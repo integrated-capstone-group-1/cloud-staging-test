@@ -31,6 +31,7 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/**").permitAll()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/accounts/**").hasAnyRole("CUSTOMER", "ADMIN", "INTERNAL")
+                        .requestMatchers("/internal/**").hasAnyRole("INTERNAL", "ADMIN")
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();

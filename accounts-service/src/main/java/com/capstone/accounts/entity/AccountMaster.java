@@ -73,6 +73,23 @@ public class AccountMaster {
     )
     private BigDecimal balanceAmount;
 
+    @Builder.Default
+    @Column(
+        name = "is_primary",
+        columnDefinition = "CHAR(1)",
+        nullable = false
+    )
+    private String isPrimary = "N";
+
+    @Builder.Default
+    @Column(
+        name = "held_amount",
+        precision = 18,
+        scale = 4,
+        nullable = false
+    )
+    private BigDecimal heldAmount = BigDecimal.ZERO;
+
     @Column(
         name = "created_at",
         nullable = false,
@@ -97,4 +114,10 @@ public class AccountMaster {
         length = 50
     )
     private String updatedBy;
+
+    public BigDecimal getAvailableBalance() {
+        BigDecimal held = heldAmount != null ? heldAmount : BigDecimal.ZERO;
+        BigDecimal balance = balanceAmount != null ? balanceAmount : BigDecimal.ZERO;
+        return balance.subtract(held);
+    }
 }

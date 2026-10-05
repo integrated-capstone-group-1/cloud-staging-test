@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.jpa.repository.QueryHints;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -30,5 +31,11 @@ public interface AccountRepository extends JpaRepository<AccountMaster, String> 
     @QueryHints({@QueryHint(name = "jakarta.persistence.lock.timeout", value = "5000")})
     @Query("SELECT b FROM AccountMaster b WHERE b.accountId = :accountId")
     Optional<AccountMaster> findByIdForUpdate(@Param("accountId") String accountId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @QueryHints({@QueryHint(name = "jakarta.persistence.lock.timeout", value = "5000")})
+    @Query("SELECT b FROM AccountMaster b WHERE b.accountId IN :accountIds ORDER BY b.accountId ASC")
+    List<AccountMaster> findAllByIdsForUpdate(@Param("accountIds") Collection<String> accountIds);
 }
+
 
