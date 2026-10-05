@@ -287,6 +287,18 @@ services:
     networks:
       - banking-net
 
+  risk-engine:
+    build:
+      context: .
+      dockerfile: risk-engine/Dockerfile
+    container_name: risk-engine
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+    labels:
+      banking.service: "true"
+    networks:
+      - banking-net
+
   frontend-web:
     build:
       context: .
