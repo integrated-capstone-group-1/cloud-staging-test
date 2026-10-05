@@ -7,6 +7,7 @@ import com.capstone.risk.model.RiskDecision;
 import com.capstone.risk.model.RiskLevel;
 import com.capstone.risk.rules.AmountAnomalyRule;
 import com.capstone.risk.rules.DeviceAnomalyRule;
+import com.capstone.risk.rules.FxRoundTripAbuseRule;
 import com.capstone.risk.rules.VelocityRule;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
@@ -19,7 +20,7 @@ import java.util.List;
 
 /**
  * High-performance Java Synchronous Risk & Fraud Screening Engine (BR-08, BR-18, TR-R01, TR-R04).
- * Evaluates Velocity (V), Amount Anomaly (A), and Device Anomaly (D) heuristics to calculate
+ * Evaluates Velocity (V), Amount Anomaly (A), Device Anomaly (D), and FX Round-Trip Abuse heuristics to calculate
  * normalized weighted risk score S in [0.00, 1.00] and maps to calibrated decisions:
  * - S < 0.50: LOW -> ALLOW
  * - 0.50 <= S <= 0.85: MEDIUM -> STEP_UP_OTP
@@ -32,16 +33,19 @@ public class RiskEvaluationService {
     private final VelocityRule velocityRule;
     private final AmountAnomalyRule amountAnomalyRule;
     private final DeviceAnomalyRule deviceAnomalyRule;
+    private final FxRoundTripAbuseRule fxRoundTripAbuseRule;
     private final RiskEngineProperties properties;
 
     public RiskEvaluationService(
             VelocityRule velocityRule,
             AmountAnomalyRule amountAnomalyRule,
             DeviceAnomalyRule deviceAnomalyRule,
+            FxRoundTripAbuseRule fxRoundTripAbuseRule,
             RiskEngineProperties properties) {
         this.velocityRule = velocityRule;
         this.amountAnomalyRule = amountAnomalyRule;
         this.deviceAnomalyRule = deviceAnomalyRule;
+        this.fxRoundTripAbuseRule = fxRoundTripAbuseRule;
         this.properties = properties;
     }
 
@@ -88,19 +92,34 @@ public class RiskEvaluationService {
             triggeredRules.add(deviceAnomalyRule.getRuleName());
         }
 
-        // 4. Calculate normalized weighted score: S = min(1.00, wV*V + wA*A + wD*D)
+        // 4. Evaluate FX Round-Trip Abuse Rule (DIG-22, weight 0.35)
+        boolean fxTriggered = false;
+        if (request.getTargetCurrency() != null && !request.getTargetCurrency().isBlank()) {
+            fxTriggered = fxRoundTripAbuseRule.evaluate(
+                    request.getCustomerId(),
+                    request.getCurrency(),
+                    request.getTargetCurrency()
+            );
+            if (fxTriggered) {
+                triggeredRules.add(fxRoundTripAbuseRule.getRuleName());
+            }
+        }
+        double fx = fxTriggered ? 1.0 : 0.0;
+
+        // 5. Calculate normalized weighted score: S = min(1.00, wV*V + wA*A + wD*D + wFx*FX)
         double wV = properties.getRules().getWeights().getVelocity();
         double wA = properties.getRules().getWeights().getAmount();
         double wD = properties.getRules().getWeights().getDevice();
+        double wFx = properties.getRules().getWeights().getFxRoundTrip();
 
-        double rawScore = (wV * v) + (wA * a) + (wD * d);
+        double rawScore = (wV * v) + (wA * a) + (wD * d) + (wFx * fx);
         double score = Math.min(1.00, rawScore);
 
         // Normalize to 2 decimal places
         BigDecimal scoreBd = BigDecimal.valueOf(score).setScale(2, RoundingMode.HALF_UP);
         score = scoreBd.doubleValue();
 
-        // 5. Calibrated Decision Mapping (ADR-001)
+        // 6. Calibrated Decision Mapping (ADR-001)
         double lowMax = properties.getThresholds().getLowMax();       // 0.50
         double mediumMax = properties.getThresholds().getMediumMax(); // 0.85
 
@@ -118,9 +137,16 @@ public class RiskEvaluationService {
             decision = RiskDecision.HOLD;
         }
 
-        // 6. Record transfer in velocity tracker if requested
+        // 7. Record transfer in velocity / FX tracker if requested
         if (recordVelocity && request.getCustomerId() != null) {
             velocityRule.recordTransfer(request.getCustomerId());
+            if (request.getTargetCurrency() != null && !request.getTargetCurrency().isBlank()) {
+                fxRoundTripAbuseRule.recordConversion(
+                        request.getCustomerId(),
+                        request.getCurrency(),
+                        request.getTargetCurrency()
+                );
+            }
         }
 
         long elapsedNano = System.nanoTime() - startNano;

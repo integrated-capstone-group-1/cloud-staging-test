@@ -27,6 +27,7 @@ public class RiskEngineProperties {
         private double velocity = 0.40;
         private double amount = 0.35;
         private double device = 0.25;
+        private double fxRoundTrip = 0.35;
     }
 
     @Data

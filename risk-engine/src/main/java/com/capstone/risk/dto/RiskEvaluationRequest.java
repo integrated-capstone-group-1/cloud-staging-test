@@ -37,4 +37,7 @@ public class RiskEvaluationRequest {
 
     @JsonProperty("device_id")
     private String deviceId;
+
+    @JsonProperty("target_currency")
+    private String targetCurrency;
 }

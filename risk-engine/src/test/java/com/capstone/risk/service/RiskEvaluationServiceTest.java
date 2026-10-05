@@ -5,6 +5,7 @@ import com.capstone.risk.dto.RiskEvaluationRequest;
 import com.capstone.risk.dto.RiskEvaluationResponse;
 import com.capstone.risk.rules.AmountAnomalyRule;
 import com.capstone.risk.rules.DeviceAnomalyRule;
+import com.capstone.risk.rules.FxRoundTripAbuseRule;
 import com.capstone.risk.rules.VelocityRule;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -27,12 +28,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * 3. Velocity + Amount structuring (V=1, A=1, D=0) returns S = 0.75 (STEP_UP_OTP).
  * 4. Tripled anomaly (V=1, A=1, D=1) returns S = 1.00 > 0.85 (HOLD).
  * 5. Average execution latency is under 50ms.
+ * 6. DIG-22: Changing weight changes scoring without redeploy.
+ * 7. DIG-22: FX round-trip pattern raises the score.
  */
 class RiskEvaluationServiceTest {
 
     private VelocityRule velocityRule;
     private AmountAnomalyRule amountAnomalyRule;
     private DeviceAnomalyRule deviceAnomalyRule;
+    private FxRoundTripAbuseRule fxRoundTripAbuseRule;
     private RiskEngineProperties properties;
     private RiskEvaluationService riskService;
 
@@ -43,11 +47,13 @@ class RiskEvaluationServiceTest {
         amountAnomalyRule = new AmountAnomalyRule(properties);
         deviceAnomalyRule = new DeviceAnomalyRule(properties);
         deviceAnomalyRule.init();
+        fxRoundTripAbuseRule = new FxRoundTripAbuseRule();
 
         riskService = new RiskEvaluationService(
                 velocityRule,
                 amountAnomalyRule,
                 deviceAnomalyRule,
+                fxRoundTripAbuseRule,
                 properties
         );
     }
@@ -301,5 +307,66 @@ class RiskEvaluationServiceTest {
         assertEquals(0.40, fifthResponse.getScore(), "5th call must breach velocity (V=1)");
         assertEquals("ALLOW", fifthResponse.getDecision());
         assertTrue(fifthResponse.getTriggeredRules().contains(VelocityRule.RULE_NAME));
+    }
+
+    @Test
+    @DisplayName("DIG-22 AC 1: Changing a weight changes scoring without redeploy")
+    void testDig22_changingWeightChangesScoringWithoutRedeploy() {
+        String customerId = "cust-weight-param";
+        String deviceId = "dev-trusted-param";
+        deviceAnomalyRule.trustDevice(customerId, deviceId);
+
+        // Pre-record 4 transfers for V = 1.0
+        for (int i = 0; i < 4; i++) {
+            velocityRule.recordTransfer(customerId);
+        }
+
+        RiskEvaluationRequest request = RiskEvaluationRequest.builder()
+                .transactionId("txn-weight-test")
+                .customerId(customerId)
+                .amount(new BigDecimal("100.0000"))
+                .currency("PHP")
+                .deviceId(deviceId)
+                .build();
+
+        // Baseline score with default weight 0.40
+        RiskEvaluationResponse baseline = riskService.evaluate(request, false);
+        assertEquals(0.40, baseline.getScore(), 0.001);
+
+        // Dynamically adjust velocity weight in property store from 0.40 to 0.60
+        properties.getRules().getWeights().setVelocity(0.60);
+
+        RiskEvaluationResponse reevaluated = riskService.evaluate(request, false);
+        assertEquals(0.60, reevaluated.getScore(), 0.001, "Changing weight dynamically must adjust score without redeploy");
+        assertEquals("MEDIUM", reevaluated.getLevel(), "Score 0.60 maps to MEDIUM");
+        assertEquals("STEP_UP_OTP", reevaluated.getDecision(), "Score 0.60 requires STEP_UP_OTP");
+    }
+
+    @Test
+    @DisplayName("DIG-22 AC 2: Round-trip FX pattern raises the score")
+    void testDig22_roundTripPatternRaisesScore() {
+        String customerId = "cust-fx-arbitrageur";
+        String deviceId = "dev-trusted-fx";
+        deviceAnomalyRule.trustDevice(customerId, deviceId);
+
+        // First leg: customer converts PHP -> USD (recorded)
+        fxRoundTripAbuseRule.recordConversion(customerId, "PHP", "USD");
+
+        // Second leg within 5-minute window: customer inverts conversion USD -> PHP
+        RiskEvaluationRequest request = RiskEvaluationRequest.builder()
+                .transactionId("txn-fx-roundtrip")
+                .customerId(customerId)
+                .amount(new BigDecimal("5000.0000"))
+                .currency("USD")
+                .targetCurrency("PHP")
+                .deviceId(deviceId)
+                .build();
+
+        RiskEvaluationResponse response = riskService.evaluate(request, false);
+
+        assertEquals(0.35, response.getScore(), 0.001, "FX round-trip abuse weight (0.35) raises score from 0.00");
+        assertEquals(1, response.getTriggeredRules().size());
+        assertTrue(response.getTriggeredRules().contains(FxRoundTripAbuseRule.RULE_NAME),
+                "Triggered rules must include FX_ROUND_TRIP_ABUSE");
     }
 }
