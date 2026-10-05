@@ -64,7 +64,7 @@ spring:
         - id: forex-service
           uri: http://forex-service:8087
           predicates:
-            - Path=/api/v1/fx-rate,/api/v1/fx-rate/**,/api/v1/forex/**
+            - Path=/api/v1/fx-rate,/api/v1/fx-rate/**,/api/v1/forex/**,/api/v1/fx/**
 
         - id: notification-service
           uri: http://notification-service:8085
