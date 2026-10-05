@@ -38,6 +38,7 @@ Used for double-entry settlement of cross-currency transfers and FX spread fee b
 | `bank-fx-usd-01` | `cust-admin-001` | `INTERNAL_BANK_FX` | `USD` | `200000.0000` | `ACTIVE` |
 | `bank-fx-eur-01` | `cust-admin-001` | `INTERNAL_BANK_FX` | `EUR` | `200000.0000` | `ACTIVE` |
 | `bank-fee-income-php-01` | `cust-admin-001` | `INTERNAL_BANK_FX` | `PHP` | `500000.0000` | `ACTIVE` |
+| `bank-cash-clearing-php-01` | `cust-admin-001` | `INTERNAL_BANK_FX` | `PHP` | `10000000.0000` | `ACTIVE` |
 
 ---
 
