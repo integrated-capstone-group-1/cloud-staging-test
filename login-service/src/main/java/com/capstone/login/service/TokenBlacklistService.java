@@ -5,6 +5,7 @@ import com.capstone.common.constants.RedisKeys;
 import com.capstone.common.security.JwtTokenProvider;
 import io.jsonwebtoken.Claims;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
@@ -13,6 +14,7 @@ import java.time.Instant;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class TokenBlacklistService {
 
     private final StringRedisTemplate redisTemplate;
@@ -36,6 +38,73 @@ public class TokenBlacklistService {
         Claims claims = tokenProvider.parseClaims(token);
         long remainingSeconds = Math.max(1, (claims.getExpiration().getTime() - Instant.now().toEpochMilli()) / 1000);
         redisTemplate.opsForValue().set(RedisKeys.tokenKey(token), "BLACKLISTED", Duration.ofSeconds(remainingSeconds));
+    }
+
+    /**
+     * Registers a refresh token in Redis with format:
+     * refresh_token:{refreshToken} = {customerId}:{status}
+     * Stored with TTL matching refresh token expiry (typically 7 days).
+     */
+    public void registerRefreshToken(String refreshToken, long expirySeconds, String customerId) {
+        String key = "refresh_token:" + refreshToken;
+        String value = customerId + ":ACTIVE";
+        redisTemplate.opsForValue().set(key, value, Duration.ofSeconds(expirySeconds));
+        log.debug("Registered refresh token {} for customerId {}", refreshToken, customerId);
+    }
+
+    /**
+     * Validates refresh token:
+     * 1. Check if key exists (not expired)
+     * 2. Check if status is not BLACKLISTED
+     * 3. Extract and return customerId
+     */
+    public String validateRefreshToken(String refreshToken) {
+        String key = "refresh_token:" + refreshToken;
+        String value = redisTemplate.opsForValue().get(key);
+        
+        if (value == null) {
+            log.warn("Refresh token not found or expired: {}", refreshToken);
+            return null;
+        }
+
+        String[] parts = value.split(":");
+        if (parts.length < 2) {
+            log.warn("Malformed refresh token value: {}", value);
+            return null;
+        }
+
+        String customerId = parts[0];
+        String status = parts[1];
+
+        if ("BLACKLISTED".equals(status)) {
+            log.warn("Refresh token is blacklisted: {}", refreshToken);
+            return null;
+        }
+
+        return customerId;
+    }
+
+    /**
+     * Blacklist a refresh token for token rotation.
+     * Mark as BLACKLISTED but keep key alive for remaining TTL
+     * (prevents reuse in race conditions).
+     */
+    public void blacklistRefreshToken(String refreshToken) {
+        String key = "refresh_token:" + refreshToken;
+        String value = redisTemplate.opsForValue().get(key);
+        
+        if (value != null) {
+            String[] parts = value.split(":");
+            String customerId = parts[0];
+            String newValue = customerId + ":BLACKLISTED";
+            
+            // Keep the same TTL as the original token
+            Long ttl = redisTemplate.getExpire(key, java.util.concurrent.TimeUnit.SECONDS);
+            if (ttl != null && ttl > 0) {
+                redisTemplate.opsForValue().set(key, newValue, Duration.ofSeconds(ttl));
+                log.info("Blacklisted refresh token: {}", refreshToken);
+            }
+        }
     }
 }
 

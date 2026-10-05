@@ -2,9 +2,12 @@
 package com.capstone.registration.service;
 
 import com.capstone.common.constants.KafkaTopics;
+import com.capstone.common.dto.AccountDTO;
+import com.capstone.common.dto.CreateAccountRequest;
 import com.capstone.common.dto.RegisterRequest;
 import com.capstone.common.dto.RegisterResponse;
 import com.capstone.common.exception.DuplicateResourceException;
+import com.capstone.registration.client.AccountsServiceClient;
 import com.capstone.registration.entity.AppUser;
 import com.capstone.registration.entity.Customer;
 import com.capstone.registration.repository.AppUserRepository;
@@ -19,6 +22,12 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+/**
+ * Handles customer self-registration with automatic primary PHP pocket provisioning.
+ * 
+ * BR-16: Registration auto-provisions one primary PHP account per customer
+ * BR-07: BCrypt password hashing
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -28,11 +37,15 @@ public class RegistrationService {
     private final AppUserRepository appUserRepository;
     private final PasswordEncoder passwordEncoder;
     private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final AccountsServiceClient accountsServiceClient;
 
     /**
-     * Atomically inserts into CUSTOMER_MASTER and APP_USER_MASTER.
-     * Both rows share the same @Transactional boundary — if either insert fails,
-     * Oracle rolls back both writes.
+     * Atomically inserts into CUSTOMER_MASTER and APP_USER_MASTER,
+     * then auto-provisions one primary PHP pocket.
+     * 
+     * Both database inserts share the same @Transactional boundary — if either fails,
+     * Oracle rolls back both writes. Account provisioning is called AFTER the
+     * transaction commits to ensure the customer exists before creating accounts.
      *
      * created_by is set to "SYSTEM" for the self-registration flow; an admin
      * flow would pass the caller's customerId.
@@ -93,7 +106,38 @@ public class RegistrationService {
                     }
                 });
 
+        // BR-16: Auto-provision primary PHP pocket AFTER customer is created
+        // This is called outside the @Transactional to ensure customer exists
+        provisionPrimaryAccount(customerId);
+
         return response;
+    }
+
+    /**
+     * Auto-provisions one primary PHP savings account for the newly registered customer.
+     * Uses system-to-system authentication with internal JWT.
+     * 
+     * @param customerId the UUID of the newly created customer
+     */
+    private void provisionPrimaryAccount(String customerId) {
+        try {
+            CreateAccountRequest accountRequest = new CreateAccountRequest(
+                    customerId,
+                    "SAVINGS",
+                    "PHP"
+            );
+
+            AccountDTO account = accountsServiceClient.createAccount(accountRequest);
+            log.info("Auto-provisioned primary PHP account for customerId={}, accountId={}",
+                    customerId, account.accountId());
+
+        } catch (Exception e) {
+            // Log but don't fail registration if account provisioning fails.
+            // Account can be created manually later or via admin retry.
+            log.error("Failed to auto-provision primary PHP account for customerId={}. " +
+                    "Registration successful but account provisioning pending. Error: {}",
+                    customerId, e.getMessage(), e);
+        }
     }
 }
 
