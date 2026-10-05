@@ -39,7 +39,7 @@ class SecurityConfigTest {
         @DisplayName("Verify CSRF is disabled and sessions are stateless")
         void testCsrfDisabledAndSessionStateless() throws Exception {
                 Mockito.when(loginService.login(any()))
-                                .thenReturn(LoginResponse.of("mock-token", 3600L, "cust-1", "user@test.com"));
+                                .thenReturn(LoginResponse.withRefreshToken("mock-token", 3600L, "rt-mock-refresh", 604800L, "cust-1", "user@test.com", "ROLE_CUSTOMER"));
 
                 // Send a POST request without any CSRF token
                 MvcResult result = mockMvc.perform(post("/api/auth/login")

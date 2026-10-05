@@ -4,6 +4,8 @@ package com.capstone.login.controller;
 import com.capstone.common.dto.ApiResponse;
 import com.capstone.common.dto.LoginRequest;
 import com.capstone.common.dto.LoginResponse;
+import com.capstone.common.dto.RefreshTokenRequest;
+import com.capstone.common.dto.RefreshTokenResponse;
 import com.capstone.common.exception.InvalidTokenException;
 import com.capstone.login.service.LoginService;
 import jakarta.validation.Valid;
@@ -36,6 +38,12 @@ public class LoginController {
         String token = authorizationHeader.substring(7);
         loginService.logout(token);
         return ResponseEntity.ok(ApiResponse.ok("Logout successful", null));
+    }
+
+    @PostMapping("/refresh")
+    public ResponseEntity<ApiResponse<RefreshTokenResponse>> refresh(@Valid @RequestBody RefreshTokenRequest request) {
+        RefreshTokenResponse response = loginService.refresh(request);
+        return ResponseEntity.ok(ApiResponse.ok("Token refreshed successfully", response));
     }
 }
 
