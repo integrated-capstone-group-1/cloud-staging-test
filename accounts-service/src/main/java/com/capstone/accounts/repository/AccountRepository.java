@@ -21,6 +21,8 @@ public interface AccountRepository extends JpaRepository<AccountMaster, String> 
 
     List<AccountMaster> findByCustomerId(String customerId);
 
+    Optional<AccountMaster> findByCustomerIdAndCurrencyCode(String customerId, String currencyCode);
+
     /**
      * Issues SELECT … FOR UPDATE (PESSIMISTIC_WRITE) with a 5-second
      * acquisition timeout. All balance-mutation callers MUST use this
