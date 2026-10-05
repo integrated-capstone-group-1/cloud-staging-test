@@ -171,6 +171,14 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(pd);
     }
 
+    @ExceptionHandler(SecurityCheckUnavailableException.class)
+    public ResponseEntity<ProblemDetail> handleSecurityCheckUnavailable(SecurityCheckUnavailableException ex, WebRequest request) {
+        ProblemDetail pd = build(HttpStatus.SERVICE_UNAVAILABLE, "https://capstone.bank/errors/security-check-unavailable",
+                "Security Check Unavailable", ex.getMessage(), request);
+        pd.setProperty("error_code", "SECURITY_CHECK_UNAVAILABLE");
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(pd);
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ProblemDetail> handleGeneric(Exception ex, WebRequest request) {
         ProblemDetail pd = build(HttpStatus.INTERNAL_SERVER_ERROR, "https://capstone.bank/errors/internal",

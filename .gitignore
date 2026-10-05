@@ -61,6 +61,7 @@ Desktop.ini
 .env.*
 !.env.example
 
-# Maven Wrapper / local metadata (if ever generated)
-.mvn/wrapper/maven-wrapper.jar
-.mvn/wrapper/maven-wrapper.properties
+# Maven Wrapper
+.mvn/
+mvnw
+mvnw.cmd

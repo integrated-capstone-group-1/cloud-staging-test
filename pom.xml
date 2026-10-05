@@ -25,7 +25,7 @@
         <module>notification-service</module>
         <module>frontend-web</module>
         <module>reconciliation-service</module>
-
+        <module>risk-engine</module>
     </modules>
 
     <properties>

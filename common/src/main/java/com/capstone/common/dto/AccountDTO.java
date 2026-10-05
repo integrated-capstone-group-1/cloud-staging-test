@@ -16,7 +16,21 @@ public record AccountDTO(
         String accountStatus,
         BigDecimal balanceAmount,
         String currencyCode,
-        LocalDateTime createdAt
+        LocalDateTime createdAt,
+        BigDecimal heldAmount,
+        String isPrimary
 ) {
+    public AccountDTO(
+            String accountId,
+            String customerId,
+            String accountType,
+            String accountStatus,
+            BigDecimal balanceAmount,
+            String currencyCode,
+            LocalDateTime createdAt
+    ) {
+        this(accountId, customerId, accountType, accountStatus, balanceAmount, currencyCode, createdAt, BigDecimal.ZERO, "N");
+    }
 }
+
 

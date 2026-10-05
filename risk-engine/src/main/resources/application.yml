@@ -1,0 +1,56 @@
+server:
+  port: 8088
+
+spring:
+  application:
+    name: risk-engine
+
+jwt:
+  secret: ${JWT_SECRET:CapstoneBankingSuperSecretSigningKeyMustBe256BitsLong!}
+
+risk:
+  rules:
+    weights:
+      velocity: 0.40
+      amount: 0.35
+      device: 0.25
+    velocity:
+      max-transfers: 3
+      window-minutes: 5
+    amount:
+      php-threshold: 100000.0000
+      amla-structuring-lower: 400000.0000
+      amla-structuring-upper: 500000.0000
+    device:
+      strict-trust-check: true
+    thresholds:
+      low-max: 0.50
+      medium-max: 0.85
+
+resilience4j:
+  timelimiter:
+    instances:
+      riskEvaluation:
+        timeout-duration: 200ms
+        cancel-running-future: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      show-details: always
+    prometheus:
+      enabled: true
+  metrics:
+    tags:
+      service: risk-engine
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+
+logging:
+  level:
+    com.capstone.risk: DEBUG
