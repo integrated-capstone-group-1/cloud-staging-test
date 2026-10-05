@@ -17,6 +17,9 @@ public final class RedisKeys {
     public static final String TRANSACTION_ID_PREFIX =
             "transaction-id:";
 
+    public static final String OTP_PREFIX =
+            "otp:";
+
     /** accountId is a String UUID from ACCOUNT_MASTER.account_id */
     public static String balanceKey(String accountId) {
         return BALANCE_PREFIX + accountId;
@@ -36,5 +39,17 @@ public final class RedisKeys {
      */
     public static String transactionIdKey(String transactionId) {
         return TRANSACTION_ID_PREFIX + transactionId;
+    }
+
+    public static String otpKey(String identifier) {
+        return OTP_PREFIX + identifier;
+    }
+
+    public static String otpAttemptsKey(String identifier) {
+        return OTP_PREFIX + "attempts:" + identifier;
+    }
+
+    public static String otpVerifiedKey(String identifier) {
+        return OTP_PREFIX + "verified:" + identifier;
     }
 }

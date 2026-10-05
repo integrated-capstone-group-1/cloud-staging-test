@@ -23,6 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class LoginController {
 
     private final LoginService loginService;
+    private final com.capstone.login.service.OtpService otpService;
 
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<LoginResponse>> login(@Valid @RequestBody LoginRequest request) {
@@ -44,6 +45,20 @@ public class LoginController {
     public ResponseEntity<ApiResponse<RefreshTokenResponse>> refresh(@Valid @RequestBody RefreshTokenRequest request) {
         RefreshTokenResponse response = loginService.refresh(request);
         return ResponseEntity.ok(ApiResponse.ok("Token refreshed successfully", response));
+    }
+
+    @PostMapping("/otp/request")
+    public ResponseEntity<com.capstone.common.dto.OtpResponse> requestOtp(
+            @Valid @RequestBody com.capstone.common.dto.OtpRequest request) {
+        com.capstone.common.dto.OtpResponse response = otpService.generateAndSendOtp(request);
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/otp/verify")
+    public ResponseEntity<com.capstone.common.dto.OtpVerifyResponse> verifyOtp(
+            @Valid @RequestBody com.capstone.common.dto.OtpVerifyRequest request) {
+        com.capstone.common.dto.OtpVerifyResponse response = otpService.verifyOtp(request);
+        return ResponseEntity.ok(response);
     }
 }
 
