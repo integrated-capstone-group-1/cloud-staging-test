@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Logback configuration for risk-engine.
+  - default/local profile : plain-text console (human-readable for local dev)
+  - docker/prod profile   : structured JSON via LogstashEncoder (Promtail → Loki)
+-->
+<configuration scan="true" scanPeriod="30 seconds">
+
+    <springProperty scope="context" name="appName"
+                    source="spring.application.name"
+                    defaultValue="risk-engine"/>
+
+    <!-- ── Plain text console (default / local dev) ──────────────────────── -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- ── Structured JSON console (docker profile — picked up by Promtail) ─ -->
+    <appender name="JSON_CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <!-- Service name embedded in every log line for Loki label compatibility -->
+            <customFields>{"service":"${appName}"}</customFields>
+            <!-- MDC fields written by the application -->
+            <includeMdcKeyName>transactionId</includeMdcKeyName>
+            <includeMdcKeyName>customerId</includeMdcKeyName>
+            <includeMdcKeyName>riskScore</includeMdcKeyName>
+            <includeMdcKeyName>riskLevel</includeMdcKeyName>
+            <includeMdcKeyName>riskDecision</includeMdcKeyName>
+            <includeMdcKeyName>component</includeMdcKeyName>
+            <includeMdcKeyName>event_type</includeMdcKeyName>
+            <throwableConverter class="net.logstash.logback.stacktrace.ShortenedThrowableConverter">
+                <maxDepthPerCause>10</maxDepthPerCause>
+                <rootCauseFirst>true</rootCauseFirst>
+            </throwableConverter>
+        </encoder>
+    </appender>
+
+    <!-- ── Async wrapper (prevents I/O blocking application threads) ─────── -->
+    <appender name="ASYNC_JSON" class="ch.qos.logback.classic.AsyncAppender">
+        <queueSize>512</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <neverBlock>true</neverBlock>
+        <appender-ref ref="JSON_CONSOLE"/>
+    </appender>
+
+    <!-- ── Profile-specific root logger configuration ────────────────────── -->
+    <springProfile name="docker">
+        <root level="INFO">
+            <appender-ref ref="ASYNC_JSON"/>
+        </root>
+        <logger name="com.capstone.risk" level="DEBUG"/>
+    </springProfile>
+
+    <springProfile name="!docker">
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+        </root>
+        <logger name="com.capstone.risk" level="DEBUG"/>
+    </springProfile>
+
+</configuration>
