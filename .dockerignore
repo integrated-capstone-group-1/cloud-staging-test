@@ -1,0 +1,32 @@
+# Git metadata
+.git
+.gitignore
+
+# Build outputs (keep compiled JARs for Docker COPY, exclude everything else)
+**/target/**
+!**/target/*-*.jar
+**/build/
+**/bin/
+**/out/
+
+# IDE/editor files
+**/.idea/
+**/.vscode/
+**/.settings/
+**/*.iml
+**/*.ipr
+**/*.iws
+
+# OS / temp files
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
+*.swp
+
+# Local environment / secrets
+.env
+.env.*
+
+# Docker-specific local context noise
+docker-compose.override.yml

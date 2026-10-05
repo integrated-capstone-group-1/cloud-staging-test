@@ -1,0 +1,57 @@
+
+package com.capstone.common.dto;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.util.UUID;
+
+/**
+ * accountId is now a String UUID matching ACCOUNT_MASTER.account_id.
+ * txnType mirrors TRANSACTION_MASTER.txn_type (WITHDRAWAL|DEPOSIT|TRANSFER).
+ * txnStatus mirrors TRANSACTION_MASTER.txn_status (PENDING|COMMITTED|ROLLED_BACK).
+ */
+public record TransactionResponse(
+        UUID txnId,
+        String accountId,
+        String txnType,
+        BigDecimal amount,
+        BigDecimal balanceAfter,
+        String txnStatus,
+        Instant timestamp,
+        String targetCurrency,
+        BigDecimal exchangeRate,
+        BigDecimal targetAmount,
+        BigDecimal feeAmount,
+        Boolean isCrossCurrency,
+        String currencyCode
+) {
+    public TransactionResponse(
+            UUID txnId,
+            String accountId,
+            String txnType,
+            BigDecimal amount,
+            BigDecimal balanceAfter,
+            String txnStatus,
+            Instant timestamp,
+            String targetCurrency,
+            BigDecimal exchangeRate,
+            BigDecimal targetAmount,
+            BigDecimal feeAmount,
+            Boolean isCrossCurrency) {
+        this(txnId, accountId, txnType, amount, balanceAfter, txnStatus, timestamp,
+                targetCurrency, exchangeRate, targetAmount, feeAmount, isCrossCurrency, null);
+    }
+
+    public TransactionResponse(
+            UUID txnId,
+            String accountId,
+            String txnType,
+            BigDecimal amount,
+            BigDecimal balanceAfter,
+            String txnStatus,
+            Instant timestamp) {
+        this(txnId, accountId, txnType, amount, balanceAfter, txnStatus, timestamp,
+            null, null, null, null, false, null);
+    }
+}
+

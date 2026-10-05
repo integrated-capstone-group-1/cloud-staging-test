@@ -1,0 +1,84 @@
+server:
+  port: 8084
+  tomcat:
+    threads:
+      max: 200
+      min-spare: 20
+
+accounts:
+  service:
+    url: ${ACCOUNTS_SERVICE_URL:http://localhost:8083}
+
+spring:
+  application:
+    name: transaction-service
+
+  datasource:
+    oracle:
+      url: ${ORACLE_URL:jdbc:oracle:thin:@localhost:1521/XEPDB1}
+      username: ${ORACLE_USERNAME:ledger_app}
+      password: ${ORACLE_PASSWORD:LedgerAppPass123}
+      driver-class-name: oracle.jdbc.OracleDriver
+      type: com.zaxxer.hikari.HikariDataSource
+      hikari:
+        maximum-pool-size: 30
+        minimum-idle: 5
+        connection-timeout: 30000
+        pool-name: TransactionOracleHikariPool
+    postgres:
+      url: ${POSTGRES_URL:jdbc:postgresql://localhost:5432/ledger_audit}
+      username: ${POSTGRES_USERNAME:ledger_audit}
+      password: ${POSTGRES_PASSWORD:LedgerAuditPass123}
+      driver-class-name: org.postgresql.Driver
+      type: com.zaxxer.hikari.HikariDataSource
+      hikari:
+        maximum-pool-size: 10
+        minimum-idle: 2
+        connection-timeout: 30000
+        pool-name: TransactionPostgresHikariPool
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+
+jwt:
+  secret: ${JWT_SECRET:CapstoneBankingSuperSecretSigningKeyMustBe256BitsLong!}
+
+# ── Actuator / Micrometer / Prometheus ─────────────────────────────────────────
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      show-details: always
+    prometheus:
+      enabled: true
+
+  # Add a common 'service' tag to every metric emitted by this service.
+  # This lets Grafana filter/group by service name alongside the Prometheus 'job' label.
+  metrics:
+    tags:
+      service: transaction-service
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+
+# ── Logging ────────────────────────────────────────────────────────────────────
+# Logback profile switching is handled in logback-spring.xml via <springProfile>.
+# These properties set the root level and suppress noisy framework packages
+# at the Spring property level (works in both profiles).
+logging:
+  level:
+    root: INFO
+    com.capstone: INFO
+    org.hibernate.SQL: WARN
+    com.zaxxer.hikari: WARN
+    org.apache.kafka: WARN
+    org.springframework.kafka: WARN
+    org.springframework.security: WARN
