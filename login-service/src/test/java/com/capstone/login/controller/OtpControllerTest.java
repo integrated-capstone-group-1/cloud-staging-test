@@ -42,6 +42,9 @@ class OtpControllerTest {
     private OtpService otpService;
 
     @MockBean
+    private com.capstone.login.service.PinService pinService;
+
+    @MockBean
     private StringRedisTemplate redisTemplate;
 
     @Test

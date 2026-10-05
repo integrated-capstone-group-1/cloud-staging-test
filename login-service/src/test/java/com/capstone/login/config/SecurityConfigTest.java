@@ -33,6 +33,12 @@ class SecurityConfigTest {
         private LoginService loginService;
 
         @MockBean
+        private com.capstone.login.service.OtpService otpService;
+
+        @MockBean
+        private com.capstone.login.service.PinService pinService;
+
+        @MockBean
         private StringRedisTemplate redisTemplate;
 
         @Test
