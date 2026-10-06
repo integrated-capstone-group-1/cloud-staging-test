@@ -92,8 +92,44 @@ public class GrafanaProxyController {
         } catch (Exception e) {
             log.debug("Grafana upstream proxy unavailable: {}", e.getMessage());
             try {
-                response.sendError(HttpServletResponse.SC_BAD_GATEWAY, "Grafana upstream container unavailable on internal port :3000");
+                String uri = request.getRequestURI();
+                response.setStatus(HttpServletResponse.SC_BAD_GATEWAY);
+                if (uri.contains("/api/")) {
+                    response.setContentType("application/json");
+                    response.getWriter().write("{\"status\":\"offline\",\"message\":\"Grafana container is currently offline on internal network\"}");
+                } else {
+                    response.setContentType("text/html;charset=UTF-8");
+                    response.getWriter().write("""
+                        <!DOCTYPE html>
+                        <html>
+                        <head>
+                            <meta charset="utf-8"/>
+                            <title>Grafana Stack Offline</title>
+                            <style>
+                                body { font-family: system-ui, -apple-system, sans-serif; background: #0f1117; color: #d8d9da; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+                                .card { background: #181b1f; border: 1px solid #2c3235; border-radius: 8px; padding: 2rem; max-width: 540px; text-align: center; box-shadow: 0 4px 20px rgba(0,0,0,0.4); }
+                                h3 { color: #f2c94c; margin-top: 0; }
+                                code { background: #111217; padding: 6px 12px; border-radius: 4px; color: #73bf69; font-size: 0.9rem; display: inline-block; margin: 12px 0; }
+                                p { font-size: 0.95rem; line-height: 1.5; color: #a0a5ad; }
+                                .btn { background: #3274d9; color: #fff; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; text-decoration: none; display: inline-block; margin-top: 10px; }
+                                .btn:hover { background: #2457a6; }
+                            </style>
+                        </head>
+                        <body>
+                            <div class="card">
+                                <h3>Observability Stack Offline</h3>
+                                <p>The internal Grafana & Prometheus service is not currently running on the private bridge network.</p>
+                                <p>To start the telemetry containers in your terminal, run:</p>
+                                <code>docker-compose up -d grafana prometheus loki</code>
+                                <p><small>Once started, click below to refresh the live stream.</small></p>
+                                <a href="javascript:location.reload()" class="btn">Reload Live Stream</a>
+                            </div>
+                        </body>
+                        </html>
+                    """);
+                }
             } catch (Exception ignored) {}
         }
     }
 }
+

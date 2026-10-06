@@ -150,50 +150,65 @@
              TAB 2: LIVE GRAFANA · TRANSACTION MONITORING
              ========================================================= -->
         <div class="tab-pane fade" id="tab-grafana-tx" role="tabpanel">
-            <div class="grafana-offline-warning alert alert-warning p-3 mb-3 d-none">
-                <div class="d-flex align-items-start gap-2">
-                    <i class="bi bi-exclamation-triangle-fill fs-5 mt-1"></i>
-                    <div>
-                        <strong class="d-block mb-1">Grafana Service Container is Currently Offline on Port :3000</strong>
-                        <p class="small mb-2">
-                            The full observability stack (Grafana 11.1, Prometheus, and Loki) is pre-configured in <code>docker-compose.yml</code>.
-                            To activate real-time time-series telemetry, start the containers in your terminal:
-                        </p>
-                        <code class="p-2 rounded bg-dark text-light d-inline-block small mb-2">docker-compose up -d grafana prometheus loki</code>
-                        <div class="small text-muted">
-                            Once started, this frame will automatically stream real-time Micrometer business metrics (<code>banking_transactions_total</code>) with 5-second auto-refresh.
+
+            <!-- Standby Mode Panel when Docker is Offline -->
+            <div class="grafana-offline-panel card p-4 text-center my-2 border-0 shadow-sm" style="background: var(--brand-card-soft);">
+                <div class="my-3">
+                    <span class="d-inline-flex align-items-center justify-content-center rounded-circle p-3" style="background: rgba(217, 154, 36, 0.15); width: 68px; height: 68px;">
+                        <i class="bi bi-hdd-network text-warning fs-2"></i>
+                    </span>
+                </div>
+                <h5 class="fw-bold mb-2">Grafana Observability Stack in Standby</h5>
+                <p class="text-muted small mx-auto mb-3" style="max-width: 580px;">
+                    The Grafana 11.1 time-series service is cloaked inside the internal Docker bridge network (<code>banking-net</code>).
+                    Since Docker Desktop is currently stopped, real-time Prometheus charts are in standby.
+                </p>
+                <div class="p-3 my-2 rounded text-start mx-auto" style="background: var(--bg-card); border: 1px solid var(--border-color); max-width: 540px;">
+                    <div class="small fw-semibold text-muted mb-1"><i class="bi bi-terminal me-1"></i>To launch the live time-series cluster in your terminal:</div>
+                    <code class="d-block p-2 rounded bg-dark text-light small font-monospace">docker-compose up -d grafana prometheus loki</code>
+                    <div class="small text-muted mt-2">
+                        <i class="bi bi-info-circle me-1"></i>In local mock development, live transaction monitoring and the 11-stage pipeline are fully functional without Docker.
+                    </div>
+                </div>
+                <div class="d-flex justify-content-center gap-2 mt-3">
+                    <button type="button" class="btn btn-primary btn-sm px-3" onclick="switchToPipeline()">
+                        <i class="bi bi-diagram-3 me-1"></i> View Active 11-Stage Pipeline
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm px-3" onclick="probeGrafanaConnectivity(true)">
+                        <i class="bi bi-arrow-clockwise me-1"></i> Check Connection Again
+                    </button>
+                </div>
+            </div>
+
+            <!-- Live Streaming Panel (Shown automatically when Grafana is Online) -->
+            <div class="grafana-live-panel d-none">
+                <div class="card p-2 mb-2">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 small">
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="badge bg-primary"><i class="bi bi-graph-up me-1"></i>Prometheus Time-Series</span>
+                            <span class="text-muted">Dashboard: <code>banking-transaction-monitoring</code></span>
+                        </div>
+                        <div class="d-flex align-items-center gap-2">
+                            <label class="text-muted">Refresh:</label>
+                            <select class="form-select form-select-sm py-0" style="width: auto;" onchange="updateGrafanaRefresh('iframe-grafana-tx', this.value)">
+                                <option value="5s" selected>5 seconds</option>
+                                <option value="10s">10 seconds</option>
+                                <option value="30s">30 seconds</option>
+                            </select>
+                            <a href="/grafana/d/banking-transaction-monitoring/banking-system-transaction-monitoring" target="_blank" class="btn btn-sm btn-outline-secondary py-0">
+                                <i class="bi bi-box-arrow-up-right me-1"></i> Fullscreen
+                            </a>
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <div class="card p-2 mb-2">
-                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 small">
-                    <div class="d-flex align-items-center gap-2">
-                        <span class="badge bg-primary"><i class="bi bi-graph-up me-1"></i>Prometheus Datasource</span>
-                        <span class="text-muted">Dashboard UID: <code>banking-transaction-monitoring</code></span>
-                    </div>
-                    <div class="d-flex align-items-center gap-2">
-                        <label class="text-muted">Refresh Interval:</label>
-                        <select class="form-select form-select-sm py-0" style="width: auto;" onchange="updateGrafanaRefresh('iframe-grafana-tx', this.value)">
-                            <option value="5s" selected>5 seconds</option>
-                            <option value="10s">10 seconds</option>
-                            <option value="30s">30 seconds</option>
-                            <option value="1m">1 minute</option>
-                        </select>
-                        <a href="/grafana/d/banking-transaction-monitoring/banking-system-transaction-monitoring" target="_blank" class="btn btn-sm btn-outline-secondary py-0">
-                            <i class="bi bi-box-arrow-up-right me-1"></i> Fullscreen
-                        </a>
-                    </div>
+                <div class="position-relative" style="min-height: 850px;">
+                    <iframe id="iframe-grafana-tx"
+                            data-base-path="/d/banking-transaction-monitoring/banking-system-transaction-monitoring"
+                            src=""
+                            style="width: 100%; height: 860px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-card);"
+                            allow="fullscreen"></iframe>
                 </div>
-            </div>
-
-            <div class="position-relative" style="min-height: 850px;">
-                <iframe id="iframe-grafana-tx"
-                        data-base-path="/d/banking-transaction-monitoring/banking-system-transaction-monitoring"
-                        src=""
-                        style="width: 100%; height: 860px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-card);"
-                        allow="fullscreen"></iframe>
             </div>
         </div>
 
@@ -201,45 +216,62 @@
              TAB 3: LIVE GRAFANA · SYSTEM HEALTH & MICROSERVICES
              ========================================================= -->
         <div class="tab-pane fade" id="tab-grafana-sys" role="tabpanel">
-            <div class="grafana-offline-warning alert alert-warning p-3 mb-3 d-none">
-                <div class="d-flex align-items-start gap-2">
-                    <i class="bi bi-exclamation-triangle-fill fs-5 mt-1"></i>
-                    <div>
-                        <strong class="d-block mb-1">Grafana Service Container is Currently Offline</strong>
-                        <p class="small mb-2">
-                            To stream live microservice health, HTTP throughput, and p95 latencies across all 10 banking services:
-                        </p>
-                        <code class="p-2 rounded bg-dark text-light d-inline-block small mb-2">docker-compose up -d grafana prometheus</code>
-                    </div>
+
+            <!-- Standby Mode Panel when Docker is Offline -->
+            <div class="grafana-offline-panel card p-4 text-center my-2 border-0 shadow-sm" style="background: var(--brand-card-soft);">
+                <div class="my-3">
+                    <span class="d-inline-flex align-items-center justify-content-center rounded-circle p-3" style="background: rgba(217, 154, 36, 0.15); width: 68px; height: 68px;">
+                        <i class="bi bi-cpu text-warning fs-2"></i>
+                    </span>
+                </div>
+                <h5 class="fw-bold mb-2">Microservices Observability in Standby</h5>
+                <p class="text-muted small mx-auto mb-3" style="max-width: 580px;">
+                    The microservice health, throughput, and latency dashboard runs through Prometheus metrics scraping.
+                    Start the telemetry containers to stream live metrics across all 10 microservices.
+                </p>
+                <div class="p-3 my-2 rounded text-start mx-auto" style="background: var(--bg-card); border: 1px solid var(--border-color); max-width: 540px;">
+                    <div class="small fw-semibold text-muted mb-1"><i class="bi bi-terminal me-1"></i>To launch the containers:</div>
+                    <code class="d-block p-2 rounded bg-dark text-light small font-monospace">docker-compose up -d grafana prometheus</code>
+                </div>
+                <div class="d-flex justify-content-center gap-2 mt-3">
+                    <button type="button" class="btn btn-primary btn-sm px-3" onclick="switchToPipeline()">
+                        <i class="bi bi-diagram-3 me-1"></i> View Active 11-Stage Pipeline
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm px-3" onclick="probeGrafanaConnectivity(true)">
+                        <i class="bi bi-arrow-clockwise me-1"></i> Check Connection Again
+                    </button>
                 </div>
             </div>
 
-            <div class="card p-2 mb-2">
-                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 small">
-                    <div class="d-flex align-items-center gap-2">
-                        <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Microservices Health</span>
-                        <span class="text-muted">Dashboard UID: <code>banking-overview</code></span>
-                    </div>
-                    <div class="d-flex align-items-center gap-2">
-                        <label class="text-muted">Refresh Interval:</label>
-                        <select class="form-select form-select-sm py-0" style="width: auto;" onchange="updateGrafanaRefresh('iframe-grafana-sys', this.value)">
-                            <option value="5s">5 seconds</option>
-                            <option value="10s" selected>10 seconds</option>
-                            <option value="30s">30 seconds</option>
-                        </select>
-                        <a href="/grafana/d/banking-overview/banking-system-overview" target="_blank" class="btn btn-sm btn-outline-secondary py-0">
-                            <i class="bi bi-box-arrow-up-right me-1"></i> Fullscreen
-                        </a>
+            <!-- Live Streaming Panel (Shown automatically when Grafana is Online) -->
+            <div class="grafana-live-panel d-none">
+                <div class="card p-2 mb-2">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 small">
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Microservices Health</span>
+                            <span class="text-muted">Dashboard: <code>banking-overview</code></span>
+                        </div>
+                        <div class="d-flex align-items-center gap-2">
+                            <label class="text-muted">Refresh:</label>
+                            <select class="form-select form-select-sm py-0" style="width: auto;" onchange="updateGrafanaRefresh('iframe-grafana-sys', this.value)">
+                                <option value="5s">5 seconds</option>
+                                <option value="10s" selected>10 seconds</option>
+                                <option value="30s">30 seconds</option>
+                            </select>
+                            <a href="/grafana/d/banking-overview/banking-system-overview" target="_blank" class="btn btn-sm btn-outline-secondary py-0">
+                                <i class="bi bi-box-arrow-up-right me-1"></i> Fullscreen
+                            </a>
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            <div class="position-relative" style="min-height: 850px;">
-                <iframe id="iframe-grafana-sys"
-                        data-base-path="/d/banking-overview/banking-system-overview"
-                        src=""
-                        style="width: 100%; height: 860px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-card);"
-                        allow="fullscreen"></iframe>
+                <div class="position-relative" style="min-height: 850px;">
+                    <iframe id="iframe-grafana-sys"
+                            data-base-path="/d/banking-overview/banking-system-overview"
+                            src=""
+                            style="width: 100%; height: 860px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-card);"
+                            allow="fullscreen"></iframe>
+                </div>
             </div>
         </div>
 
@@ -247,39 +279,55 @@
              TAB 4: LIVE GRAFANA · APPLICATION LOGS & TRACES (LOKI)
              ========================================================= -->
         <div class="tab-pane fade" id="tab-grafana-logs" role="tabpanel">
-            <div class="grafana-offline-warning alert alert-warning p-3 mb-3 d-none">
-                <div class="d-flex align-items-start gap-2">
-                    <i class="bi bi-exclamation-triangle-fill fs-5 mt-1"></i>
-                    <div>
-                        <strong class="d-block mb-1">Grafana &amp; Loki Log Aggregator Offline</strong>
-                        <p class="small mb-2">
-                            To aggregate and search live container logs and correlation IDs across all banking microservices:
-                        </p>
-                        <code class="p-2 rounded bg-dark text-light d-inline-block small mb-2">docker-compose up -d grafana loki promtail</code>
-                    </div>
+
+            <!-- Standby Mode Panel when Docker is Offline -->
+            <div class="grafana-offline-panel card p-4 text-center my-2 border-0 shadow-sm" style="background: var(--brand-card-soft);">
+                <div class="my-3">
+                    <span class="d-inline-flex align-items-center justify-content-center rounded-circle p-3" style="background: rgba(217, 154, 36, 0.15); width: 68px; height: 68px;">
+                        <i class="bi bi-journal-code text-warning fs-2"></i>
+                    </span>
+                </div>
+                <h5 class="fw-bold mb-2">Loki Log Aggregator in Standby</h5>
+                <p class="text-muted small mx-auto mb-3" style="max-width: 580px;">
+                    Centralized container log streaming and correlation ID indexing operate through Loki and Promtail.
+                </p>
+                <div class="p-3 my-2 rounded text-start mx-auto" style="background: var(--bg-card); border: 1px solid var(--border-color); max-width: 540px;">
+                    <div class="small fw-semibold text-muted mb-1"><i class="bi bi-terminal me-1"></i>To launch Loki & Promtail:</div>
+                    <code class="d-block p-2 rounded bg-dark text-light small font-monospace">docker-compose up -d grafana loki promtail</code>
+                </div>
+                <div class="d-flex justify-content-center gap-2 mt-3">
+                    <button type="button" class="btn btn-primary btn-sm px-3" onclick="switchToPipeline()">
+                        <i class="bi bi-diagram-3 me-1"></i> View Active 11-Stage Pipeline
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm px-3" onclick="probeGrafanaConnectivity(true)">
+                        <i class="bi bi-arrow-clockwise me-1"></i> Check Connection Again
+                    </button>
                 </div>
             </div>
 
-            <div class="card p-2 mb-2">
-                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 small">
-                    <div class="d-flex align-items-center gap-2">
-                        <span class="badge bg-dark"><i class="bi bi-journal-code me-1"></i>Loki Log Pipeline</span>
-                        <span class="text-muted">Dashboard UID: <code>banking-application-logs</code></span>
-                    </div>
-                    <div class="d-flex align-items-center gap-2">
-                        <a href="/grafana/d/banking-application-logs/banking-system-application-logs" target="_blank" class="btn btn-sm btn-outline-secondary py-0">
-                            <i class="bi bi-box-arrow-up-right me-1"></i> Fullscreen
-                        </a>
+            <!-- Live Streaming Panel (Shown automatically when Grafana is Online) -->
+            <div class="grafana-live-panel d-none">
+                <div class="card p-2 mb-2">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 small">
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="badge bg-dark"><i class="bi bi-journal-code me-1"></i>Loki Log Pipeline</span>
+                            <span class="text-muted">Dashboard: <code>banking-application-logs</code></span>
+                        </div>
+                        <div class="d-flex align-items-center gap-2">
+                            <a href="/grafana/d/banking-application-logs/banking-system-application-logs" target="_blank" class="btn btn-sm btn-outline-secondary py-0">
+                                <i class="bi bi-box-arrow-up-right me-1"></i> Fullscreen
+                            </a>
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            <div class="position-relative" style="min-height: 850px;">
-                <iframe id="iframe-grafana-logs"
-                        data-base-path="/d/banking-application-logs/banking-system-application-logs"
-                        src=""
-                        style="width: 100%; height: 860px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-card);"
-                        allow="fullscreen"></iframe>
+                <div class="position-relative" style="min-height: 850px;">
+                    <iframe id="iframe-grafana-logs"
+                            data-base-path="/d/banking-application-logs/banking-system-application-logs"
+                            src=""
+                            style="width: 100%; height: 860px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-card);"
+                            allow="fullscreen"></iframe>
+                </div>
             </div>
         </div>
 
@@ -319,6 +367,8 @@ function filterTxnFeed() {
 }
 
 // 3. Grafana Live Integration & Theme-Aware Iframe Loader (Proxied via :8090/grafana/**)
+var isGrafanaOnline = false;
+
 function getGrafanaTheme() {
     return document.documentElement.classList.contains("dark-mode") ? "dark" : "light";
 }
@@ -331,6 +381,7 @@ function buildGrafanaUrl(basePath, refreshInterval) {
 }
 
 function loadGrafanaIframe(iframeId, refreshInterval) {
+    if (!isGrafanaOnline) return; // Never mount/load iframe when Grafana is in standby
     var iframe = document.getElementById(iframeId);
     if (!iframe) return;
     var basePath = iframe.getAttribute("data-base-path");
@@ -344,40 +395,67 @@ function updateGrafanaRefresh(iframeId, refresh) {
     loadGrafanaIframe(iframeId, refresh);
 }
 
+function switchToPipeline() {
+    var btn = document.getElementById("tab-pipeline-btn");
+    if (btn && typeof bootstrap !== "undefined") {
+        new bootstrap.Tab(btn).show();
+    }
+}
+
 // 4. Grafana Health Probe via Portal Reverse Proxy
-function probeGrafanaConnectivity() {
+function probeGrafanaConnectivity(isManual) {
     var dot = document.getElementById("grafanaDot");
     var text = document.getElementById("grafanaStatusText");
-    var warnings = document.querySelectorAll(".grafana-offline-warning");
+
+    if (isManual && text) {
+        text.textContent = "Checking connection...";
+    }
 
     fetch("/grafana/api/health")
         .then(function(res) {
             if (res.ok) {
+                isGrafanaOnline = true;
                 setGrafanaOnline();
+                // Load active iframe if on a Grafana tab
+                loadActiveTabIframe();
             } else {
+                isGrafanaOnline = false;
                 setGrafanaOffline();
             }
         })
         .catch(function() {
+            isGrafanaOnline = false;
             setGrafanaOffline();
         });
 
     function setGrafanaOnline() {
         if (dot) dot.className = "bi bi-circle-fill text-success me-1";
         if (text) text.textContent = "Grafana Proxy Online (:8090/grafana)";
-        warnings.forEach(w => w.classList.add("d-none"));
+        document.querySelectorAll(".grafana-offline-panel").forEach(p => p.classList.add("d-none"));
+        document.querySelectorAll(".grafana-live-panel").forEach(p => p.classList.remove("d-none"));
     }
 
     function setGrafanaOffline() {
         if (dot) dot.className = "bi bi-circle-fill text-warning me-1";
         if (text) text.textContent = "Grafana Stack Offline";
-        warnings.forEach(w => w.classList.remove("d-none"));
+        document.querySelectorAll(".grafana-offline-panel").forEach(p => p.classList.remove("d-none"));
+        document.querySelectorAll(".grafana-live-panel").forEach(p => p.classList.add("d-none"));
     }
 }
 
-// 5. Tab Activation Listener to Lazy-Load Grafana Iframes
+function loadActiveTabIframe() {
+    var activePane = document.querySelector(".tab-pane.active");
+    if (activePane) {
+        var iframe = activePane.querySelector("iframe");
+        if (iframe) {
+            loadGrafanaIframe(iframe.id);
+        }
+    }
+}
+
+// 5. Tab Activation Listener
 document.addEventListener("DOMContentLoaded", function () {
-    probeGrafanaConnectivity();
+    probeGrafanaConnectivity(false);
 
     var tabs = [
         { btnId: "tab-grafana-tx-btn", iframeId: "iframe-grafana-tx" },
@@ -389,7 +467,9 @@ document.addEventListener("DOMContentLoaded", function () {
         var btn = document.getElementById(item.btnId);
         if (btn) {
             btn.addEventListener("shown.bs.tab", function() {
-                loadGrafanaIframe(item.iframeId);
+                if (isGrafanaOnline) {
+                    loadGrafanaIframe(item.iframeId);
+                }
             });
         }
     });
@@ -410,4 +490,3 @@ document.addEventListener("DOMContentLoaded", function () {
 <footer th:replace="~{fragments/layout :: footer}"></footer>
 </body>
 </html>
-
