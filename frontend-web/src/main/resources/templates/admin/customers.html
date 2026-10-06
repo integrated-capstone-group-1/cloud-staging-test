@@ -53,8 +53,8 @@
                                   th:text="${c.kycStatus.displayName}">VERIFIED</span>
                         </td>
                         <td>
-                            <a th:href="@{/customers/{id}(id=${c.customerId})}" class="btn btn-sm btn-outline-secondary py-0 px-2">
-                                <span th:text="${c.accounts.size()}"></span> accts
+                            <a th:href="@{/admin/customers/{id}(id=${c.customerId})}" class="btn btn-sm btn-outline-primary py-0 px-2" title="Customer 360 Profile">
+                                <i class="bi bi-person-bounding-box me-1"></i>360 (<span th:text="${c.accounts.size()}"></span>)
                             </a>
                         </td>
                         <td>

@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Held Transactions &amp; Risk Review Queue')}"></head>
+<body>
+<div th:replace="~{fragments/layout :: demoBar}"></div>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div th:replace="~{fragments/layout :: alerts}"></div>
+
+<main class="container py-4">
+    <!-- Header -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
+        <div>
+            <h4 class="fw-bold mb-1"><i class="bi bi-shield-exclamation text-warning me-2"></i>Held Transactions Review Queue</h4>
+            <p class="text-muted small mb-0">Maker-checker approval queue for high-risk and AMLA-flagged transfers (DIG-51, DIG-54)</p>
+        </div>
+        <div>
+            <a href="/admin/parameters" class="btn btn-outline-secondary btn-sm">
+                <i class="bi bi-sliders me-1"></i> Edit Risk Thresholds
+            </a>
+        </div>
+    </div>
+
+    <!-- Active Held Queue Table -->
+    <div class="card p-3 mb-4">
+        <h5 class="fw-bold mb-3"><i class="bi bi-hourglass-split text-warning me-2"></i>Pending Officer Review</h5>
+        <div class="table-responsive">
+            <table class="table table-sm table-hover align-middle">
+                <thead>
+                    <tr class="small text-muted">
+                        <th>Transaction ID</th>
+                        <th>Timestamp</th>
+                        <th>Customer</th>
+                        <th>Transfer Route</th>
+                        <th class="text-end">Amount</th>
+                        <th>Risk Score</th>
+                        <th>Triggered Flag Reason</th>
+                        <th>Status</th>
+                        <th class="text-center">Admin Decisions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr th:each="item : ${heldList}" th:if="${item.pending}">
+                        <td class="font-monospace small fw-bold" th:text="${item.txnId}">TXN-HELD-001</td>
+                        <td class="small" th:text="${#temporals.format(item.timestamp, 'yyyy-MM-dd HH:mm')}">2026-10-06 14:00</td>
+                        <td>
+                            <a th:href="@{/admin/customers/{id}(id=${item.customerId})}" class="fw-semibold text-decoration-none" th:text="${item.customerName}">Maria Santos</a>
+                            <div class="small text-muted font-monospace" th:text="${item.customerId}">CUST-1002</div>
+                        </td>
+                        <td class="font-monospace small">
+                            <span th:text="${item.fromAccount}">ACCT-5001-PHP</span> &rarr;
+                            <span th:text="${item.toAccount}">ACCT-9922-USD</span>
+                        </td>
+                        <td class="text-end font-monospace small fw-bold text-danger" th:text="${item.formattedAmount}">₱490,000.00</td>
+                        <td>
+                            <span class="badge"
+                                  th:classappend="${item.riskScore > 75 ? 'bg-danger' : 'bg-warning text-dark'}"
+                                  th:text="${item.riskScore} + ' / 100'">82 / 100</span>
+                        </td>
+                        <td class="small text-muted" style="max-width: 250px;" th:text="${item.flaggedReason}">AMLA CTR Threshold exceeded</td>
+                        <td>
+                            <span class="badge bg-warning text-dark">HELD_FOR_REVIEW</span>
+                        </td>
+                        <td class="text-center">
+                            <div class="d-flex justify-content-center gap-1">
+                                <!-- Approve / Release Button -->
+                                <form th:action="@{/admin/transfers/held/{txnId}/approve(txnId=${item.txnId})}" method="post">
+                                    <input type="hidden" name="notes" value="Approved by risk officer upon AML verification"/>
+                                    <button type="submit" class="btn btn-sm btn-success py-0 px-2" title="Approve & Release transfer">
+                                        <i class="bi bi-check-lg"></i> Approve
+                                    </button>
+                                </form>
+                                <!-- Reject / Reverse Button -->
+                                <form th:action="@{/admin/transfers/held/{txnId}/reject(txnId=${item.txnId})}" method="post">
+                                    <input type="hidden" name="notes" value="Rejected by compliance officer due to AML anomaly"/>
+                                    <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2" title="Reject transfer">
+                                        <i class="bi bi-x-lg"></i> Reject
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    <tr th:if="${heldList == null || heldList.isEmpty()}">
+                        <td colspan="9" class="text-center text-muted py-4">No transactions currently held for review.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Resolved / Processed History -->
+    <div class="card p-3">
+        <h5 class="fw-bold mb-3"><i class="bi bi-check2-all text-success me-2"></i>Processed Transfer Decisions</h5>
+        <div class="table-responsive">
+            <table class="table table-sm table-hover align-middle">
+                <thead>
+                    <tr class="small text-muted">
+                        <th>Transaction ID</th>
+                        <th>Customer</th>
+                        <th>Amount</th>
+                        <th>Decision</th>
+                        <th>Reviewer</th>
+                        <th>Decision Notes</th>
+                        <th>Reviewed At</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr th:each="item : ${heldList}" th:if="${!item.pending}">
+                        <td class="font-monospace small fw-bold" th:text="${item.txnId}">TXN-HELD-001</td>
+                        <td th:text="${item.customerName}">Maria Santos</td>
+                        <td class="font-monospace small fw-bold" th:text="${item.formattedAmount}">₱490,000.00</td>
+                        <td>
+                            <span th:class="${'badge ' + (item.approved ? 'bg-success' : 'bg-danger')}"
+                                  th:text="${item.status}">APPROVED</span>
+                        </td>
+                        <td class="small" th:text="${item.reviewedBy}">admin@ledgerbank.com</td>
+                        <td class="small text-muted" th:text="${item.decisionNotes}">Approved upon KYC review</td>
+                        <td class="small" th:text="${#temporals.format(item.reviewedAt, 'yyyy-MM-dd HH:mm')}">2026-10-06 14:05</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+</body>
+</html>
+

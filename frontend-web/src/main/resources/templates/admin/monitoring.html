@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Real-Time Transaction Monitoring Dashboard')}"></head>
+<body>
+<div th:replace="~{fragments/layout :: demoBar}"></div>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div th:replace="~{fragments/layout :: alerts}"></div>
+
+<main class="container py-4">
+    <!-- Header with Throughput KPIs -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+        <div>
+            <h4 class="fw-bold mb-1"><i class="bi bi-activity text-success me-2"></i>Real-Time Transaction Monitoring Dashboard</h4>
+            <p class="text-muted small mb-0">11-stage lifecycle pipeline, latency trackers, and anomaly detection (DIG-102, TR-MD02)</p>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <span class="badge bg-success p-2"><i class="bi bi-broadcast me-1"></i>Active Feed · TPS: <span th:text="${activeTps}">18.4 tx/s</span></span>
+            <span class="badge bg-primary p-2"><i class="bi bi-stopwatch me-1"></i>p95 Latency: <span th:text="${p95LatencyMs}">340 ms</span></span>
+            <button class="btn btn-sm btn-outline-secondary" onclick="toggleMasking()">
+                <i class="bi bi-eye-slash" id="maskIcon"></i> <span id="maskLabel">Unmask Identifiers</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Live Stale-Feed Banner -->
+    <div class="alert alert-info py-2 px-3 small d-flex align-items-center gap-2 mb-4" id="staleFeedBanner">
+        <div class="spinner-grow spinner-grow-sm text-info" role="status"></div>
+        <div>Live transaction stream active. Event-to-screen p95 is &le; 2.0 s across all gateway channels.</div>
+    </div>
+
+    <!-- Filter & Search Controls -->
+    <div class="card p-3 mb-4">
+        <div class="row g-2 align-items-center">
+            <div class="col-md-6">
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text"><i class="bi bi-search"></i></span>
+                    <input type="text" id="txnFilterInput" class="form-control" placeholder="Search by Transaction ID, Correlation ID, or Account..." onkeyup="filterTxnFeed()">
+                </div>
+            </div>
+            <div class="col-md-3">
+                <select id="statusFilter" class="form-select form-select-sm" onchange="filterTxnFeed()">
+                    <option value="">All Statuses</option>
+                    <option value="SUCCESS">SUCCESS</option>
+                    <option value="HELD">HELD</option>
+                    <option value="FAILED">FAILED</option>
+                    <option value="REVERSED">REVERSED</option>
+                </select>
+            </div>
+            <div class="col-md-3 text-end text-muted small">
+                Showing <strong th:text="${feed.size()}">2</strong> active transactions
+            </div>
+        </div>
+    </div>
+
+    <!-- Transactions Feed with 11-Stage Pipeline -->
+    <div th:each="txn : ${feed}" class="card p-3 mb-4 txn-card" th:attr="data-status=${txn.overallStatus},data-txn=${txn.txnId},data-corr=${txn.correlationId}">
+        <div class="d-flex flex-wrap justify-content-between align-items-center border-bottom pb-2 mb-3 gap-2">
+            <div>
+                <span class="font-monospace fw-bold me-2" th:text="${txn.txnId}">TXN-MON-8801</span>
+                <span class="badge" th:classappend="${txn.statusBadgeClass}" th:text="${txn.overallStatus}">SUCCESS</span>
+                <span class="small text-muted ms-2 font-monospace">Correlation: <span th:text="${txn.correlationId}">CORR-MON-8801</span></span>
+            </div>
+            <div class="d-flex align-items-center gap-3">
+                <span class="fw-bold font-monospace text-primary fs-6" th:text="${txn.formattedAmount}">₱12,500.00</span>
+                <span class="badge bg-light text-dark border small" th:text="'Duration: ' + ${txn.totalDurationMs} + ' ms'">840 ms</span>
+            </div>
+        </div>
+
+        <div class="row g-2 small mb-3">
+            <div class="col-md-4">
+                <span class="text-muted">Customer:</span>
+                <span class="fw-semibold cust-name masked" th:text="${txn.maskedCustomerName}">J*** D***</span>
+                <span class="fw-semibold cust-name raw d-none" th:text="${txn.rawCustomerName}">Juan Dela Cruz</span>
+            </div>
+            <div class="col-md-4">
+                <span class="text-muted">Source Account:</span>
+                <span class="font-monospace fw-semibold src-acct masked" th:text="${txn.maskedSourceAccount}">ACCT-****-1001</span>
+                <span class="font-monospace fw-semibold src-acct raw d-none" th:text="${txn.rawSourceAccount}">ACCT-1001-PHP</span>
+            </div>
+            <div class="col-md-4">
+                <span class="text-muted">Destination:</span>
+                <span class="font-monospace fw-semibold dst-acct masked" th:text="${txn.maskedDestAccount}">ACCT-****-2001</span>
+                <span class="font-monospace fw-semibold dst-acct raw d-none" th:text="${txn.rawDestAccount}">ACCT-2001-PHP</span>
+            </div>
+        </div>
+
+        <!-- 11-Stage Pipeline Visual Tracker -->
+        <h6 class="small fw-bold text-muted text-uppercase mb-2"><i class="bi bi-diagram-3 me-1"></i>Lifecycle Stage Tracker (11 Stages)</h6>
+        <div class="d-flex flex-wrap gap-1 align-items-center">
+            <div th:each="stage : ${txn.stages}" class="d-flex align-items-center gap-1">
+                <div class="badge p-2 text-center" th:classappend="${stage.badgeClass}" style="min-width: 95px;">
+                    <div class="fw-bold" style="font-size: 0.65rem;" th:text="${stage.stageName}">STAGE</div>
+                    <div class="small" style="font-size: 0.6rem;" th:text="${stage.durationMs} + ' ms'">40 ms</div>
+                </div>
+                <i class="bi bi-chevron-right text-muted small" th:if="${stage.sequence < txn.stages.size()}"></i>
+            </div>
+        </div>
+    </div>
+</main>
+
+<script>
+var isMasked = true;
+function toggleMasking() {
+    isMasked = !isMasked;
+    document.querySelectorAll(".masked").forEach(el => el.classList.toggle("d-none", !isMasked));
+    document.querySelectorAll(".raw").forEach(el => el.classList.toggle("d-none", isMasked));
+    var icon = document.getElementById("maskIcon");
+    var label = document.getElementById("maskLabel");
+    if (isMasked) {
+        icon.className = "bi bi-eye-slash";
+        label.textContent = "Unmask Identifiers";
+    } else {
+        icon.className = "bi bi-eye";
+        label.textContent = "Mask Identifiers";
+    }
+}
+
+function filterTxnFeed() {
+    var query = document.getElementById("txnFilterInput").value.toLowerCase();
+    var status = document.getElementById("statusFilter").value.toUpperCase();
+    document.querySelectorAll(".txn-card").forEach(function(card) {
+        var cardStatus = (card.getAttribute("data-status") || "").toUpperCase();
+        var cardTxn = (card.getAttribute("data-txn") || "").toLowerCase();
+        var cardCorr = (card.getAttribute("data-corr") || "").toLowerCase();
+        var matchesStatus = !status || cardStatus === status;
+        var matchesQuery = !query || cardTxn.includes(query) || cardCorr.includes(query);
+        card.style.display = (matchesStatus && matchesQuery) ? "" : "none";
+    });
+}
+</script>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+</body>
+</html>
+

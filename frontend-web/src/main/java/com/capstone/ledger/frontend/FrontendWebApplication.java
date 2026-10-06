@@ -8,7 +8,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
  * Run with `mvn spring-boot:run` from frontend-web/ — see README.md at the repo
  * root for the seeded demo login.
  */
-@SpringBootApplication
+@SpringBootApplication(scanBasePackages = {"com.capstone.ledger.frontend", "com.capstone.ledger"})
 public class FrontendWebApplication {
     public static void main(String[] args) {
         SpringApplication.run(FrontendWebApplication.class, args);

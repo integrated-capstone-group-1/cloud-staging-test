@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Dead Letter Queue (DLQ) Console')}"></head>
+<body>
+<div th:replace="~{fragments/layout :: demoBar}"></div>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div th:replace="~{fragments/layout :: alerts}"></div>
+
+<main class="container py-4">
+    <!-- Header -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
+        <div>
+            <h4 class="fw-bold mb-1"><i class="bi bi-inbox-fill text-danger me-2"></i>Dead Letter Queue (DLQ) Console</h4>
+            <p class="text-muted small mb-0">Inspect, replay, and discard poison messages with immutable audit tracking (DIG-90, BR-35)</p>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <span class="badge bg-secondary p-2"><i class="bi bi-clock me-1"></i>Max Age: 2h 15m</span>
+            <span class="badge bg-danger p-2"><i class="bi bi-exclamation-octagon me-1"></i>Queue Depth: <span th:text="${pendingCount}">2</span></span>
+        </div>
+    </div>
+
+    <!-- Metrics Row -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <div class="card p-3 border-start border-danger border-4">
+                <div class="text-muted small text-uppercase fw-semibold">Pending Messages</div>
+                <div class="h3 fw-bold mt-1 text-danger" th:text="${pendingCount}">2</div>
+                <div class="small text-muted">Awaiting administrator intervention</div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card p-3 border-start border-success border-4">
+                <div class="text-muted small text-uppercase fw-semibold">Replayed Messages</div>
+                <div class="h3 fw-bold mt-1 text-success" th:text="${replayedCount}">0</div>
+                <div class="small text-muted">Safely re-published with original key</div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card p-3 border-start border-secondary border-4">
+                <div class="text-muted small text-uppercase fw-semibold">Discarded Messages</div>
+                <div class="h3 fw-bold mt-1 text-secondary" th:text="${discardedCount}">0</div>
+                <div class="small text-muted">Discarded with documented audit reason</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- DLQ Messages Table -->
+    <div class="card p-3 mb-4">
+        <h5 class="fw-bold mb-3"><i class="bi bi-list-task text-primary me-2"></i>DLQ Message Registry</h5>
+        <div class="table-responsive">
+            <table class="table table-sm table-hover align-middle">
+                <thead>
+                    <tr class="small text-muted">
+                        <th>Message ID</th>
+                        <th>Topic &amp; Partition</th>
+                        <th>Original Key</th>
+                        <th>Exception / Cause</th>
+                        <th>Payload</th>
+                        <th>Retries</th>
+                        <th>Status</th>
+                        <th class="text-center">Resolution Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr th:each="msg : ${messages}">
+                        <td class="font-monospace small fw-bold" th:text="${msg.id}">DLQ-101</td>
+                        <td class="small">
+                            <span class="badge bg-light text-dark border" th:text="${msg.topic}">txn.settlement</span>
+                            <span class="text-muted font-monospace" th:text="'[P' + ${msg.partition} + ':' + ${msg.offset} + ']'">[P0:14205]</span>
+                        </td>
+                        <td class="font-monospace small" th:text="${msg.messageKey}">TXN-9081</td>
+                        <td class="small text-danger" style="max-width: 250px;" th:text="${msg.exceptionMessage}">OptimisticLockingFailureException</td>
+                        <td>
+                            <code class="small text-truncate d-inline-block" style="max-width: 180px;" th:text="${msg.payload}">{"txnId": "..."}</code>
+                        </td>
+                        <td>
+                            <span class="badge bg-secondary" th:text="${msg.retryCount} + ' retries'">3 retries</span>
+                        </td>
+                        <td>
+                            <span th:class="${'badge ' + (msg.pending ? 'bg-danger' : (msg.replayed ? 'bg-success' : 'bg-secondary'))}"
+                                  th:text="${msg.status}">PENDING</span>
+                        </td>
+                        <td class="text-center">
+                            <div th:if="${msg.pending}" class="d-flex justify-content-center gap-1">
+                                <!-- Replay Form -->
+                                <form th:action="@{/admin/dlq/{id}/replay(id=${msg.id})}" method="post">
+                                    <button type="submit" class="btn btn-sm btn-success py-0 px-2" title="Re-publish message with original partition key">
+                                        <i class="bi bi-arrow-repeat"></i> Replay
+                                    </button>
+                                </form>
+                                <!-- Discard Form with Reason -->
+                                <form th:action="@{/admin/dlq/{id}/discard(id=${msg.id})}" method="post" class="d-flex gap-1"
+                                      onsubmit="return confirmDiscard(this)">
+                                    <input type="hidden" name="reason" value="Manually resolved and discarded by compliance admin"/>
+                                    <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2" title="Discard message with reason">
+                                        <i class="bi bi-trash"></i> Discard
+                                    </button>
+                                </form>
+                            </div>
+                            <div th:unless="${msg.pending}" class="small text-muted font-monospace">
+                                <span th:text="${msg.actionBy}">admin</span>
+                            </div>
+                        </td>
+                    </tr>
+                    <tr th:if="${messages == null || messages.isEmpty()}">
+                        <td colspan="8" class="text-center text-muted py-4">DLQ is currently clean. No poison messages.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</main>
+
+<script>
+function confirmDiscard(form) {
+    var reason = prompt("Please enter the regulatory reason for discarding this DLQ message:", "Manually resolved upon core ledger reconciliation");
+    if (reason && reason.trim() !== "") {
+        form.elements["reason"].value = reason.trim();
+        return true;
+    }
+    return false;
+}
+</script>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+</body>
+</html>
+

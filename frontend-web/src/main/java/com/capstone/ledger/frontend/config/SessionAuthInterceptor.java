@@ -35,9 +35,13 @@ public class SessionAuthInterceptor implements HandlerInterceptor {
 
         UserSession user = (UserSession) session.getAttribute(SESSION_USER);
 
-        // Role authorization guard: only ADMIN can access /admin/**
-        if (uri.startsWith("/admin/") && !user.isAdmin()) {
-            response.sendRedirect("/customer/dashboard?denied=true");
+        // Role authorization guard: only ADMIN can access /admin/**, /v1/admin/**, /api/v1/admin/**
+        if ((uri.startsWith("/admin/") || uri.startsWith("/v1/admin/") || uri.startsWith("/api/v1/admin/")) && !user.isAdmin()) {
+            if (uri.equals("/admin/dashboard")) {
+                response.sendRedirect("/customer/dashboard?denied=true");
+                return false;
+            }
+            response.sendError(HttpServletResponse.SC_FORBIDDEN, "Access denied: Administrator privileges required");
             return false;
         }
 
