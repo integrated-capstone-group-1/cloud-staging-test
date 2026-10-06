@@ -74,6 +74,35 @@ class RbacAuthorizationFilterTest {
     }
 
     @Test
+    @DisplayName("DIG-71: Customer accessing /v1/admin/** is rejected with 403 Forbidden and ACCESS_DENIED")
+    void testCustomerAccessingV1AdminEndpoint_forbidden() throws ServletException, IOException {
+        authenticate("cust-001", "ROLE_CUSTOMER");
+
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/v1/admin/audit-logs");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        filter.doFilter(request, response, filterChain);
+
+        verify(filterChain, never()).doFilter(any(), any());
+        assertThat(response.getStatus()).isEqualTo(403);
+        assertThat(response.getContentType()).isEqualTo("application/problem+json");
+        assertThat(response.getContentAsString()).contains("ACCESS_DENIED");
+        assertThat(response.getContentAsString()).contains("Customer attempted to access admin endpoint");
+    }
+
+    @Test
+    @DisplayName("DIG-71: Public endpoint /v1/auth/otp/request bypasses RBAC checks")
+    void testV1AuthEndpointBypassesRbac() throws ServletException, IOException {
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/v1/auth/otp/request");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        filter.doFilter(request, response, filterChain);
+
+        verify(filterChain, times(1)).doFilter(request, response);
+        assertThat(response.getStatus()).isEqualTo(200);
+    }
+
+    @Test
     @DisplayName("DIG-71: Admin accessing /api/admin/** is permitted")
     void testAdminAccessingAdminEndpoint_permitted() throws ServletException, IOException {
         authenticate("admin-001", "ROLE_ADMIN");

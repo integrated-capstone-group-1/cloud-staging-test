@@ -32,7 +32,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/auth")
+@RequestMapping({"/api/auth", "/v1/auth", "/api/v1/auth"})
 @RequiredArgsConstructor
 public class LoginController {
 

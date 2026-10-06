@@ -36,7 +36,7 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         // Public: customer self-registration and actuator health
-                        .requestMatchers("/api/auth/register/**", "/actuator/**").permitAll()
+                        .requestMatchers("/api/auth/register/**", "/v1/auth/register/**", "/api/v1/auth/register/**", "/actuator/**").permitAll()
                         // Admin endpoints: requires ROLE_ADMIN
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/customers/**").hasAnyRole("CUSTOMER", "ADMIN", "INTERNAL")
