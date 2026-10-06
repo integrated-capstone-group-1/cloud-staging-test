@@ -20,8 +20,11 @@ import com.capstone.accounts.repository.CustomerRepository;
 import com.capstone.accounts.repository.OutboxMasterRepository;
 import com.capstone.common.constants.KafkaTopics;
 import com.capstone.common.dto.AccountDTO;
+import com.capstone.common.dto.AccountLockResponse;
 import com.capstone.common.dto.AccountMutationResponse;
 import com.capstone.common.dto.CreateAccountRequest;
+import com.capstone.common.dto.LockAccountRequest;
+import com.capstone.common.dto.UnlockAccountRequest;
 import com.capstone.common.event.BalanceUpdatedEvent;
 import com.capstone.common.event.CrossCurrencySettlementCompletedEvent;
 import com.capstone.common.event.ForexConversionCompletedEvent;
@@ -29,6 +32,7 @@ import com.capstone.common.exception.InsufficientBalanceException;
 import com.capstone.common.exception.ResourceNotFoundException;
 import com.capstone.common.security.SecurityUtils;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -141,6 +145,53 @@ public class AccountService {
     }
 
     @Transactional(readOnly = true)
+    public AccountDTO getPocket(String customerId, String currency) {
+        SecurityUtils.checkCustomerAccess(customerId, "view pocket " + currency);
+        AccountMaster pocket = accountRepository.findByCustomerIdAndCurrencyCode(customerId, currency)
+                .orElseThrow(() -> new ResourceNotFoundException("Pocket for currency " + currency + " not found for customer " + customerId));
+        return toDto(pocket);
+    }
+
+    @Transactional
+    public AccountLockResponse lockAccount(String accountId, LockAccountRequest request) {
+        AccountMaster account = findOrThrow(accountId);
+        SecurityUtils.checkCustomerAccess(account.getCustomerId(), "lock account " + accountId);
+
+        account.setAccountStatus("FROZEN");
+        account.setUpdatedAt(LocalDateTime.now());
+        account.setUpdatedBy("CUSTOMER");
+        AccountMaster saved = accountRepository.save(account);
+
+        balanceCacheService.evict(accountId);
+        log.info("Account {} locked by customer. Reason: {}", accountId, request != null ? request.reason() : "N/A");
+        return new AccountLockResponse(saved.getAccountId(), saved.getAccountStatus());
+    }
+
+    @Transactional
+    public AccountLockResponse unlockAccount(String accountId, UnlockAccountRequest request) {
+        AccountMaster account = findOrThrow(accountId);
+        SecurityUtils.checkCustomerAccess(account.getCustomerId(), "unlock account " + accountId);
+
+        // Strict Admin Freeze Precedence: if frozen by ADMIN, customer cannot self-unlock
+        if ("FROZEN".equalsIgnoreCase(account.getAccountStatus()) && "ADMIN".equalsIgnoreCase(account.getUpdatedBy())) {
+            throw new IllegalStateException("Account is administratively frozen and cannot be unlocked by customer");
+        }
+
+        if (request == null || request.otpCode() == null || request.otpCode().isBlank()) {
+            throw new IllegalArgumentException("Valid OTP code is required to unlock account");
+        }
+
+        account.setAccountStatus("ACTIVE");
+        account.setUpdatedAt(LocalDateTime.now());
+        account.setUpdatedBy("CUSTOMER");
+        AccountMaster saved = accountRepository.save(account);
+
+        balanceCacheService.evict(accountId);
+        log.info("Account {} unlocked by customer with OTP", accountId);
+        return new AccountLockResponse(saved.getAccountId(), saved.getAccountStatus());
+    }
+
+    @Transactional(readOnly = true)
     public List<AccountDTO> getAllAccounts() {
         return accountRepository.findAll().stream()
                 .map(this::toDto)
@@ -183,6 +234,7 @@ public class AccountService {
      * Redis hit returns immediately.
      * Cache miss falls through to Oracle and refreshes Redis.
      */
+    @CircuitBreaker(name = "balanceService", fallbackMethod = "getBalanceFallback")
     @Transactional(readOnly = true)
     public BigDecimal getBalance(String accountId) {
         AccountMaster acct = findOrThrow(accountId);
@@ -195,6 +247,12 @@ public class AccountService {
                     );
                     return acct.getBalanceAmount();
                 });
+    }
+
+    public BigDecimal getBalanceFallback(String accountId, Throwable t) {
+        log.warn("Circuit breaker fallback triggered for getBalance on account: {}", accountId, t);
+        return balanceCacheService.get(accountId)
+                .orElseThrow(() -> new IllegalStateException("Balance cache unavailable during CBS latency spike for account " + accountId, t));
     }
 
     /**

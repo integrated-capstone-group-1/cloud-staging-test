@@ -112,7 +112,9 @@ public class CrossCurrencyTimeoutService {
 
                 eventProducer.publishFailed(failedEvent);
 
-                metricsService.recordFailure("TRANSFER", txnId, "Cross-currency settlement timed out: ForEx service is unavailable");
+                if (metricsService != null) {
+                    metricsService.recordFailure("TRANSFER", txnId, "Cross-currency settlement timed out: ForEx service is unavailable");
+                }
 
                 log.warn("Marked cross-currency txnId={} as ROLLED_BACK due to ForEx service timeout; notified customer", txnId);
 
