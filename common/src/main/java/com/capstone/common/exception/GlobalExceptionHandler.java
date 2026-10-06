@@ -140,6 +140,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     public ResponseEntity<ProblemDetail> handleAccessDenied(AccessDeniedException ex, WebRequest request) {
         ProblemDetail pd = build(HttpStatus.FORBIDDEN, "https://capstone.bank/errors/access-denied",
                 "Access Denied", ex.getMessage(), request);
+        pd.setProperty("error_code", "ACCESS_DENIED");
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(pd);
     }
 
@@ -169,6 +170,28 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         ProblemDetail pd = build(HttpStatus.BAD_REQUEST, "https://capstone.bank/errors/invalid-state",
                 "Invalid State", ex.getMessage(), request);
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(pd);
+    }
+
+    @ExceptionHandler(CardNotFoundException.class)
+    public ResponseEntity<ProblemDetail> handleCardNotFound(CardNotFoundException ex, WebRequest request) {
+        ProblemDetail pd = build(HttpStatus.NOT_FOUND, "https://capstone.bank/errors/card-not-found",
+                "Card Not Found", ex.getMessage(), request);
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(pd);
+    }
+
+    @ExceptionHandler(InvalidCardOperationException.class)
+    public ResponseEntity<ProblemDetail> handleInvalidCardOperation(InvalidCardOperationException ex, WebRequest request) {
+        HttpStatus status = "ECOM_TRANSACTIONS_DISABLED".equals(ex.getMessage()) 
+                ? HttpStatus.UNPROCESSABLE_ENTITY 
+                : HttpStatus.BAD_REQUEST;
+        String errorCode = "ECOM_TRANSACTIONS_DISABLED".equals(ex.getMessage()) 
+                ? "ECOM_TRANSACTIONS_DISABLED" 
+                : "INVALID_CARD_OPERATION";
+        
+        ProblemDetail pd = build(status, "https://capstone.bank/errors/card-operation",
+                "Invalid Card Operation", ex.getMessage(), request);
+        pd.setProperty("error_code", errorCode);
+        return ResponseEntity.status(status).body(pd);
     }
 
     @ExceptionHandler(SecurityCheckUnavailableException.class)
