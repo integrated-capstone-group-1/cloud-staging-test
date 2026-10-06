@@ -35,7 +35,7 @@ public class ReconciliationController {
         this.bankingClient = bankingClient;
     }
 
-    @GetMapping("/admin/reconciliation")
+    @GetMapping({"/admin/reconciliation", "/v1/admin/reconciliation"})
     public String reconciliationDashboard(@RequestParam(required = false) String runId,
                                           HttpSession session, Model model) {
         UserSession user = (UserSession) session.getAttribute(SessionAuthInterceptor.SESSION_USER);
