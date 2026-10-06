@@ -1,6 +1,7 @@
 
 package com.capstone.common.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 
@@ -11,7 +12,13 @@ public record LoginRequest(
         String email,
 
         @NotBlank(message = "Password is required")
-        String password
+        String password,
+
+        @JsonProperty("device_id")
+        String deviceId
 ) {
+    public LoginRequest(String email, String password) {
+        this(email, password, null);
+    }
 }
 

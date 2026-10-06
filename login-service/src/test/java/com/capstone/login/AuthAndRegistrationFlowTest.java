@@ -113,4 +113,43 @@ class AuthAndRegistrationFlowTest {
         assertThat(refreshToken).startsWith("rt-");
         assertThat(refreshToken.length()).isGreaterThan(3);
     }
+
+    @Test
+    @DisplayName("DIG-69: LoginRequest supports optional device_id for server-side binding")
+    void testLoginRequestDeviceBindingSupport() {
+        LoginRequest req = new LoginRequest(TEST_EMAIL, TEST_PASSWORD, "device-android-pixel");
+        assertThat(req.email()).isEqualTo(TEST_EMAIL);
+        assertThat(req.password()).isEqualTo(TEST_PASSWORD);
+        assertThat(req.deviceId()).isEqualTo("device-android-pixel");
+    }
+
+    @Test
+    @DisplayName("DIG-70: PIN fallback DTO structure and 6-digit contract")
+    void testPinFallbackContract() {
+        com.capstone.common.dto.PinSetupRequest setup = new com.capstone.common.dto.PinSetupRequest(TEST_CUST_ID, "654321");
+        assertThat(setup.customerId()).isEqualTo(TEST_CUST_ID);
+        assertThat(setup.pin()).isEqualTo("654321");
+
+        com.capstone.common.dto.PinVerifyRequest verify = new com.capstone.common.dto.PinVerifyRequest(TEST_CUST_ID, "654321");
+        assertThat(verify.customerId()).isEqualTo(TEST_CUST_ID);
+        assertThat(verify.pin()).isEqualTo("654321");
+
+        com.capstone.common.dto.PinVerifyResponse resp = com.capstone.common.dto.PinVerifyResponse.authorized();
+        assertThat(resp.status()).isEqualTo("AUTHORIZED");
+        assertThat(resp.verified()).isTrue();
+    }
+
+    @Test
+    @DisplayName("DIG-71: RBAC role verification for CUSTOMER and ADMIN roles")
+    void testRbacRoleVerification() {
+        String secret = "test_secret_key_long_enough_for_hs256_algo_256bits";
+        JwtTokenProvider provider = new JwtTokenProvider(secret, 3600000L);
+
+        String customerToken = provider.generateToken(TEST_CUST_ID, TEST_EMAIL, List.of("ROLE_CUSTOMER"));
+        assertThat(provider.getRoles(customerToken)).contains("ROLE_CUSTOMER");
+        assertThat(provider.getRoles(customerToken)).doesNotContain("ROLE_ADMIN");
+
+        String adminToken = provider.generateToken("admin-001", "admin@capstone.bank", List.of("ROLE_ADMIN"));
+        assertThat(provider.getRoles(adminToken)).contains("ROLE_ADMIN");
+    }
 }

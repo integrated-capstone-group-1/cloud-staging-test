@@ -140,6 +140,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     public ResponseEntity<ProblemDetail> handleAccessDenied(AccessDeniedException ex, WebRequest request) {
         ProblemDetail pd = build(HttpStatus.FORBIDDEN, "https://capstone.bank/errors/access-denied",
                 "Access Denied", ex.getMessage(), request);
+        pd.setProperty("error_code", "ACCESS_DENIED");
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(pd);
     }
 
