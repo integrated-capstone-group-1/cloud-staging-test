@@ -96,5 +96,24 @@ public class TransactionMaster {
 
     @Column(name = "updated_by", length = 50)
     private String updatedBy;
+
+    @Column(name = "customer_id", length = 36)
+    private String customerId;
+
+    @Builder.Default
+    @Column(name = "stage", length = 30)
+    private String stage = "INITIATED";
+
+    @Column(name = "core_reference_id", length = 50)
+    private String coreReferenceId;
+
+    @Column(name = "cancel_reason", length = 100)
+    private String cancelReason;
+
+    @Column(name = "reversal_of_txn_id", length = 36)
+    private String reversalOfTxnId;
+
+    @Column(name = "idempotency_key", length = 64)
+    private String idempotencyKey;
 }
 
