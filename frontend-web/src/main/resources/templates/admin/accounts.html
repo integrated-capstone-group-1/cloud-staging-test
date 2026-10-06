@@ -36,7 +36,7 @@
                     <tr th:each="a : ${accounts}">
                         <td class="font-monospace fw-bold" th:text="${a.accountId}">ACCT-1001</td>
                         <td>
-                            <a th:href="@{/customers/{id}(id=${a.customerId})}" class="font-monospace text-decoration-none small" th:text="${a.customerId}"></a>
+                            <a th:href="@{/admin/customers/{id}(id=${a.customerId})}" class="font-monospace text-decoration-none small" th:text="${a.customerId}"></a>
                         </td>
                         <td th:text="${a.accountType.displayName}">Savings</td>
                         <td><span class="currency-badge" th:text="${a.currencyCode}">PHP</span></td>

@@ -15,13 +15,13 @@
         </div>
         <div class="d-flex gap-2">
             <a href="/admin/customers" class="btn btn-sm btn-outline-primary">
-                <i class="bi bi-people me-1"></i> Customer KYC Directory
+                <i class="bi bi-person-bounding-box me-1"></i> Customer 360 Directory
+            </a>
+            <a href="/admin/monitoring" class="btn btn-sm btn-outline-info">
+                <i class="bi bi-activity me-1"></i> Live Monitoring Feed
             </a>
             <a href="/admin/reconciliation" class="btn btn-sm btn-outline-warning">
                 <i class="bi bi-shield-check me-1"></i> Reconciliation &amp; Audit
-            </a>
-            <a href="/transactions/new" class="btn btn-sm btn-primary">
-                <i class="bi bi-plus-circle me-1"></i> New Mutation
             </a>
         </div>
     </div>
@@ -33,7 +33,9 @@
                 <div class="text-muted small text-uppercase fw-semibold">Total Customers</div>
                 <div class="balance-figure mt-1" th:text="${customerCount}">0</div>
                 <div class="small mt-1 text-muted">
-                    <span class="badge bg-warning-subtle text-warning border" th:text="${pendingKyc + ' Pending KYC'}"></span>
+                    <span class="badge bg-success-subtle text-success border border-success-subtle">
+                        <i class="bi bi-check-circle me-1"></i>Onboarded Customers
+                    </span>
                 </div>
             </div>
         </div>
@@ -77,14 +79,14 @@
                 </div>
 
                 <div class="table-responsive">
-                    <table class="table table-sm table-hover">
+                    <table class="table table-sm table-hover align-middle">
                         <thead>
                             <tr>
                                 <th>Customer ID</th>
                                 <th>Full Name</th>
                                 <th>Email</th>
-                                <th>Accounts</th>
-                                <th>KYC Status</th>
+                                <th>Pockets</th>
+                                <th>Status</th>
                                 <th>Action</th>
                             </tr>
                         </thead>
@@ -94,15 +96,14 @@
                                 <td class="fw-semibold" th:text="${c.fullName}">Juan Dela Cruz</td>
                                 <td class="small" th:text="${c.email}">email@example.com</td>
                                 <td>
-                                    <span class="badge bg-light text-dark border" th:text="${c.accounts.size()} + ' accts'"></span>
+                                    <span class="badge bg-light text-dark border" th:text="${c.accounts.size()} + ' pockets'"></span>
                                 </td>
                                 <td>
-                                    <span th:class="${'badge ' + (c.kycStatus.name() == 'VERIFIED' ? 'badge-kyc-verified' : 'badge-kyc-pending')}"
-                                          th:text="${c.kycStatus.displayName}">VERIFIED</span>
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle">ACTIVE</span>
                                 </td>
                                 <td>
-                                    <a th:href="@{/customers/{id}(id=${c.customerId})}" class="btn btn-xs btn-outline-primary py-0 px-2">
-                                        View
+                                    <a th:href="@{/admin/customers/{id}(id=${c.customerId})}" class="btn btn-sm btn-outline-primary py-0 px-2">
+                                        <i class="bi bi-person-bounding-box me-1"></i>360
                                     </a>
                                 </td>
                             </tr>
@@ -117,7 +118,7 @@
             <div class="card p-3 h-100">
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <h5 class="fw-bold mb-0"><i class="bi bi-activity text-primary me-2"></i>Live Ledger Feed</h5>
-                    <a href="/transactions/history" class="small text-decoration-none">Audit Trail &rarr;</a>
+                    <a href="/admin/monitoring" class="small text-decoration-none">Live Telemetry &rarr;</a>
                 </div>
 
                 <div class="table-responsive">

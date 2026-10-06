@@ -712,6 +712,15 @@
         );
 }
 
+.banking-landing .magenta-gradient {
+    background:
+        linear-gradient(
+            135deg,
+            #c21868,
+            #a91459
+        );
+}
+
 .banking-landing .feature-card h5 {
     color: var(--brand-text-primary);
 

@@ -24,24 +24,24 @@
         <span class="d-none d-sm-inline">
             <i class="bi bi-person-badge me-1"></i>
             <span>Active Persona:</span>
-            <strong class="text-white ms-1" th:text="${session.user != null ? session.user.fullName + ' (' + session.user.role + ')' : 'Guest'}">Guest</strong>
+            <strong class="text-white ms-1" th:text="${session.user != null ? session.user.fullName + ' (' + session.user.role + ')' : 'Guest Staff'}">Guest Staff</strong>
         </span>
     </div>
     <div>
-        <span class="d-none d-md-inline">Quick Switch:</span>
-        <a href="/auth/switch?role=admin" class="badge bg-secondary text-decoration-none">Admin</a>
-        <a href="/auth/switch?role=juan" class="badge bg-primary text-decoration-none">Juan (Customer - PHP/USD)</a>
-        <a href="/auth/switch?role=maria" class="badge bg-info text-decoration-none">Maria (Customer - Multi-Currency)</a>
+        <span class="d-none d-md-inline">Staff Demo Persona:</span>
+        <a href="/auth/switch?role=admin" class="badge bg-primary text-decoration-none">
+            <i class="bi bi-shield-check me-1"></i>Admin (Lead Operations)
+        </a>
     </div>
 </div>
 
 <!-- Main Application Navigation -->
 <nav th:fragment="navbar" class="navbar navbar-expand-lg navbar-dark navbar-custom px-3 py-2 sticky-top">
     <div class="container-fluid">
-        <a class="navbar-brand" th:href="${session.user != null && session.user.isAdmin() ? '/admin/dashboard' : (session.user != null ? '/customer/dashboard' : '/')}">
+        <a class="navbar-brand" th:href="${session.user != null && session.user.isAdmin() ? '/admin/dashboard' : '/'}">
             <i class="bi bi-bank2 text-primary"></i>
             <span>Core Retail Ledger</span>
-            <span th:if="${session.user != null && session.user.isAdmin()}" class="badge bg-danger ms-1 small" style="font-size: 0.65rem;">ADMIN</span>
+            <span class="badge bg-primary ms-1 small" style="font-size: 0.65rem; letter-spacing: 0.5px;">ADMIN PORTAL</span>
         </a>
 
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNavbar"
@@ -50,77 +50,53 @@
         </button>
 
         <div class="collapse navbar-collapse" id="mainNavbar">
-            <!-- Left-aligned Nav Links based on Role -->
-            <ul class="navbar-nav me-auto mb-2 mb-lg-0" th:if="${session.user != null}">
-                <!-- Admin Role Links -->
-                <th:block th:if="${session.user.isAdmin()}">
-                    <li class="nav-item">
-                        <a class="nav-link" href="/admin/dashboard"><i class="bi bi-speedometer2 me-1"></i> Dashboard</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/admin/customers"><i class="bi bi-people me-1"></i> Customers &amp; KYC</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/admin/accounts"><i class="bi bi-wallet2 me-1"></i> Accounts</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/admin/transfers/held"><i class="bi bi-shield-exclamation me-1"></i> Held Queue</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/admin/parameters"><i class="bi bi-sliders me-1"></i> Parameters</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/admin/dlq"><i class="bi bi-inbox-fill me-1"></i> DLQ</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/admin/monitoring"><i class="bi bi-activity me-1"></i> Monitoring</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/admin/reconciliation"><i class="bi bi-shield-check me-1"></i> Recon</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/admin/audit"><i class="bi bi-journal-check me-1"></i> Audit</a>
-                    </li>
-                </th:block>
-
-                <!-- Customer Role Links -->
-                <th:block th:if="${session.user.isCustomer()}">
-                    <li class="nav-item">
-                        <a class="nav-link" href="/customer/dashboard"><i class="bi bi-grid-1x2 me-1"></i> My Dashboard</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/accounts/open"><i class="bi bi-plus-circle me-1"></i> Open Account</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/transactions/new"><i class="bi bi-send me-1"></i> Transact &amp; Transfer</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/transactions/history"><i class="bi bi-clock-history me-1"></i> My Activity</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/notifications"><i class="bi bi-bell me-1"></i> Alerts</a>
-                    </li>
-                </th:block>
+            <!-- Left-aligned Nav Links for Admin -->
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0" th:if="${session.user != null && session.user.isAdmin()}">
+                <li class="nav-item">
+                    <a class="nav-link" href="/admin/dashboard"><i class="bi bi-speedometer2 me-1"></i> Dashboard</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/admin/customers"><i class="bi bi-person-bounding-box me-1"></i> Customer 360</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/admin/accounts"><i class="bi bi-wallet2 me-1"></i> Accounts</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/admin/transfers/held"><i class="bi bi-shield-exclamation me-1"></i> Held Queue</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/admin/parameters"><i class="bi bi-sliders me-1"></i> Parameters</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/admin/dlq"><i class="bi bi-inbox-fill me-1"></i> DLQ</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/admin/monitoring"><i class="bi bi-activity me-1"></i> Monitoring</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/admin/reconciliation"><i class="bi bi-shield-check me-1"></i> Recon</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/admin/audit"><i class="bi bi-journal-check me-1"></i> Audit</a>
+                </li>
             </ul>
 
             <!-- Right-aligned Profile & Session Actions -->
-            <div class="d-flex align-items-center gap-2" th:if="${session.user != null}">
-                <a th:if="${session.user.isCustomer()}" href="/customer/profile" class="btn btn-sm profile-link d-flex align-items-center gap-1">
-                    <i class="bi bi-person-circle"></i>
-                    <span th:text="${session.user.fullName}">Customer Name</span>
-                </a>
-                <span th:if="${session.user.isAdmin()}" class="admin-console-label small me-2">
-                    <i class="bi bi-shield-lock text-warning me-1"></i> Admin Console
+            <div class="d-flex align-items-center gap-2 ms-auto" th:if="${session.user != null}">
+                <span class="admin-console-label small me-2">
+                    <i class="bi bi-shield-lock text-warning me-1"></i>
+                    <span th:text="${session.user.fullName}">Administrator</span>
                 </span>
                 <a class="btn btn-outline-danger btn-sm logout-link" href="/logout">
                     <i class="bi bi-box-arrow-right"></i> Log out
                 </a>
             </div>
 
-            <!-- Guest Links -->
+            <!-- Guest Action: Admin Sign In -->
             <div class="d-flex gap-2 ms-auto" th:if="${session.user == null}">
-                <a class="btn btn-sm guest-login-link" href="/login">Log in</a>
-                <a class="btn btn-primary btn-sm" href="/register">Create account</a>
+                <a class="btn btn-primary btn-sm px-3" href="/login">
+                    <i class="bi bi-shield-lock me-1"></i> Admin Sign In
+                </a>
             </div>
         </div>
     </div>

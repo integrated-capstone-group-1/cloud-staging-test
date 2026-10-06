@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
-<head th:replace="~{fragments/layout :: head('Customer KYC Management')}"></head>
+<head th:replace="~{fragments/layout :: head('Customer Directory &amp; 360')}"></head>
 <body>
 <div th:replace="~{fragments/layout :: demoBar}"></div>
 <nav th:replace="~{fragments/layout :: navbar}"></nav>
@@ -9,8 +9,8 @@
 <main class="container py-4">
     <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
         <div>
-            <h4 class="fw-bold mb-1"><i class="bi bi-people text-primary me-2"></i>Customer Directory &amp; KYC Verification</h4>
-            <p class="text-muted small mb-0">Review identity documents and update KYC verification compliance</p>
+            <h4 class="fw-bold mb-1"><i class="bi bi-people text-primary me-2"></i>Customer Directory &amp; Telemetry</h4>
+            <p class="text-muted small mb-0">Browse registered customer profiles, inspect Customer 360 accounts, and manage authentication</p>
         </div>
         <div>
             <input type="text" id="custSearch" class="form-control form-control-sm" placeholder="Search by name, email, ID..." onkeyup="filterCustomers()">
@@ -24,12 +24,11 @@
                     <tr>
                         <th>Customer ID</th>
                         <th>Name</th>
-                        <th>Email &amp; Phone</th>
-                        <th>Identity Document</th>
-                        <th>Address</th>
-                        <th>KYC Status</th>
-                        <th>Accounts</th>
-                        <th>KYC Action</th>
+                        <th>Email &amp; Contact</th>
+                        <th>Registration Date</th>
+                        <th>Accounts &amp; Pockets</th>
+                        <th>Status</th>
+                        <th>Customer 360 Action</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -37,43 +36,27 @@
                         <td class="font-monospace fw-semibold" th:text="${c.customerId}">CUST-1001</td>
                         <td>
                             <div class="fw-bold" th:text="${c.fullName}">Juan Dela Cruz</div>
-                            <small class="text-muted" th:text="${'Since ' + #temporals.format(c.createdAt, 'MMM yyyy')}"></small>
+                            <small class="text-muted" th:text="${c.address}">Metro Manila</small>
                         </td>
                         <td>
                             <div class="small" th:text="${c.email}">email@example.com</div>
                             <div class="small text-muted" th:text="${c.contactNo}">+63 917 000 0000</div>
                         </td>
+                        <td class="small text-muted" th:text="${#temporals.format(c.createdAt, 'dd MMM yyyy')}">01 Oct 2026</td>
                         <td>
-                            <div class="small fw-semibold" th:text="${c.idType}">PASSPORT</div>
-                            <div class="font-monospace small text-muted" th:text="${c.idNumber}">P1234567A</div>
-                        </td>
-                        <td class="small text-muted" style="max-width: 200px;" th:text="${c.address}">Metro Manila</td>
-                        <td>
-                            <span th:class="${'badge ' + (c.kycStatus.name() == 'VERIFIED' ? 'badge-kyc-verified' : (c.kycStatus.name() == 'REJECTED' ? 'bg-danger' : 'badge-kyc-pending'))}"
-                                  th:text="${c.kycStatus.displayName}">VERIFIED</span>
+                            <span class="badge bg-light text-dark border">
+                                <i class="bi bi-wallet2 me-1"></i><span th:text="${c.accounts.size()} + ' Pockets'">1 Pockets</span>
+                            </span>
                         </td>
                         <td>
-                            <a th:href="@{/admin/customers/{id}(id=${c.customerId})}" class="btn btn-sm btn-outline-primary py-0 px-2" title="Customer 360 Profile">
-                                <i class="bi bi-person-bounding-box me-1"></i>360 (<span th:text="${c.accounts.size()}"></span>)
+                            <span class="badge bg-success-subtle text-success border border-success-subtle">
+                                <i class="bi bi-check-circle me-1"></i>ACTIVE
+                            </span>
+                        </td>
+                        <td>
+                            <a th:href="@{/admin/customers/{id}(id=${c.customerId})}" class="btn btn-sm btn-primary py-1 px-3">
+                                <i class="bi bi-person-bounding-box me-1"></i> View 360 Profile
                             </a>
-                        </td>
-                        <td>
-                            <div class="d-flex gap-1">
-                                <form th:if="${c.kycStatus.name() != 'VERIFIED'}"
-                                      th:action="@{/admin/customers/{id}/kyc(id=${c.customerId})}" method="post">
-                                    <input type="hidden" name="status" value="VERIFIED"/>
-                                    <button type="submit" class="btn btn-sm btn-success py-0 px-2" title="Approve KYC">
-                                        <i class="bi bi-check-lg"></i> Approve
-                                    </button>
-                                </form>
-                                <form th:if="${c.kycStatus.name() != 'REJECTED'}"
-                                      th:action="@{/admin/customers/{id}/kyc(id=${c.customerId})}" method="post">
-                                    <input type="hidden" name="status" value="REJECTED"/>
-                                    <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2" title="Reject / Flag KYC">
-                                        <i class="bi bi-x-lg"></i>
-                                    </button>
-                                </form>
-                            </div>
                         </td>
                     </tr>
                 </tbody>
@@ -177,4 +160,3 @@ function filterCustomers() {
 
 </body>
 </html>
-
