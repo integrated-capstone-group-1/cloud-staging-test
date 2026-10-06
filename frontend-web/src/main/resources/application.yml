@@ -14,6 +14,8 @@ banking:
     gateway-url: ${BANKING_GATEWAY_URL:http://localhost:8080}
     connect-timeout-ms: 3000
     read-timeout-ms: 5000
+  grafana:
+    internal-url: ${BANKING_GRAFANA_URL:http://localhost:3000}
 
 management:
   endpoints:
