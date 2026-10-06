@@ -37,7 +37,7 @@
                 <span th:if="${dlqPendingCount > 0}" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-warning text-dark" th:text="${dlqPendingCount}">1</span>
             </a>
             <a href="/admin/monitoring" class="btn btn-sm btn-outline-info">
-                <i class="bi bi-activity me-1"></i> Live 11-Stage Feed
+                <i class="bi bi-activity me-1"></i> Observability &amp; Grafana
             </a>
             <a href="/admin/reconciliation" class="btn btn-sm btn-outline-success">
                 <i class="bi bi-shield-check me-1"></i> Reconciliation
@@ -64,9 +64,13 @@
                 <span><i class="bi bi-broadcast text-warning me-1"></i>Kafka Lag: <strong>0 msgs</strong></span>
             </div>
             <div class="d-flex align-items-center gap-3">
-                <span><i class="bi bi-database-check text-primary me-1"></i>Dual-DB State: <strong>Oracle 21c (Master) + Postgres 15 (Audit)</strong></span>
+                <a href="/admin/monitoring#grafana-tx" class="badge bg-primary text-white text-decoration-none border py-1 px-2" title="Switch to live Prometheus & Grafana dashboard">
+                    <i class="bi bi-speedometer2 me-1"></i>Grafana :3000
+                </a>
                 <span class="text-muted">|</span>
-                <span><i class="bi bi-check2-all text-success me-1"></i>Recon Status: <strong class="text-success">BALANCED (₱0.00 Variance)</strong></span>
+                <span><i class="bi bi-database-check text-primary me-1"></i>Dual-DB: <strong>Oracle + Postgres</strong></span>
+                <span class="text-muted">|</span>
+                <span><i class="bi bi-check2-all text-success me-1"></i>Recon: <strong class="text-success">BALANCED</strong></span>
             </div>
         </div>
     </div>
@@ -172,7 +176,9 @@
                     <div class="btn-group btn-group-sm" role="group">
                         <button type="button" class="btn btn-outline-secondary active py-0 px-2" style="font-size: 0.75rem;">Today</button>
                         <button type="button" class="btn btn-outline-secondary py-0 px-2" style="font-size: 0.75rem;">7 Days</button>
-                        <button type="button" class="btn btn-outline-secondary py-0 px-2" style="font-size: 0.75rem;">30 Days</button>
+                        <a href="/admin/monitoring#grafana-tx" class="btn btn-outline-primary py-0 px-2" style="font-size: 0.75rem;" title="View Prometheus live metrics in Grafana">
+                            <i class="bi bi-speedometer2 me-1"></i>Live Grafana
+                        </a>
                     </div>
                 </div>
                 <div style="height: 250px;">

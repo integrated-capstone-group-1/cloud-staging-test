@@ -414,6 +414,11 @@ services:
       - ./grafana/provisioning:/etc/grafana/provisioning
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
+      # Allow Grafana dashboards to be embedded in iframe inside the Admin Web Portal
+      - GF_SECURITY_ALLOW_EMBEDDING=true
+      - GF_SECURITY_COOKIE_SAMESITE=none
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
       # Allow Grafana to load unsigned plugins if needed in future
       - GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS=
       # Increase default query timeout for Loki log range queries

@@ -49,3 +49,8 @@ scrape_configs:
     metrics_path: "/actuator/prometheus"
     static_configs:
       - targets: ["forex-service:8087"]
+
+  - job_name: "frontend-web"
+    metrics_path: "/actuator/prometheus"
+    static_configs:
+      - targets: ["frontend-web:8090"]
