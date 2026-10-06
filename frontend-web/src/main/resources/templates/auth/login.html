@@ -148,104 +148,11 @@
 
 <div th:replace="~{fragments/layout :: footer}"></div>
 
-
-<!-- FLOATING THEME TOGGLE -->
-<button
-    type="button"
-    class="login-theme-toggle"
-    id="loginThemeToggle"
-    aria-label="Toggle dark mode"
-    title="Toggle dark mode">
-
-    <i class="bi bi-moon-fill" id="loginThemeIcon"></i>
-
-</button>
-
-
-<!-- THEME + DEMO SCRIPT -->
 <script>
-
-(function () {
-
-    const body = document.body;
-
-    const toggle =
-        document.getElementById("loginThemeToggle");
-
-    const icon =
-        document.getElementById("loginThemeIcon");
-
-    const savedTheme =
-        localStorage.getItem("banking-theme");
-
-
-    if (savedTheme === "dark") {
-        body.classList.add("dark-mode");
-    }
-
-
-    function updateIcon() {
-
-        if (body.classList.contains("dark-mode")) {
-
-            icon.className =
-                "bi bi-sun-fill";
-
-            toggle.setAttribute(
-                "aria-label",
-                "Switch to light mode"
-            );
-
-            toggle.setAttribute(
-                "title",
-                "Switch to light mode"
-            );
-
-        } else {
-
-            icon.className =
-                "bi bi-moon-fill";
-
-            toggle.setAttribute(
-                "aria-label",
-                "Switch to dark mode"
-            );
-
-            toggle.setAttribute(
-                "title",
-                "Switch to dark mode"
-            );
-
-        }
-
-    }
-
-    updateIcon();
-
-
-    toggle.addEventListener("click", function () {
-
-        body.classList.toggle("dark-mode");
-
-        const isDark =
-            body.classList.contains("dark-mode");
-
-        localStorage.setItem(
-            "banking-theme",
-            isDark ? "dark" : "light"
-        );
-
-        updateIcon();
-
-    });
-
-})();
-
 function fillDemo(email, password) {
     document.getElementById("emailInput").value = email;
     document.getElementById("passwordInput").value = password;
 }
-
 </script>
 
 </body>

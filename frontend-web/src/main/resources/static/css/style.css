@@ -892,24 +892,26 @@ a:hover {
    23. DARK MODE
    ========================================================= */
 
+html.dark-mode,
+html[data-bs-theme="dark"],
 body.dark-mode {
 
-    --brand-bg: #17151d;
-    --brand-card-bg: #211e28;
-    --brand-card-soft: #27232f;
+    --brand-bg: #15131b;
+    --brand-card-bg: #201c27;
+    --brand-card-soft: #272330;
 
-    --brand-border: #383341;
-    --brand-border-soft: #302c38;
+    --brand-border: #393444;
+    --brand-border-soft: #2f2a39;
 
-    --brand-text-primary: #f3f0f5;
-    --brand-text-secondary: #c8c3ce;
-    --brand-text-muted: #9a94a2;
+    --brand-text-primary: #f5f2f8;
+    --brand-text-secondary: #c9c3d2;
+    --brand-text-muted: #9790a3;
 
     --brand-shadow:
-        0 8px 28px rgba(0, 0, 0, 0.25);
+        0 8px 28px rgba(0, 0, 0, 0.35);
 
     --brand-shadow-hover:
-        0 14px 34px rgba(0, 0, 0, 0.34);
+        0 14px 34px rgba(0, 0, 0, 0.45);
 
     background: var(--brand-bg);
     color: var(--brand-text-primary);
@@ -1444,4 +1446,88 @@ body.dark-mode .table-hover tbody tr:hover {
     background-color: rgba(214, 69, 69, 0.15) !important;
     color: var(--brand-danger) !important;
     border: 1px solid rgba(214, 69, 69, 0.3);
-}
+}
+
+/* Dark Mode Comprehensive Overrides for All Admin Consoles */
+body.dark-mode .card,
+body.dark-mode .modal-content,
+body.dark-mode .list-group-item,
+body.dark-mode .executive-kpi-card,
+body.dark-mode .admin-stat-card,
+body.dark-mode .txn-card,
+body.dark-mode .persona-card,
+body.dark-mode .feature-card,
+body.dark-mode .auth-card {
+    background-color: var(--brand-card-bg) !important;
+    border-color: var(--brand-border) !important;
+    color: var(--brand-text-primary);
+}
+
+body.dark-mode .card-header,
+body.dark-mode .card-footer,
+body.dark-mode .table thead th,
+body.dark-mode .modal-header,
+body.dark-mode .modal-footer {
+    background-color: var(--brand-card-soft) !important;
+    border-color: var(--brand-border) !important;
+    color: var(--brand-text-secondary) !important;
+}
+
+body.dark-mode pre,
+body.dark-mode code {
+    background-color: #121017 !important;
+    color: #e5b9f5 !important;
+    border: 1px solid var(--brand-border);
+}
+
+body.dark-mode .progress {
+    background-color: var(--brand-card-soft) !important;
+}
+
+body.dark-mode .border,
+body.dark-mode .border-bottom,
+body.dark-mode .border-top,
+body.dark-mode .border-start,
+body.dark-mode .border-end {
+    border-color: var(--brand-border) !important;
+}
+
+body.dark-mode .bg-light,
+body.dark-mode .badge.bg-light {
+    background-color: var(--brand-card-soft) !important;
+    color: var(--brand-text-primary) !important;
+    border-color: var(--brand-border) !important;
+}
+
+body.dark-mode .text-dark {
+    color: var(--brand-text-primary) !important;
+}
+
+body.dark-mode .text-muted {
+    color: var(--brand-text-muted) !important;
+}
+
+body.dark-mode .form-control,
+body.dark-mode .form-select {
+    background-color: var(--brand-card-soft) !important;
+    border-color: var(--brand-border) !important;
+    color: var(--brand-text-primary) !important;
+}
+
+body.dark-mode .input-group-text {
+    background-color: var(--brand-card-soft) !important;
+    border-color: var(--brand-border) !important;
+    color: var(--brand-text-secondary) !important;
+}
+
+body.dark-mode .theme-nav-toggle {
+    border-color: var(--brand-border) !important;
+    color: var(--brand-text-secondary) !important;
+}
+
+body.dark-mode .theme-nav-toggle:hover {
+    background-color: var(--brand-card-soft) !important;
+    color: #ffffff !important;
+    border-color: var(--brand-purple) !important;
+}
+
