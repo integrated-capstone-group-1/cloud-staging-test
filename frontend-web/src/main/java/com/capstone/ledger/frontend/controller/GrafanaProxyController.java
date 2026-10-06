@@ -122,7 +122,10 @@ public class GrafanaProxyController {
                                 <p>To start the telemetry containers in your terminal, run:</p>
                                 <code>docker-compose up -d grafana prometheus loki</code>
                                 <p><small>Once started, click below to refresh the live stream.</small></p>
-                                <a href="javascript:location.reload()" class="btn">Reload Live Stream</a>
+                                <div style="display: flex; gap: 8px; justify-content: center; margin-top: 12px;">
+                                    <a href="/admin/monitoring" class="btn" style="background: #4a5568;">Back to Admin Portal</a>
+                                    <a href="javascript:location.reload()" class="btn">Reload Live Stream</a>
+                                </div>
                             </div>
                         </body>
                         </html>
