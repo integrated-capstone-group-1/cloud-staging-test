@@ -80,6 +80,38 @@ class OtpControllerTest {
     }
 
     @Test
+    @DisplayName("DIG-12: POST /v1/auth/otp/request returns 200 with dispatch confirmation and 300s TTL")
+    void testRequestOtp_v1Path_returnsOk() throws Exception {
+        when(otpService.generateAndSendOtp(any(OtpRequest.class)))
+                .thenReturn(OtpResponse.dispatched(300L));
+
+        OtpRequest request = new OtpRequest("txn-5541-uuid");
+
+        mockMvc.perform(post("/v1/auth/otp/request")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("OTP dispatched to registered email"))
+                .andExpect(jsonPath("$.expires_in_seconds").value(300));
+    }
+
+    @Test
+    @DisplayName("DIG-12: POST /v1/auth/otp/verify with valid code returns 200 AUTHORIZED")
+    void testVerifyOtp_v1Path_returnsAuthorized() throws Exception {
+        when(otpService.verifyOtp(any(OtpVerifyRequest.class)))
+                .thenReturn(OtpVerifyResponse.authorized());
+
+        OtpVerifyRequest request = new OtpVerifyRequest("txn-5541-uuid", "849201");
+
+        mockMvc.perform(post("/v1/auth/otp/verify")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("AUTHORIZED"))
+                .andExpect(jsonPath("$.verified").value(true));
+    }
+
+    @Test
     @DisplayName("DIG-12: POST /api/auth/otp/verify with invalid code returns 401 Unauthorized")
     void testVerifyOtp_invalidCode_returnsUnauthorized() throws Exception {
         when(otpService.verifyOtp(any(OtpVerifyRequest.class)))

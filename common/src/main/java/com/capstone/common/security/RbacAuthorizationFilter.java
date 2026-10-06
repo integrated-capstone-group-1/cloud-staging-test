@@ -90,12 +90,16 @@ public class RbacAuthorizationFilter extends OncePerRequestFilter {
 
     private boolean isPublicPath(String path) {
         return path.startsWith("/api/auth/")
+                || path.startsWith("/v1/auth/")
+                || path.startsWith("/api/v1/auth/")
                 || path.startsWith("/actuator/")
                 || path.equals("/error");
     }
 
     private boolean isAdminPath(String path) {
-        return path.startsWith("/api/admin/") || path.startsWith("/admin/");
+        return path.startsWith("/api/admin/")
+                || path.startsWith("/admin/")
+                || path.startsWith("/v1/admin/");
     }
 
     private boolean isInternalPath(String path) {
