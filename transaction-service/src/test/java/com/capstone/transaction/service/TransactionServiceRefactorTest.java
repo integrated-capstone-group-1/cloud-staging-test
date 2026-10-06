@@ -84,6 +84,8 @@ class TransactionServiceRefactorTest {
 
     @BeforeEach
     void setUp() {
+        SecurityContextHolder.clearContext();
+
         TransactionStatus mockStatus = mock(TransactionStatus.class);
         lenient().when(oracleTxManager.getTransaction(any())).thenReturn(mockStatus);
         lenient().when(postgresTxManager.getTransaction(any())).thenReturn(mockStatus);

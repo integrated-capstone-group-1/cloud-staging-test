@@ -89,6 +89,8 @@ class CrossCurrencySagaAsyncTest {
 
     @BeforeEach
     void setUp() {
+        org.springframework.security.core.context.SecurityContextHolder.clearContext();
+
         TransactionStatus mockStatus = mock(TransactionStatus.class);
         lenient().when(oracleTxManager.getTransaction(any())).thenReturn(mockStatus);
         lenient().when(postgresTxManager.getTransaction(any())).thenReturn(mockStatus);

@@ -302,16 +302,15 @@ public class TransactionService {
         String mutationType,
         String txnId) {
 
-        String requestHash = idempotencyService.computePayloadHash(request);
         Optional<TransactionResponse> cached =
-                idempotencyService.getCached(request.idempotencyKey(), requestHash);
+                idempotencyService.getCached(request.idempotencyKey());
 
         if (cached.isPresent()) {
             return cached.get();
         }
 
-        if (!idempotencyService.tryLock(request.idempotencyKey(), requestHash)) {
-            Optional<TransactionResponse> completed = idempotencyService.getCached(request.idempotencyKey(), requestHash);
+        if (!idempotencyService.tryLock(request.idempotencyKey())) {
+            Optional<TransactionResponse> completed = idempotencyService.getCached(request.idempotencyKey());
             if (completed.isPresent()) {
                 return completed.get();
             }
@@ -387,7 +386,6 @@ public class TransactionService {
 
             idempotencyService.storeResult(
                     request.idempotencyKey(),
-                    requestHash,
                     response);
 
             metricsService.recordSuccess(txnType, txnId);
@@ -430,44 +428,26 @@ public class TransactionService {
     // ── Transfer ─────────────────────────────────────────────────────────────
 
     private TransactionResponse executeTransfer(
-        TransactionRequest request,
-                String txnId,
-                String sourceCurrencyCode,
-                String destCurrencyCode) {
+            TransactionRequest request,
+            String txnId,
+            String sourceCurrencyCode,
+            String destCurrencyCode) {
 
         Optional<TransactionResponse> cached =
-        String requestHash = idempotencyService.computePayloadHash(request);
-        Optional<TransactionResponse> cached =
-                idempotencyService.getCached(request.idempotencyKey(), requestHash);
+                idempotencyService.getCached(request.idempotencyKey());
 
         if (cached.isPresent()) {
             return cached.get();
         }
 
-        if (!idempotencyService.tryLock(request.idempotencyKey(), requestHash)) {
-            Optional<TransactionResponse> completed = idempotencyService.getCached(request.idempotencyKey(), requestHash);
+        if (!idempotencyService.tryLock(request.idempotencyKey())) {
+            Optional<TransactionResponse> completed = idempotencyService.getCached(request.idempotencyKey());
             if (completed.isPresent()) {
                 return completed.get();
             }
             metricsService.recordIdempotencyConflict();
             throw new IdempotencyConflictException(
                     "REQUEST_IN_PROGRESS: Request with idempotency key '"
-                            + request.idempotencyKey()
-                            + "' is already being processed");
-        }
-
-                idempotencyService.getCached(
-                        request.idempotencyKey());
-
-        if (cached.isPresent()) {
-            return cached.get();
-        }
-
-        if (!idempotencyService.tryLock(
-                request.idempotencyKey())) {
-            metricsService.recordIdempotencyConflict();
-            throw new IdempotencyConflictException(
-                    "Request with idempotency key '"
                             + request.idempotencyKey()
                             + "' is already being processed");
         }
