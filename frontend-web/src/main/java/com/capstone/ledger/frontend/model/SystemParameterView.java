@@ -87,3 +87,4 @@ public class SystemParameterView {
     public String getAuditReason() { return auditReason; }
     public void setAuditReason(String auditReason) { this.auditReason = auditReason; }
 }
+

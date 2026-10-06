@@ -130,3 +130,4 @@ public class TransactionMonitoringView {
     public List<StageTracker> getStages() { return stages; }
     public void setStages(List<StageTracker> stages) { this.stages = stages; }
 }
+

@@ -332,3 +332,4 @@ public class AdminPortalController {
         return uri.startsWith("/api/") || (accept != null && accept.contains("application/json"));
     }
 }
+
