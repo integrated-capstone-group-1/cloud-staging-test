@@ -93,7 +93,7 @@ class RefactoredPathBenchmarkTest {
         );
 
         // Lock-free in-memory IdempotencyService
-        IdempotencyService idempotencyService = new IdempotencyService(null, null) {
+        IdempotencyService idempotencyService = new IdempotencyService(null, new ObjectMapper().findAndRegisterModules()) {
             private final ConcurrentHashMap<String, TransactionResponse> cache = new ConcurrentHashMap<>();
             private final ConcurrentHashMap<String, Boolean> locks = new ConcurrentHashMap<>();
 

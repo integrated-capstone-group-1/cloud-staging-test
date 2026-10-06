@@ -303,15 +303,22 @@ public class TransactionService {
         String txnId) {
 
         String requestHash = idempotencyService.computePayloadHash(request);
-        Optional<TransactionResponse> cached =
-                idempotencyService.getCached(request.idempotencyKey(), requestHash);
+        Optional<TransactionResponse> cached = requestHash != null
+                ? idempotencyService.getCached(request.idempotencyKey(), requestHash)
+                : idempotencyService.getCached(request.idempotencyKey());
 
         if (cached.isPresent()) {
             return cached.get();
         }
 
-        if (!idempotencyService.tryLock(request.idempotencyKey(), requestHash)) {
-            Optional<TransactionResponse> completed = idempotencyService.getCached(request.idempotencyKey(), requestHash);
+        boolean locked = requestHash != null
+                ? idempotencyService.tryLock(request.idempotencyKey(), requestHash)
+                : idempotencyService.tryLock(request.idempotencyKey());
+
+        if (!locked) {
+            Optional<TransactionResponse> completed = requestHash != null
+                    ? idempotencyService.getCached(request.idempotencyKey(), requestHash)
+                    : idempotencyService.getCached(request.idempotencyKey());
             if (completed.isPresent()) {
                 return completed.get();
             }
@@ -385,10 +392,16 @@ public class TransactionService {
                             false,
                             currencyCode);
 
-            idempotencyService.storeResult(
-                    request.idempotencyKey(),
-                    requestHash,
-                    response);
+            if (requestHash != null) {
+                idempotencyService.storeResult(
+                        request.idempotencyKey(),
+                        requestHash,
+                        response);
+            } else {
+                idempotencyService.storeResult(
+                        request.idempotencyKey(),
+                        response);
+            }
 
             metricsService.recordSuccess(txnType, txnId);
 
@@ -430,22 +443,28 @@ public class TransactionService {
     // ── Transfer ─────────────────────────────────────────────────────────────
 
     private TransactionResponse executeTransfer(
-        TransactionRequest request,
-                String txnId,
-                String sourceCurrencyCode,
-                String destCurrencyCode) {
+            TransactionRequest request,
+            String txnId,
+            String sourceCurrencyCode,
+            String destCurrencyCode) {
 
-        Optional<TransactionResponse> cached =
         String requestHash = idempotencyService.computePayloadHash(request);
-        Optional<TransactionResponse> cached =
-                idempotencyService.getCached(request.idempotencyKey(), requestHash);
+        Optional<TransactionResponse> cached = requestHash != null
+                ? idempotencyService.getCached(request.idempotencyKey(), requestHash)
+                : idempotencyService.getCached(request.idempotencyKey());
 
         if (cached.isPresent()) {
             return cached.get();
         }
 
-        if (!idempotencyService.tryLock(request.idempotencyKey(), requestHash)) {
-            Optional<TransactionResponse> completed = idempotencyService.getCached(request.idempotencyKey(), requestHash);
+        boolean locked = requestHash != null
+                ? idempotencyService.tryLock(request.idempotencyKey(), requestHash)
+                : idempotencyService.tryLock(request.idempotencyKey());
+
+        if (!locked) {
+            Optional<TransactionResponse> completed = requestHash != null
+                    ? idempotencyService.getCached(request.idempotencyKey(), requestHash)
+                    : idempotencyService.getCached(request.idempotencyKey());
             if (completed.isPresent()) {
                 return completed.get();
             }
@@ -455,23 +474,6 @@ public class TransactionService {
                             + request.idempotencyKey()
                             + "' is already being processed");
         }
-
-                idempotencyService.getCached(
-                        request.idempotencyKey());
-
-        if (cached.isPresent()) {
-            return cached.get();
-        }
-
-        if (!idempotencyService.tryLock(
-                request.idempotencyKey())) {
-            metricsService.recordIdempotencyConflict();
-            throw new IdempotencyConflictException(
-                    "Request with idempotency key '"
-                            + request.idempotencyKey()
-                            + "' is already being processed");
-        }
-
 
         try {
 
