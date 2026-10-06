@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('System Parameters &amp; Thresholds Store')}"></head>
+<body>
+<div th:replace="~{fragments/layout :: demoBar}"></div>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div th:replace="~{fragments/layout :: alerts}"></div>
+
+<main class="container py-4">
+    <!-- Header -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
+        <div>
+            <h4 class="fw-bold mb-1"><i class="bi bi-sliders text-primary me-2"></i>System Parameters &amp; Risk Thresholds</h4>
+            <p class="text-muted small mb-0">Versioned parameter store for transfer limits, AMLA rules, FX markup, and security lockouts (DIG-17, DIG-54, BR-19)</p>
+        </div>
+        <div>
+            <span class="badge bg-primary px-3 py-2 fs-6">
+                <i class="bi bi-git me-1"></i>Active Version: <span th:text="'v' + ${params.version}">v1</span>
+            </span>
+        </div>
+    </div>
+
+    <!-- Parameter Editor Form Card -->
+    <div class="card p-4 mb-4">
+        <form th:action="@{/admin/parameters}" method="post">
+            <!-- Metadata Header -->
+            <div class="row g-3 mb-4 p-3 bg-light rounded border">
+                <div class="col-md-4">
+                    <span class="small text-muted d-block">Current Store Version:</span>
+                    <strong class="font-monospace text-primary" th:text="'Version ' + ${params.version}">Version 1</strong>
+                </div>
+                <div class="col-md-4">
+                    <span class="small text-muted d-block">Last Updated By:</span>
+                    <strong th:text="${params.updatedBy}">admin@ledgerbank.com</strong>
+                </div>
+                <div class="col-md-4">
+                    <span class="small text-muted d-block">Last Update Timestamp:</span>
+                    <strong th:text="${#temporals.format(params.updatedAt, 'yyyy-MM-dd HH:mm:ss')}">2026-10-06 10:00:00</strong>
+                </div>
+            </div>
+
+            <!-- Parameters Grid -->
+            <div class="row g-4 mb-4">
+                <!-- Group 1: Transaction Limits -->
+                <div class="col-md-6">
+                    <div class="border rounded p-3 h-100">
+                        <h6 class="fw-bold text-primary mb-3">
+                            <i class="bi bi-cash-stack me-1"></i> Transaction &amp; Transfer Limits
+                        </h6>
+                        <div class="mb-3">
+                            <label for="singleTransferLimit" class="form-label small fw-semibold">Single Transfer Limit (PHP)</label>
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text">₱</span>
+                                <input type="number" step="0.01" class="form-control" id="singleTransferLimit"
+                                       name="singleTransferLimit" th:value="${params.singleTransferLimit}" required>
+                            </div>
+                            <div class="form-text small">Maximum allowed principal amount per single transfer.</div>
+                        </div>
+                        <div class="mb-0">
+                            <label for="dailyTransferLimit" class="form-label small fw-semibold">Daily Cumulative Transfer Limit (PHP)</label>
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text">₱</span>
+                                <input type="number" step="0.01" class="form-control" id="dailyTransferLimit"
+                                       name="dailyTransferLimit" th:value="${params.dailyTransferLimit}" required>
+                            </div>
+                            <div class="form-text small">24-hour rolling cumulative limit per customer.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Group 2: AMLA & Risk Thresholds -->
+                <div class="col-md-6">
+                    <div class="border rounded p-3 h-100">
+                        <h6 class="fw-bold text-warning mb-3">
+                            <i class="bi bi-shield-lock me-1"></i> AMLA &amp; Regulatory Thresholds
+                        </h6>
+                        <div class="mb-3">
+                            <label for="amlaReportingThreshold" class="form-label small fw-semibold">Covered Transaction Report (CTR) Threshold (PHP)</label>
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text">₱</span>
+                                <input type="number" step="0.01" class="form-control" id="amlaReportingThreshold"
+                                       name="amlaReportingThreshold" th:value="${params.amlaReportingThreshold}" required>
+                            </div>
+                            <div class="form-text small">AMLC statutory reporting threshold (default: ₱500,000.00).</div>
+                        </div>
+                        <div class="mb-0">
+                            <label for="amlaHighRiskThreshold" class="form-label small fw-semibold">Suspicious Transaction (STR) Threshold (PHP)</label>
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text">₱</span>
+                                <input type="number" step="0.01" class="form-control" id="amlaHighRiskThreshold"
+                                       name="amlaHighRiskThreshold" th:value="${params.amlaHighRiskThreshold}" required>
+                            </div>
+                            <div class="form-text small">Triggers Risk Engine review for anomalous patterns.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Group 3: FX & Pricing -->
+                <div class="col-md-6">
+                    <div class="border rounded p-3 h-100">
+                        <h6 class="fw-bold text-info mb-3">
+                            <i class="bi bi-currency-exchange me-1"></i> FX Pricing &amp; Spreads
+                        </h6>
+                        <div class="mb-0">
+                            <label for="fxSpreadPercentage" class="form-label small fw-semibold">FX Spread Markup Percentage (%)</label>
+                            <div class="input-group input-group-sm">
+                                <input type="number" step="0.01" class="form-control" id="fxSpreadPercentage"
+                                       name="fxSpreadPercentage" th:value="${params.fxSpreadPercentage}" required>
+                                <span class="input-group-text">%</span>
+                            </div>
+                            <div class="form-text small">Administrative bank markup added over mid-market rates.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Group 4: Authentication Security -->
+                <div class="col-md-6">
+                    <div class="border rounded p-3 h-100">
+                        <h6 class="fw-bold text-danger mb-3">
+                            <i class="bi bi-fingerprint me-1"></i> Authentication &amp; Session Security
+                        </h6>
+                        <div class="row g-2">
+                            <div class="col-sm-6 mb-2">
+                                <label for="maxFailedLoginAttempts" class="form-label small fw-semibold">Max Failed Login Attempts</label>
+                                <input type="number" class="form-control form-control-sm" id="maxFailedLoginAttempts"
+                                       name="maxFailedLoginAttempts" th:value="${params.maxFailedLoginAttempts}" min="1" max="10" required>
+                                <div class="form-text small">Triggers temporary account lockout.</div>
+                            </div>
+                            <div class="col-sm-6 mb-2">
+                                <label for="otpTtlSeconds" class="form-label small fw-semibold">OTP Validity (Seconds)</label>
+                                <input type="number" class="form-control form-control-sm" id="otpTtlSeconds"
+                                       name="otpTtlSeconds" th:value="${params.otpTtlSeconds}" min="60" max="900" required>
+                                <div class="form-text small">Email &amp; SMS OTP time-to-live.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Justification / Audit Reason -->
+            <div class="mb-4">
+                <label for="auditReason" class="form-label small fw-semibold">Modification Justification &amp; Audit Reason</label>
+                <input type="text" class="form-control form-control-sm" id="auditReason" name="auditReason"
+                       placeholder="e.g. Quarterly AML risk adjustment approved by compliance committee" required>
+                <div class="form-text small">Every parameter update creates an immutable version bump and audit ledger entry.</div>
+            </div>
+
+            <!-- Save Action Button -->
+            <div class="d-flex justify-content-end gap-2">
+                <a href="/admin/parameters" class="btn btn-outline-secondary btn-sm">Cancel</a>
+                <button type="submit" class="btn btn-primary btn-sm fw-semibold px-4">
+                    <i class="bi bi-save me-1"></i> Save &amp; Increment Version
+                </button>
+            </div>
+        </form>
+    </div>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+</body>
+</html>

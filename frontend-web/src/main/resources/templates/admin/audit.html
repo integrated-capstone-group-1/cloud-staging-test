@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Immutable Audit Ledger Viewer')}"></head>
+<body>
+<div th:replace="~{fragments/layout :: demoBar}"></div>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div th:replace="~{fragments/layout :: alerts}"></div>
+
+<main class="container py-4">
+    <!-- Header -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
+        <div>
+            <h4 class="fw-bold mb-1"><i class="bi bi-journal-check text-primary me-2"></i>Immutable Audit Ledger &amp; Administrative Activity</h4>
+            <p class="text-muted small mb-0">Append-only audit trail capturing staff actions, governance events, and system changes (DIG-53, TR-L07)</p>
+        </div>
+        <div>
+            <a href="/admin/reconciliation" class="btn btn-outline-warning btn-sm">
+                <i class="bi bi-shield-check me-1"></i> View Ledger Reconciliation
+            </a>
+        </div>
+    </div>
+
+    <!-- Audit Logs Table -->
+    <div class="card p-3 mb-4">
+        <div class="table-responsive">
+            <table class="table table-sm table-hover align-middle">
+                <thead>
+                    <tr class="small text-muted">
+                        <th>Audit ID</th>
+                        <th>Timestamp</th>
+                        <th>Action</th>
+                        <th>Operator</th>
+                        <th>Resource Target</th>
+                        <th>Details &amp; Justification</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr th:each="log : ${auditLogs}">
+                        <td class="font-monospace small fw-bold" th:text="${log.auditId}">AUD-101</td>
+                        <td class="small" th:text="${#temporals.format(log.timestamp, 'yyyy-MM-dd HH:mm:ss')}">2026-10-06 14:00:00</td>
+                        <td>
+                            <span class="badge bg-secondary font-monospace" th:text="${log.action}">ACCOUNT_FREEZE</span>
+                        </td>
+                        <td class="small fw-semibold" th:text="${log.performedBy}">admin@ledgerbank.com</td>
+                        <td class="small font-monospace">
+                            <span class="badge bg-light text-dark border" th:text="${log.targetResource + ':' + log.targetId}">ACCOUNT:ACCT-1001-PHP</span>
+                        </td>
+                        <td class="small text-muted" th:text="${log.details}">Admin enforced freeze</td>
+                    </tr>
+                    <tr th:if="${auditLogs == null || auditLogs.isEmpty()}">
+                        <td colspan="6" class="text-center text-muted py-4">No audit events recorded yet.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Compliance Notice -->
+    <div class="alert alert-light border small text-muted d-flex align-items-center gap-2">
+        <i class="bi bi-lock-fill text-secondary"></i>
+        <div>All administrative access and mutations are cryptographically signed and streamed to immutable storage. Modifications to past entries are cryptographically impossible.</div>
+    </div>
+</main>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+</body>
+</html>
