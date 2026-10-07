@@ -26,7 +26,7 @@ public class OutboxMasterRelayService {
     private final KafkaTemplate<String, Object> kafkaTemplate;
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
-    @Scheduled(fixedDelay = 2000)
+    @Scheduled(fixedDelay = 500)
     @Transactional
     public void processOutbox() {
         List<OutboxMaster> pending = outboxMasterRepository
