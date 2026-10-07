@@ -40,7 +40,124 @@ To maintain team integrity and guarantee the delivery of all core capstone deliv
 
 ---
 
-## 3. Dependency-Ordered Implementation Sequence (Fixing Dependency Violations)
+## 3. Current Status Baseline & Revised Architecture Alignment Deltas
+
+Following the architectural revision proposal (`ARCHITECTURE_REVISION_PROPOSAL.md`, `ARCHITECTURE_EXPLAINER.md`) and database schema adjustments (`sql/oracle/04_oracle_revised_fixes.sql`), the implementation plan is realigned below.
+
+> [!IMPORTANT]
+> **Core Principle: Preserve & Align (Do Not Rebuild).**
+> Completed work will **not** be reopened or rewritten from scratch. The business logic, test suites, and REST contracts already written for `T-001` through `T-004`, `T-006` through `T-008`, `T-011`, and `DIG-105` represent ~90% of the platform functionality. Teams will apply surgical, targeted alignment deltas to bridge the schema and architectural updates.
+
+### 3.1 Status Baseline Breakdown
+* **Reported Done (Pending Alignment Verification):** `T-001`, `T-002`, `T-003`, `T-004`, `T-006`, `T-007`, `T-008`, `T-011`; `DIG-16`; `DIG-105`.
+* **Remaining / In-Progress:** `T-005` (API Gateway), `T-009` (Mobile Core), `T-010` (Mobile UI), `T-012` (Reconciliation Engine), `T-014` (DevOps & Chaos Defense).
+* **Scope Clarification (`T-013`):** `DIG-105` (Standing Instructions Processor) is complete. The full checkpointed EOD batch runner (`DIG-104`) and compliance report pack (`DIG-107`) remain formally deferred to Post-Capstone per **ADR-004**.
+
+---
+
+### 3.2 Completed Tasks: Alignment Delta & Action Item Matrix
+
+| Task Card / Domain | Owner | Current Implementation | Revised Architecture Alignment Gap | Surgical Alignment Delta (Work Remaining) |
+| :--- | :--- | :--- | :--- | :--- |
+| **`T-002`**<br/>Mock CBS | Yancey | Atomic multi-leg settlement updates `account_master`, inserts `posting_reference`, and writes `outbox_master`. | **Omits `ledger_entry` journal.** `04_oracle_revised_fixes.sql` introduced the immutable `ledger_entry` journal table in Oracle for running balances and value dates. | **Keep settlement intact.** Add `LedgerEntry` JPA entity/repo; insert leg records with `running_balance` in the **exact same `@Transactional` commit** as balance mutation. Map `normal_balance`, `customer_locked`, `admin_frozen` in `AccountMaster`. |
+| **`T-007`**<br/>Forex Service | Rohan | Background scheduler fetches rates from Frankfurter API and saves to PostgreSQL `fx_rate_cache`. | **Breaks Chaos `CH-04`.** When Postgres audit DB is taken down during `CH-04`, Forex rate queries fail, taking down cross-currency transfers. Revised architecture moved `fx_rate` to Oracle XE `FX` schema. | **Switch `forex-service` JPA datasource to Oracle XE** (using table `fx_rate` from `04_oracle_revised_fixes.sql`). Rates remain accessible even when Postgres is down. |
+| **`T-001`**<br/>Transaction Lifecycle | Rohan | 7-status saga with CAS claim (`AUTHORIZED` $	o$ `PROCESSING`), 5s undo window, and cancellation for `INITIATED`/`AUTHORIZED`. | **Cancellation blocked on `RESERVED`.** If a transaction is risk-held (`RESERVED`), cancellation throws `409 Conflict`, leaving CBS held funds permanently reserved. | In `LifecycleService.cancelPayment()`, allow cancelling `RESERVED` status and trigger `DELETE /internal/accounts/{id}/holds/{holdId}` via `AccountsServiceClient` to release held funds back to available balance. Verify `txn.lifecycle` event emission. |
+| **`T-008`**<br/>Virtual Cards | Yancey & Angge | `CardMaster` entity and controls live in `transaction-service`. | Revised diagram places `card_master` in CBS. | **Preserve working code in `transaction-service`.** `transaction-service` already implements the card controls, PAN masking, and e-commerce toggle tests. Do not move or rewrite. |
+| **`T-006`**<br/>Onboarding & Auth | PK & Yancey | `RegistrationService` directly inserts `customer_master` and `app_user_master` in Oracle XE. | Revised proposal suggests separating Channel DB (`app_user_master`) from Core CBS (`customer_master`). | **Preserve single-DB model for capstone.** Matches the pragmatic fallback noted in `ARCHITECTURE_REVISION_PROPOSAL.md` §4 Q2. Confirm transactional rollback if CBS account creation fails. |
+| **`T-003`**<br/>Java Risk Engine | PK | Heuristic fraud engine calculates composite score $S \in [0.00, 1.00]$ with $\le 200	ext{ms}$ fail-closed SLA. | Static weights in config; missing runtime reload (`DIG-22`) and alert events (`DIG-79`). | Add parameter store refresh for rule weights and publish Kafka alert events on rule hits (score $> 0.85$). |
+| **`T-004`**<br/>Outbox & Audit | Rohan & Yancey | `OutboxMasterRelay` polls Oracle `outbox_master`; `AuditLedgerConsumer` writes to Postgres. | Outbox payload must supply all fields needed for deterministic UUIDv5 generation in `ledger_mutation_audit`. | Verify `outbox_master` JSON payload parity with `AuditLedgerConsumer` and confirm DLQ error routing. |
+| **`T-011`**<br/>Admin Portal | PK & Yancey | Thymeleaf portal on `:8090` with Customer 360, account lock/freeze, and held review queue. | Missing DLQ replay UI (`DIG-90`) and real-time SSE stream (`DIG-101/102`). | Wire DLQ inspect/replay buttons and link SSE stream to operations dashboard. |
+| **`T-013`**<br/>EOD Batch (`DIG-105`) | Rohan & Yancey | Nightly standing instruction batch engine executes due transfers with idempotency. | Reviewer noted T-013 card describes broader EOD batch runner and report pack. | **Mark core capstone scope complete.** `DIG-105` is finished; `DIG-104` (checkpointed batch runner) and `DIG-107` (reports) are formally deferred per **ADR-004**. |
+
+---
+
+### 3.3 Remaining Tasks: Implementation Strategy Aligned with Revised Architecture
+
+| Task Card | Domain | Owner | Aligned Implementation Scope |
+| :--- | :--- | :--- | :--- |
+| **`T-005`** | API Gateway (:8080) | Russel & Gym | Configure Spring Cloud Gateway with route allowlist, token blacklist filter, and Redis token-bucket rate limiter. Cloak all microservice and database ports (`:8081-8088`, `:1521`, `:5432`) from external callers, strictly exposing only `:8080` (Gateway) and `:8090` (Admin Portal). |
+| **`T-009`** | Flutter Client Core | Lanz | Dio HTTP client pointing to Gateway `:8080` with automated Bearer JWT injection, UUID `Idempotency-Key` headers, and exponential backoff retry interceptors. |
+| **`T-010`** | Flutter UI Screens | Angge & Lanz | Customer screens: Login/PIN, Home Pocket carousel (showing Ledger & Available balances), Send Money with 30s shortfall funding sheet, QR scan, Virtual card controls, and receipts. |
+| **`T-012`** | Dual-DataSource Recon | Yancey & Gym | Independent auditor comparing live Oracle `account_master` balances & `ledger_entry` records against PostgreSQL `ledger_mutation_audit` leg sums. Emits Kafka breaks on variance. |
+| **`T-014`** | DevOps & Chaos Defense | Russel & Gym | Final Docker Compose configuration with `cap_add: [NET_ADMIN]` on Oracle. Automate and execute the 4 graded chaos scenarios (`CH-01` to `CH-04`), proving `CH-04` passes because Forex is on Oracle and audit is decoupled via Outbox. |
+
+---
+
+### 3.4 Member-by-Member Action Plan for Completed Task Deltas
+
+To give each team member complete clarity on what needs immediate attention before moving on to new features or testing:
+
+```mermaid
+flowchart TD
+    subgraph Yancey_Flow["Yancey (Core CBS & Balances)"]
+        Y1["T-002: accounts-service"] --> Y2["1. Add LedgerEntry to CoreSettlementService.settle()<br/>2. Map normal_balance, customer_locked, admin_frozen in AccountMaster<br/>3. Map captured_amount, placed_by, reason_code in AccountHold"]
+    end
+
+    subgraph Rohan_Flow["Rohan (Channels & Messaging)"]
+        R1["T-007: forex-service (Top Priority)"] --> R2["1. Point JPA datasource to Oracle XE LEDGER_APP.fx_rate<br/>2. Add 60m Redis fallback cache to ForexQuoteService"]
+        R3["T-001: transaction-service"] --> R4["1. Allow cancellation when status == RESERVED<br/>2. Trigger CBS hold release (DELETE /internal/accounts/{id}/holds/{holdId})<br/>3. Confirm stage event emission on txn.lifecycle"]
+        R5["T-004: Outbox Relay"] --> R6["1. Verify 1s, 2s, 4s retry backoff<br/>2. Confirm DLQ routing to dead-letter-events"]
+    end
+
+    subgraph PK_Flow["PK (Auth, Risk & Operations)"]
+        P1["T-003: risk-service"] --> P2["1. Implement PUT /internal/risk/parameters dynamic reload (DIG-22)<br/>2. Publish Kafka alert events on topic risk.alert (DIG-79)"]
+        P3["T-006: Identity / Auth"] --> P4["1. Verify transactional rollback if CBS account provisioning fails"]
+        P5["T-011: Admin Portal"] --> P6["1. Expose /api/v1/admin/dlq inspect/replay endpoints (DIG-90)<br/>2. Wire risk parameter configuration UI"]
+    end
+
+    subgraph AnggeLanz_Flow["Angge & Lanz (Cards & Mobile UX)"]
+        AL1["T-008: Virtual Cards"] --> AL2["1. Confirm card toggle events emit to outbox for alerts<br/>2. Keep CardMaster in transaction-service (no architectural rewrite)<br/>3. Shift immediately to T-009 / T-010 Flutter implementation"]
+    end
+
+    subgraph RusselGym_Flow["Russel & Gym (Cloud, Platform & Chaos)"]
+        RG1["T-005, T-012, T-014"] --> RG2["1. Zero deltas on completed work<br/>2. Proceed directly with Gateway (:8080), Recon Engine, and Chaos Test Suite"]
+    end
+```
+
+#### Detailed Member Action Checklist:
+
+1. **Yancey (`T-002` — `accounts-service`)**
+   * **Action 1:** In `CoreSettlementService.settle()`, add persistence of `LedgerEntry` rows (UUIDv5 `entry_id`, `running_balance`, `value_date`, `business_date`, `narrative`) in the **exact same `@Transactional` commit** as `account_master` and `outbox_master`.
+   * **Action 2:** In `AccountMaster.java`, map columns `normal_balance` (`CHAR(2)`), `customer_locked` (`CHAR(1)`), and `admin_frozen` (`CHAR(1)`).
+   * **Action 3:** In `AccountHold.java`, map columns `captured_amount`, `placed_by`, and `reason_code`.
+   * **Verification Command:** `./mvnw test -pl accounts-service -Dtest=CoreSettlementServiceTest`
+
+2. **Rohan (`T-007`, `T-001`, `T-004`)**
+   * **`T-007` (`forex-service` — Urgent for `CH-04`):**
+     * Switch datasource from PostgreSQL to Oracle XE `LEDGER_APP.fx_rate`.
+     * Maintain Redis hourly cache fallback in `ForexQuoteService`.
+     * **Verification:** `./mvnw test -pl forex-service` passes and quotes return while Postgres container is stopped.
+   * **`T-001` (`transaction-service`):**
+     * Update `LifecycleService.cancelPayment()` to permit cancellation when `status == RESERVED`.
+     * Call `DELETE /internal/accounts/{id}/holds/{holdId}` via `AccountsServiceClient` to release customer funds upon cancellation.
+     * Ensure transition events publish to Kafka topic `txn.lifecycle` (`DIG-81`).
+     * **Verification:** `./mvnw test -pl transaction-service -Dtest=PaymentOrchestrationTest`
+   * **`T-004` (Outbox Relay & Consumer):**
+     * Confirm exponential retry on Postgres connection failure (1s, 2s, 4s).
+     * Verify DLQ routing to `dead-letter-events` topic (`DIG-25`, `DIG-82`).
+
+3. **PK (`T-003`, `T-006`, `T-011`)**
+   * **`T-003` (`risk-service`):**
+     * Implement `PUT /internal/risk/parameters` to reload rule weights and thresholds without server restart (`DIG-22`).
+     * Publish Kafka events to `risk.alert` for score $> 0.85$ or rule hits (`DIG-79`).
+     * **Verification:** `./mvnw test -pl risk-service -Dtest=RiskEngineTest`
+   * **`T-006` (Identity / Auth):**
+     * Verify exception handling in `RegistrationService` rolls back local credentials if CBS account creation fails.
+   * **`T-011` (Admin Portal):**
+     * Expose `/api/v1/admin/dlq` endpoints to inspect and replay poisoned messages (`DIG-90`).
+     * Connect risk threshold editor UI to `risk-service`.
+
+4. **Angge & Lanz (`T-008` — Virtual Cards)**
+   * **`T-008`:** Preserve `CardMasterRepository` in `transaction-service`. Confirm toggle operations emit outbox notifications.
+   * **Next Focus:** Shift directly to Flutter implementation: [`T-009`](file:///c:/Users/RBS83790/OneDrive%20-%20EastWest%20Banking%20Corporation/Documents/training/integrated-capstone/banking-backend-monorepo/docs/tasks/T-009.md) (Dio Client, Keystore, Pinning) and [`T-010`](file:///c:/Users/RBS83790/OneDrive%20-%20EastWest%20Banking%20Corporation/Documents/training/integrated-capstone/banking-backend-monorepo/docs/tasks/T-010.md) (Pockets UI, Send Flow, Shortfall Funding).
+
+5. **Russel & Gym (`T-005`, `T-012`, `T-014`)**
+   * No completed task deltas required.
+   * **Next Focus:** Russel proceeds with API Gateway [`T-005`](file:///c:/Users/RBS83790/OneDrive%20-%20EastWest%20Banking%20Corporation/Documents/training/integrated-capstone/banking-backend-monorepo/docs/tasks/T-005.md) and Chaos test suite [`T-014`](file:///c:/Users/RBS83790/OneDrive%20-%20EastWest%20Banking%20Corporation/Documents/training/integrated-capstone/banking-backend-monorepo/docs/tasks/T-014.md); Gym proceeds with Kafka/Redis observability, Recon Engine [`T-012`](file:///c:/Users/RBS83790/OneDrive%20-%20EastWest%20Banking%20Corporation/Documents/training/integrated-capstone/banking-backend-monorepo/docs/tasks/T-012.md), and JMeter load testing.
+
+---
+
+## 4. Dependency-Ordered Implementation Sequence (Fixing Dependency Violations)
 
 To eliminate the 39 dependency-order violations present in the raw backlog:
 
@@ -100,7 +217,7 @@ flowchart TD
 
 ---
 
-## 4. End-to-End Traceability Matrix (Requirements $\to$ Tasks $\to$ Tests)
+## 5. End-to-End Traceability Matrix (Requirements $\to$ Tasks $\to$ Tests)
 
 | Requirement ID | Summary | Task Card | Jira Issue | Verification / Test Command |
 | :--- | :--- | :--- | :--- | :--- |
@@ -123,11 +240,11 @@ flowchart TD
 
 ---
 
-## 5. Master Jira Backlog Traceability (109 Issues from `00_jira_backlog_v01.xlsx`)
+## 6. Master Jira Backlog Traceability (109 Issues from `00_jira_backlog_v01.xlsx`)
 
 Under **Option A (Roll-Up Traceability Model)**, all 109 issues from `00_jira_backlog_v01.xlsx` are accounted for with complete traceability across the 14 Task Cards, Sprint 0 Bootstrap, Sprints 4–5 Defense Readiness, and Deferred Post-Capstone Scope:
 
-### 5.1 Backlog Breakdown & Disposition Summary
+### 6.1 Backlog Breakdown & Disposition Summary
 | Category / Disposition | Issue Count | Jira Issue Keys | Delivery Mechanism |
 | :--- | :--- | :--- | :--- |
 | **Core Coding Tasks (T-001–T-014)** | **88** | Listed below in Section 5.2 | Delivered and verified by PRs merging T-001 through T-014 |
@@ -138,7 +255,7 @@ Under **Option A (Roll-Up Traceability Model)**, all 109 issues from `00_jira_ba
 
 ---
 
-### 5.2 Master Mapping by Task Card (T-001 to T-014)
+### 6.2 Master Mapping by Task Card (T-001 to T-014)
 
 | Task Card | Service / Domain | Owner | Mapped Jira Issues (Primary & Siblings) | Sibling Sub-Stories Delivered |
 | :--- | :--- | :--- | :--- | :--- |
@@ -159,7 +276,7 @@ Under **Option A (Roll-Up Traceability Model)**, all 109 issues from `00_jira_ba
 
 ---
 
-### 5.3 Non-Coding Defense Readiness Suite (Sprints 4 & 5)
+### 6.3 Non-Coding Defense Readiness Suite (Sprints 4 & 5)
 | Jira Key | Summary | Sprint | Owner | Capstone Defense Deliverable |
 | :--- | :--- | :--- | :--- | :--- |
 | `DIG-113` | End-to-end demo script & dry run on cloud | Sprint 4 | Rohan | Live demo runbook and choreography covering happy paths and failure scenarios |
@@ -173,7 +290,7 @@ Under **Option A (Roll-Up Traceability Model)**, all 109 issues from `00_jira_ba
 
 ---
 
-### 5.4 Formally Deferred Post-Capstone Scope (ADR-004)
+### 6.4 Formally Deferred Post-Capstone Scope (ADR-004)
 | Jira Key | Summary | Component | Owner | Deferral Rationale (per ADR-004 & REQUIREMENTS.md) |
 | :--- | :--- | :--- | :--- | :--- |
 | `DIG-72` | Inbound partner callback route with HMAC & IP allowlist | `api-gateway` | Russel | External B2B partner webhooks deferred; internal mock APIs used for capstone scope |
