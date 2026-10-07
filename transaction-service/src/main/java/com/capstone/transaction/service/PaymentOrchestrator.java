@@ -126,7 +126,7 @@ public class PaymentOrchestrator {
                             "High risk security review hold"
                     )
             );
-            lifecycleService.markReserved(txnId);
+            lifecycleService.markReserved(txnId, holdResponse != null ? holdResponse.holdId() : null);
             return PaymentResponse.builder()
                     .transactionId(txnId)
                     .status("RESERVED")

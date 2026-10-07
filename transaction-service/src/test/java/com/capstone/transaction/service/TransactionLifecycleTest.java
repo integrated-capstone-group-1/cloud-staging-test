@@ -25,6 +25,9 @@ class TransactionLifecycleTest {
     @Mock
     private TransactionMasterRepository txnMasterRepository;
 
+    @Mock
+    private com.capstone.transaction.client.AccountsServiceClient accountsServiceClient;
+
     @InjectMocks
     private LifecycleService lifecycleService;
 
@@ -107,5 +110,27 @@ class TransactionLifecycleTest {
         assertThatThrownBy(() -> lifecycleService.cancelPayment("txn-103", "Race test"))
                 .isInstanceOf(StateConflictException.class)
                 .hasMessageContaining("Transaction already in PROCESSING and cannot be cancelled");
+    }
+
+    @Test
+    @DisplayName("Delta 1: Customer cancellation in RESERVED status releases CBS hold")
+    void shouldCancelWhenReservedAndReleaseHold() {
+        TransactionMaster reservedTxn = TransactionMaster.builder()
+                .txnId("txn-104")
+                .txnStatus("RESERVED")
+                .stage("RISK_HELD")
+                .debitAccountId("acc-debit-01")
+                .coreReferenceId("hold-risk-999")
+                .build();
+
+        when(txnMasterRepository.findById("txn-104")).thenReturn(Optional.of(reservedTxn));
+        when(txnMasterRepository.cancelTransactionCas(eq("txn-104"), any(), any(LocalDateTime.class))).thenReturn(1);
+
+        TransactionMaster cancelled = lifecycleService.cancelPayment("txn-104", "Customer cancelled risk-held txn");
+
+        assertThat(cancelled.getTxnStatus()).isEqualTo("CANCELLED");
+        assertThat(cancelled.getStage()).isEqualTo("CANCELLED");
+        verify(txnMasterRepository).cancelTransactionCas(eq("txn-104"), eq("Customer cancelled risk-held txn"), any());
+        verify(accountsServiceClient).releaseHold("acc-debit-01", "hold-risk-999");
     }
 }
