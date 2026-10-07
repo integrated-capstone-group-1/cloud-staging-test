@@ -17,15 +17,35 @@ import org.springframework.web.bind.annotation.RestController;
  * Exposes POST /internal/risk/evaluate for synchronous caller screening.
  * Blocked at edge gateway by network boundary protection (B-06).
  */
+import com.capstone.common.dto.ApiResponse;
+import com.capstone.common.event.RiskAlertEvent;
+import com.capstone.risk.dto.RiskParametersDto;
+import com.capstone.risk.kafka.RiskAlertProducer;
+import com.capstone.risk.service.RiskParameterService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+
+import java.util.Collections;
+import java.util.List;
+
 @RestController
 @RequestMapping("/internal/risk")
 @Slf4j
 public class RiskEvaluationController {
 
     private final RiskEvaluationService riskEvaluationService;
+    private final RiskParameterService riskParameterService;
+    private final RiskAlertProducer riskAlertProducer;
 
-    public RiskEvaluationController(RiskEvaluationService riskEvaluationService) {
+    @Autowired
+    public RiskEvaluationController(
+            RiskEvaluationService riskEvaluationService,
+            @Autowired(required = false) RiskParameterService riskParameterService,
+            @Autowired(required = false) RiskAlertProducer riskAlertProducer) {
         this.riskEvaluationService = riskEvaluationService;
+        this.riskParameterService = riskParameterService;
+        this.riskAlertProducer = riskAlertProducer;
     }
 
     /**
@@ -53,6 +73,64 @@ public class RiskEvaluationController {
 
         RiskEvaluationResponse response = riskEvaluationService.evaluate(request);
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * GET /internal/risk/parameters: Fetches current live risk parameters and rule weights (DIG-22).
+     */
+    @GetMapping("/parameters")
+    public ResponseEntity<ApiResponse<RiskParametersDto>> getParameters() {
+        if (riskParameterService == null) {
+            return ResponseEntity.ok(ApiResponse.ok("Parameter service unavailable", RiskParametersDto.builder().build()));
+        }
+        RiskParametersDto params = riskParameterService.getParameters();
+        return ResponseEntity.ok(ApiResponse.ok("Live risk parameters retrieved", params));
+    }
+
+    /**
+     * PUT /internal/risk/parameters: Dynamically reloads risk parameters at runtime without redeployment (DIG-22).
+     */
+    @PutMapping("/parameters")
+    public ResponseEntity<ApiResponse<RiskParametersDto>> updateParameters(
+            @RequestBody RiskParametersDto updateReq,
+            @RequestHeader(value = "X-Admin-User", defaultValue = "admin@capstonebank.com") String adminUser,
+            @RequestHeader(value = "X-Audit-Reason", defaultValue = "Admin parameter update via API") String auditReason) {
+
+        if (riskParameterService == null) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("Parameter service is not available"));
+        }
+
+        try {
+            RiskParametersDto updated = riskParameterService.updateParameters(updateReq, adminUser, auditReason);
+            return ResponseEntity.ok(ApiResponse.ok("Risk parameters dynamically reloaded to v" + updated.getVersion(), updated));
+        } catch (IllegalArgumentException ex) {
+            log.warn("Validation error updating risk parameters: {}", ex.getMessage());
+            return ResponseEntity.badRequest().body(ApiResponse.error(ex.getMessage()));
+        }
+    }
+
+    /**
+     * POST /internal/risk/parameters/reset: Resets parameters to factory defaults (DIG-22).
+     */
+    @PostMapping("/parameters/reset")
+    public ResponseEntity<ApiResponse<RiskParametersDto>> resetParameters(
+            @RequestHeader(value = "X-Admin-User", defaultValue = "admin@capstonebank.com") String adminUser) {
+
+        if (riskParameterService == null) {
+            return ResponseEntity.badRequest().body(ApiResponse.error("Parameter service is not available"));
+        }
+
+        RiskParametersDto reset = riskParameterService.resetToDefaults(adminUser);
+        return ResponseEntity.ok(ApiResponse.ok("Risk parameters reset to system defaults", reset));
+    }
+
+    /**
+     * GET /internal/risk/alerts: Returns recent high-risk alert events emitted to Kafka (DIG-79).
+     */
+    @GetMapping("/alerts")
+    public ResponseEntity<ApiResponse<List<RiskAlertEvent>>> getRecentAlerts() {
+        List<RiskAlertEvent> alerts = (riskAlertProducer != null) ? riskAlertProducer.getRecentAlerts() : Collections.emptyList();
+        return ResponseEntity.ok(ApiResponse.ok("Recent risk alert events retrieved", alerts));
     }
 }
 

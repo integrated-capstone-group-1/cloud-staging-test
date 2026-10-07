@@ -1,8 +1,10 @@
 package com.capstone.risk.service;
 
+import com.capstone.common.event.RiskAlertEvent;
 import com.capstone.risk.config.RiskEngineProperties;
 import com.capstone.risk.dto.RiskEvaluationRequest;
 import com.capstone.risk.dto.RiskEvaluationResponse;
+import com.capstone.risk.kafka.RiskAlertProducer;
 import com.capstone.risk.model.RiskDecision;
 import com.capstone.risk.model.RiskLevel;
 import com.capstone.risk.rules.AmountAnomalyRule;
@@ -11,12 +13,15 @@ import com.capstone.risk.rules.FxRoundTripAbuseRule;
 import com.capstone.risk.rules.VelocityRule;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * High-performance Java Synchronous Risk & Fraud Screening Engine (BR-08, BR-18, TR-R01, TR-R04).
@@ -35,6 +40,7 @@ public class RiskEvaluationService {
     private final DeviceAnomalyRule deviceAnomalyRule;
     private final FxRoundTripAbuseRule fxRoundTripAbuseRule;
     private final RiskEngineProperties properties;
+    private final RiskAlertProducer riskAlertProducer;
 
     public RiskEvaluationService(
             VelocityRule velocityRule,
@@ -42,11 +48,23 @@ public class RiskEvaluationService {
             DeviceAnomalyRule deviceAnomalyRule,
             FxRoundTripAbuseRule fxRoundTripAbuseRule,
             RiskEngineProperties properties) {
+        this(velocityRule, amountAnomalyRule, deviceAnomalyRule, fxRoundTripAbuseRule, properties, null);
+    }
+
+    @Autowired
+    public RiskEvaluationService(
+            VelocityRule velocityRule,
+            AmountAnomalyRule amountAnomalyRule,
+            DeviceAnomalyRule deviceAnomalyRule,
+            FxRoundTripAbuseRule fxRoundTripAbuseRule,
+            RiskEngineProperties properties,
+            @Autowired(required = false) RiskAlertProducer riskAlertProducer) {
         this.velocityRule = velocityRule;
         this.amountAnomalyRule = amountAnomalyRule;
         this.deviceAnomalyRule = deviceAnomalyRule;
         this.fxRoundTripAbuseRule = fxRoundTripAbuseRule;
         this.properties = properties;
+        this.riskAlertProducer = riskAlertProducer;
     }
 
     /**
@@ -147,6 +165,26 @@ public class RiskEvaluationService {
                         request.getTargetCurrency()
                 );
             }
+        }
+
+        // 8. Publish Kafka alert on high-risk hold decision (DIG-79)
+        if ((decision == RiskDecision.HOLD || score > mediumMax) && riskAlertProducer != null) {
+            String alertReason = String.format("Risk score %.2f exceeded threshold %.2f (rules: %s)",
+                    score, mediumMax, triggeredRules);
+            RiskAlertEvent alertEvent = new RiskAlertEvent(
+                    UUID.randomUUID().toString(),
+                    request.getTransactionId(),
+                    request.getCustomerId(),
+                    request.getAmount(),
+                    request.getCurrency(),
+                    score,
+                    level.name(),
+                    decision.name(),
+                    List.copyOf(triggeredRules),
+                    Instant.now(),
+                    alertReason
+            );
+            riskAlertProducer.publishAlert(alertEvent);
         }
 
         long elapsedNano = System.nanoTime() - startNano;
