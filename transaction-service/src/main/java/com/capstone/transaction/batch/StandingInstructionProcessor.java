@@ -16,6 +16,7 @@ import java.time.LocalDate;
 public class StandingInstructionProcessor {
 
     private final PaymentOrchestrator paymentOrchestrator;
+    private final com.capstone.transaction.repository.oracle.StandingInstructionRepository repository;
 
     @Transactional
     public void process(StandingInstruction instruction) {
@@ -30,6 +31,7 @@ public class StandingInstructionProcessor {
         try {
             paymentOrchestrator.processPayment(request, idempotencyKey, instruction.getCustomerId());
             advanceNextExecutionDate(instruction);
+            repository.save(instruction);
         } catch (Exception e) {
             log.error("Failed to process standing instruction {}: {}", instruction.getInstructionId(), e.getMessage());
         }

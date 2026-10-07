@@ -19,6 +19,14 @@ import org.springframework.web.bind.annotation.*;
 public class AdminTransferController {
 
     private final ReversalCoordinator reversalCoordinator;
+    private final com.capstone.transaction.batch.EodBatchScheduler eodBatchScheduler;
+
+    @PostMapping("/batch/eod")
+    public ResponseEntity<java.util.Map<String, String>> triggerEodBatch() {
+        log.info("Triggering on-demand EOD batch execution via Admin API");
+        eodBatchScheduler.runEodBatch();
+        return ResponseEntity.ok(java.util.Map.of("status", "SUCCESS", "message", "EOD batch completed"));
+    }
 
     @PostMapping({"/transfers/{id}/reverse", "/transactions/{id}/reverse"})
     public ResponseEntity<ReversalResponse> reverseTransfer(

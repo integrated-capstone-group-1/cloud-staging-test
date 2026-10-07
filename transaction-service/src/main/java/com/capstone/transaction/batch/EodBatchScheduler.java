@@ -17,6 +17,7 @@ public class EodBatchScheduler {
 
     private final StandingInstructionRepository repository;
     private final StandingInstructionProcessor processor;
+    private final com.capstone.transaction.kafka.TransactionEventProducer eventProducer;
 
     @Scheduled(cron = "0 0 0 * * *")
     public void runEodBatch() {
@@ -27,6 +28,17 @@ public class EodBatchScheduler {
         for (StandingInstruction instruction : instructions) {
             processor.process(instruction);
         }
+
+        if (eventProducer != null) {
+            java.util.Map<String, Object> eventPayload = java.util.Map.of(
+                    "eventType", "batch.eod.completed",
+                    "executionDate", LocalDate.now().toString(),
+                    "instructionsProcessed", instructions.size(),
+                    "completedAt", java.time.Instant.now().toString()
+            );
+            eventProducer.publishRaw("batch-eod-" + LocalDate.now(), eventPayload);
+        }
+
         log.info("EOD batch finished");
     }
 }
