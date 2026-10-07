@@ -17,6 +17,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import com.capstone.common.event.TransactionLifecycleEvent;
+import com.capstone.transaction.kafka.TransactionEventProducer;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -24,6 +26,12 @@ class TransactionLifecycleTest {
 
     @Mock
     private TransactionMasterRepository txnMasterRepository;
+
+    @Mock
+    private com.capstone.transaction.client.AccountsServiceClient accountsServiceClient;
+
+    @Mock
+    private TransactionEventProducer transactionEventProducer;
 
     @InjectMocks
     private LifecycleService lifecycleService;
@@ -107,5 +115,54 @@ class TransactionLifecycleTest {
         assertThatThrownBy(() -> lifecycleService.cancelPayment("txn-103", "Race test"))
                 .isInstanceOf(StateConflictException.class)
                 .hasMessageContaining("Transaction already in PROCESSING and cannot be cancelled");
+    }
+
+    @Test
+    @DisplayName("Delta 1: Customer cancellation in RESERVED status releases CBS hold")
+    void shouldCancelWhenReservedAndReleaseHold() {
+        TransactionMaster reservedTxn = TransactionMaster.builder()
+                .txnId("txn-104")
+                .txnStatus("RESERVED")
+                .stage("RISK_HELD")
+                .debitAccountId("acc-debit-01")
+                .coreReferenceId("hold-risk-999")
+                .build();
+
+        when(txnMasterRepository.findById("txn-104")).thenReturn(Optional.of(reservedTxn));
+        when(txnMasterRepository.cancelTransactionCas(eq("txn-104"), any(), any(LocalDateTime.class))).thenReturn(1);
+
+        TransactionMaster cancelled = lifecycleService.cancelPayment("txn-104", "Customer cancelled risk-held txn");
+
+        assertThat(cancelled.getTxnStatus()).isEqualTo("CANCELLED");
+        assertThat(cancelled.getStage()).isEqualTo("CANCELLED");
+        verify(txnMasterRepository).cancelTransactionCas(eq("txn-104"), eq("Customer cancelled risk-held txn"), any());
+        verify(accountsServiceClient).releaseHold("acc-debit-01", "hold-risk-999");
+    }
+
+    @Test
+    @DisplayName("Delta 2: Status transition explicitly publishes lifecycle events to Kafka topic txn.lifecycle")
+    void shouldPublishLifecycleEventOnStageTransition() {
+        TransactionMaster txn = TransactionMaster.builder()
+                .txnId("txn-201")
+                .customerId("cust-99")
+                .debitAccountId("acc-deb")
+                .creditAccountId("acc-cred")
+                .mutationAmount(new java.math.BigDecimal("150.0000"))
+                .currencyCode("PHP")
+                .txnStatus("POSTED")
+                .stage("COMPLETED")
+                .build();
+
+        when(txnMasterRepository.findById("txn-201")).thenReturn(Optional.of(txn));
+
+        lifecycleService.markPosted("txn-201", "core-ref-888");
+
+        verify(txnMasterRepository).markCompleted(eq("txn-201"), eq("POSTED"), eq("COMPLETED"), eq("core-ref-888"), any());
+        verify(transactionEventProducer).publishLifecycle(argThat(event ->
+                event.txnId().equals("txn-201")
+                        && event.txnStatus().equals("POSTED")
+                        && event.stage().equals("COMPLETED")
+                        && event.amount().compareTo(new java.math.BigDecimal("150.0000")) == 0
+        ));
     }
 }

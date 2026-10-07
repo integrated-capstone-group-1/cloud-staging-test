@@ -35,10 +35,16 @@ public interface TransactionMasterRepository extends JpaRepository<TransactionMa
                         @Param("now") LocalDateTime now);
 
     @Modifying
-    @Query("UPDATE TransactionMaster t SET t.txnStatus = 'CANCELLED', t.stage = 'CANCELLED', t.cancelReason = :cancelReason, t.updatedAt = :now WHERE t.txnId = :txnId AND t.txnStatus IN ('INITIATED', 'AUTHORIZED')")
+    @Query("UPDATE TransactionMaster t SET t.txnStatus = 'CANCELLED', t.stage = 'CANCELLED', t.cancelReason = :cancelReason, t.updatedAt = :now WHERE t.txnId = :txnId AND t.txnStatus IN ('INITIATED', 'AUTHORIZED', 'RESERVED')")
     int cancelTransactionCas(@Param("txnId") String txnId,
                              @Param("cancelReason") String cancelReason,
                              @Param("now") LocalDateTime now);
+
+    @Modifying
+    @Query("UPDATE TransactionMaster t SET t.txnStatus = 'RESERVED', t.stage = 'RISK_HELD', t.coreReferenceId = :holdId, t.updatedAt = :now WHERE t.txnId = :txnId AND t.txnStatus = 'INITIATED'")
+    int markReservedCas(@Param("txnId") String txnId,
+                        @Param("holdId") String holdId,
+                        @Param("now") LocalDateTime now);
 
     @Modifying
     @Query("UPDATE TransactionMaster t SET t.txnStatus = :newStatus, t.stage = :newStage, t.coreReferenceId = :coreReferenceId, t.completedAt = :now, t.updatedAt = :now WHERE t.txnId = :txnId")

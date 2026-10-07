@@ -10,6 +10,9 @@ public final class KafkaTopics {
     /** Single fan-out topic for CREATED / COMPLETED / FAILED events. */
     public static final String TRANSACTION_EVENTS      = "transaction-events";
 
+    /** Durable transaction stage and status lifecycle events for monitoring (DIG-81, DIG-101). */
+    public static final String TXN_LIFECYCLE           = "txn.lifecycle";
+
     // ── Registration & Account provisioning ─────────────────────────────────────
     public static final String CUSTOMER_REGISTERED     = "customer.registered";
     public static final String ACCOUNT_CREATED         = "account.created";

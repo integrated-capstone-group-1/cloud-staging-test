@@ -145,6 +145,17 @@ public class HttpAccountsServiceClient implements AccountsServiceClient {
         return response.data();
     }
 
+    @Override
+    public void releaseHold(String accountId, String holdId) {
+        String authHeader = resolveSystemToken();
+        log.info("Releasing CBS hold {} on account {}", holdId, accountId);
+        restClient.delete()
+                .uri("/internal/accounts/{accountId}/holds/{holdId}", accountId, holdId)
+                .header("Authorization", authHeader)
+                .retrieve()
+                .toBodilessEntity();
+    }
+
     private String resolveSystemToken() {
         String token = jwtTokenProvider.generateToken(
                 "SYSTEM_TXN_SERVICE",

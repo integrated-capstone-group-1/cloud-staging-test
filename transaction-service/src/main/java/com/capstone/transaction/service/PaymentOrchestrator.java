@@ -94,6 +94,7 @@ public class PaymentOrchestrator {
                 .build();
 
         txnMasterRepository.save(txn);
+        lifecycleService.emitLifecycleEvent(txn, "INITIATED", "RISK_PENDING", null);
 
         // 2. Synchronous Risk Screening (<= 200ms fail-closed SLA)
         RiskEvaluationRequest riskReq = RiskEvaluationRequest.builder()
@@ -126,7 +127,7 @@ public class PaymentOrchestrator {
                             "High risk security review hold"
                     )
             );
-            lifecycleService.markReserved(txnId);
+            lifecycleService.markReserved(txnId, holdResponse != null ? holdResponse.holdId() : null);
             return PaymentResponse.builder()
                     .transactionId(txnId)
                     .status("RESERVED")
@@ -156,6 +157,7 @@ public class PaymentOrchestrator {
                 "AUTH_CONFIRMED",
                 LocalDateTime.now()
         );
+        lifecycleService.emitLifecycleEvent(txnId, "AUTHORIZED", "AUTH_CONFIRMED", null);
 
         // 4. CAS Claim: AUTHORIZED -> PROCESSING (ADR-002)
         boolean claimed = lifecycleService.claimForSettlement(txnId);

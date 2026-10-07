@@ -25,5 +25,11 @@ public interface AccountsServiceClient {
      * Retrieves account metadata (balance, status, currency).
      */
     AccountDTO getAccount(String accountId);
+
+    /**
+     * Releases an active hold in CBS.
+     */
+    default void releaseHold(String accountId, String holdId) {
+    }
 }
 

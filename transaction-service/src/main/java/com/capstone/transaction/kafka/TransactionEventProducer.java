@@ -37,6 +37,10 @@ public class TransactionEventProducer {
         publish(key, event);
     }
 
+    public void publishLifecycle(com.capstone.common.event.TransactionLifecycleEvent event) {
+        publishToTopic(KafkaTopics.TXN_LIFECYCLE, event.txnId(), event);
+    }
+
     public void publishToTopic(String topic, String key, Object event) {
         kafkaTemplate.send(topic, key, event)
                 .whenComplete((result, ex) -> {

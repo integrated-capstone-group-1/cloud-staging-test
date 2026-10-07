@@ -182,7 +182,7 @@ class PaymentOrchestratorTest {
         assertThat(response).isNotNull();
         assertThat(response.getStatus()).isEqualTo("RESERVED");
         assertThat(response.getHoldId()).isEqualTo("hold-8812-uuid");
-        verify(lifecycleService).markReserved(anyString());
+        verify(lifecycleService).markReserved(anyString(), eq("hold-8812-uuid"));
         verify(coreBankingClient, never()).settle(any());
     }
 }
