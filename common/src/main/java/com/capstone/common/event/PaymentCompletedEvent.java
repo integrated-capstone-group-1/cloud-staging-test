@@ -1,11 +1,11 @@
 package com.capstone.common.event;
 
-import java.math.BigDecimal;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.List;
 
 public record PaymentCompletedEvent(
-        String txnId,
-        String coreReferenceId,
-        String customerId,
-        List<LegDTO> legs
+        @JsonProperty("txn_id") String txnId,
+        @JsonProperty("core_reference_id") String coreReferenceId,
+        @JsonProperty("customer_id") String customerId,
+        @JsonProperty("legs") List<LegDTO> legs
 ) {}

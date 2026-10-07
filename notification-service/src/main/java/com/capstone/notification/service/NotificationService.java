@@ -53,6 +53,22 @@ public class NotificationService {
     }
 
     @Transactional
+    public void notifySettlementCompleted(com.capstone.common.event.PaymentCompletedEvent event) {
+        if (event == null) {
+            return;
+        }
+        log.info("[NOTIFY] txn={} customer={} settlement COMPLETED with {} legs",
+                event.txnId(), event.customerId(), event.legs() != null ? event.legs().size() : 0);
+
+        String message = String.format(
+                "Settlement for transaction %s COMPLETED. Core reference: %s.",
+                event.txnId(), event.coreReferenceId());
+
+        String customerId = event.customerId() != null ? event.customerId() : "SYSTEM";
+        persistAudit(customerId, message, "SENT");
+    }
+
+    @Transactional
     public void notifyFailed(TransactionFailedEvent event) {
         log.warn("[NOTIFY] txn={} type={} amount={} account={} FAILED reason={}",
                 event.txnId(), event.txnType(), event.amount(),
