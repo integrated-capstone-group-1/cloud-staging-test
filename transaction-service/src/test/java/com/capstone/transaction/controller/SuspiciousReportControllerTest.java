@@ -94,3 +94,4 @@ class SuspiciousReportControllerTest {
         assertThat(response.getBody()).hasSize(1);
     }
 }
+

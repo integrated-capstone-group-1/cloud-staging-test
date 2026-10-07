@@ -84,3 +84,4 @@ public class TransactionDetailsResponse {
     @JsonProperty("stages")
     private List<StageTimelineDto> stages;
 }
+

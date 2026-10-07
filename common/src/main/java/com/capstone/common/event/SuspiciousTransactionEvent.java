@@ -19,3 +19,4 @@ public record SuspiciousTransactionEvent(
         LocalDateTime reportedAt
 ) {
 }
+

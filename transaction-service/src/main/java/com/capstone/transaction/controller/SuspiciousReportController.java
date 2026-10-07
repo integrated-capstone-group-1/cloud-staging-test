@@ -80,3 +80,4 @@ public class SuspiciousReportController {
         return ResponseEntity.ok(response);
     }
 }
+

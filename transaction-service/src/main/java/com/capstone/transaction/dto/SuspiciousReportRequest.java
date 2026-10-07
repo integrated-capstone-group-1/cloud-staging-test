@@ -30,3 +30,4 @@ public class SuspiciousReportRequest {
     @JsonProperty("customer_id")
     private String customerId;
 }
+

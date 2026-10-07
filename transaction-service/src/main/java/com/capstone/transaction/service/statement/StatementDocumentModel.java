@@ -65,3 +65,4 @@ public class StatementDocumentModel {
     @Builder.Default
     private Map<String, String> extraSummaryMetrics = new HashMap<>();
 }
+

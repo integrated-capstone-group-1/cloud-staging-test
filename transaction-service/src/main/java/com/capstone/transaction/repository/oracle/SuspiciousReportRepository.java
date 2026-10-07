@@ -16,3 +16,4 @@ public interface SuspiciousReportRepository extends JpaRepository<SuspiciousRepo
 
     List<SuspiciousReport> findByStatusOrderByCreatedAtDesc(String status);
 }
+

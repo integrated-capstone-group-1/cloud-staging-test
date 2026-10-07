@@ -199,3 +199,4 @@ class TransactionHistoryTest {
                 .hasMessageContaining("Transaction invalid-id not found");
     }
 }
+

@@ -163,3 +163,4 @@ class SuspiciousReportTest {
         assertThat(queue.get(0).getStatus()).isEqualTo("OPEN");
     }
 }
+

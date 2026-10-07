@@ -424,3 +424,4 @@ public class StatementPdfGenerator {
         return text.substring(0, maxLength - 1) + ".";
     }
 }
+

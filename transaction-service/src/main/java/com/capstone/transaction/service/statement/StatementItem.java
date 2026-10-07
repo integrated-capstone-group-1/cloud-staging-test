@@ -25,3 +25,4 @@ public class StatementItem {
     private BigDecimal balanceAfter;
     private String status;
 }
+
