@@ -2,8 +2,8 @@ package com.capstone.forex.entity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
+import jakarta.persistence.IdClass;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -13,10 +13,14 @@ import lombok.Setter;
 
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
-import java.util.UUID;
 
+/**
+ * Entity mapping to Oracle XE table `fx_rate` (LEDGER_APP / FX schema).
+ * Composite Primary Key: (base_currency, quote_currency).
+ */
 @Entity
-@Table(name = "fx_rate_cache")
+@Table(name = "fx_rate")
+@IdClass(FxRateId.class)
 @Getter
 @Setter
 @NoArgsConstructor
@@ -25,13 +29,10 @@ import java.util.UUID;
 public class FxRateCache {
 
     @Id
-    @GeneratedValue
-    @Column(name = "rate_id", updatable = false, nullable = false)
-    private UUID rateId;
-
     @Column(name = "base_currency", nullable = false, length = 3)
     private String baseCurrency;
 
+    @Id
     @Column(name = "quote_currency", nullable = false, length = 3)
     private String quoteCurrency;
 

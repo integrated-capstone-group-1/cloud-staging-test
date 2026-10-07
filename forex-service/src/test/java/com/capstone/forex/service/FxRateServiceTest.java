@@ -42,7 +42,6 @@ class FxRateServiceTest {
     @DisplayName("getExchangeRate: direct pair in cache returns cached rate")
     void directPair_inCache_returnsRate() {
         FxRateCache cached = FxRateCache.builder()
-                .rateId(UUID.randomUUID())
                 .baseCurrency("USD")
                 .quoteCurrency("EUR")
                 .rate(new BigDecimal("0.92000000"))
@@ -61,7 +60,6 @@ class FxRateServiceTest {
     @DisplayName("getExchangeRate: reverse pair in cache returns reciprocal")
     void reversePair_inCache_returnsReciprocal() {
         FxRateCache cached = FxRateCache.builder()
-                .rateId(UUID.randomUUID())
                 .baseCurrency("USD")
                 .quoteCurrency("PHP")
                 .rate(new BigDecimal("50.00000000"))
