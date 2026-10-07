@@ -155,16 +155,16 @@
                                 <td class="text-end font-monospace small text-danger" th:text="${pocket.formattedHeld}">₱0.00</td>
                                 <td class="text-end font-monospace small fw-bold text-success" th:text="${pocket.formattedAvailable}">₱150,000.00</td>
                                 <td>
-                                    <!-- Admin Freeze / Unfreeze Button invoking POST /api/v1/admin/accounts/{id}/freeze -->
+                                    <!-- Admin Freeze / Unfreeze Button invoking POST /admin/accounts/{id}/freeze -->
                                     <form th:if="${pocket.accountStatus.name() == 'ACTIVE'}"
-                                          th:action="@{/api/v1/admin/accounts/{id}/freeze(id=${pocket.accountId})}" method="post" class="d-inline">
+                                          th:action="@{/admin/accounts/{id}/freeze(id=${pocket.accountId})}" method="post" class="d-inline">
                                         <input type="hidden" name="redirectCustId" th:value="${c360.customerId}"/>
                                         <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2" title="Freeze account">
                                             <i class="bi bi-pause-circle"></i> Freeze
                                         </button>
                                     </form>
                                     <form th:if="${pocket.accountStatus.name() == 'FROZEN'}"
-                                          th:action="@{/api/v1/admin/accounts/{id}/unfreeze(id=${pocket.accountId})}" method="post" class="d-inline">
+                                          th:action="@{/admin/accounts/{id}/unfreeze(id=${pocket.accountId})}" method="post" class="d-inline">
                                         <input type="hidden" name="redirectCustId" th:value="${c360.customerId}"/>
                                         <button type="submit" class="btn btn-sm btn-outline-success py-0 px-2" title="Unfreeze account">
                                             <i class="bi bi-play-circle"></i> Unfreeze
