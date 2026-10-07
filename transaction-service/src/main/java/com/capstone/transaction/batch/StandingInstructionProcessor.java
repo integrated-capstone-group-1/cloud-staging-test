@@ -1,6 +1,6 @@
 package com.capstone.transaction.batch;
 
-import com.capstone.common.dto.TransactionRequest;
+import com.capstone.transaction.dto.PaymentRequest;
 import com.capstone.transaction.entity.oracle.StandingInstruction;
 import com.capstone.transaction.service.PaymentOrchestrator;
 import lombok.RequiredArgsConstructor;
@@ -20,12 +20,11 @@ public class StandingInstructionProcessor {
     @Transactional
     public void process(StandingInstruction instruction) {
         String idempotencyKey = "SI-" + instruction.getInstructionId() + "-" + LocalDate.now();
-        TransactionRequest request = TransactionRequest.builder()
-                .debitAccountId(instruction.getSourceAccountId())
-                .creditAccountId(instruction.getTargetAccountId())
+        PaymentRequest request = PaymentRequest.builder()
+                .senderAccountId(instruction.getSourceAccountId())
+                .recipientAccountId(instruction.getTargetAccountId())
                 .amount(instruction.getAmount())
-                .currencyCode(instruction.getCurrencyCode())
-                .isCrossCurrency(false) // Assuming same currency based on simple design
+                .currency(instruction.getCurrencyCode())
                 .build();
         
         try {
