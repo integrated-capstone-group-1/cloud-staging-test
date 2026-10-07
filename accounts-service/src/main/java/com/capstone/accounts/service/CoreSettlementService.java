@@ -114,6 +114,13 @@ public class CoreSettlementService {
             if (!"ACTIVE".equalsIgnoreCase(account.getAccountStatus())) {
                 throw new IllegalStateException("Account " + account.getAccountId() + " is not ACTIVE");
             }
+            if ("Y".equalsIgnoreCase(account.getAdminFrozen())) {
+                throw new IllegalStateException("Account " + account.getAccountId() + " is ADMIN FROZEN");
+            }
+            if ("Y".equalsIgnoreCase(account.getCustomerLocked())) {
+                throw new IllegalStateException("Account " + account.getAccountId() + " is CUSTOMER LOCKED");
+            }
+
 
             if ("DEBIT".equalsIgnoreCase(leg.direction())) {
                 BigDecimal available = account.getAvailableBalance();
