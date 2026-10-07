@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
 
-<head th:replace="~{fragments/layout :: head('Core Retail Banking System')}"></head>
+<head th:replace="~{fragments/layout :: head('Admin Operations Portal &amp; Telemetry')}"></head>
 
 <body class="banking-landing">
 
@@ -15,7 +15,7 @@
 <main class="container py-5">
 
     <!-- =====================================================
-         HERO SECTION
+         HERO SECTION: ADMIN OPERATIONS & REGULATORY CONTROL
          ===================================================== -->
     <div class="row align-items-center py-4 my-3 banking-hero">
 
@@ -23,45 +23,44 @@
 
             <span class="badge hero-badge px-3 py-2 rounded-pill mb-3">
                 <i class="bi bi-shield-check me-1"></i>
-                Core Retail Ledger &amp; Balance Mutation Engine
+                Core Retail Ledger · Admin Operations Portal
             </span>
 
             <h1 class="display-4 hero-title mb-3">
-                Next-Gen Banking Platform with Append-Only Audit Trail
+                Mission-Critical Operations, Monitoring &amp; Customer 360
             </h1>
 
             <p class="lead hero-description mb-4">
-                Enterprise multi-service retail banking architecture with synchronous balance mutation locking,
-                cross-currency ForEx conversion, asynchronous Kafka alerts, and automated reconciliation.
+                Staff-facing operations control console: Real-time 11-stage transaction tracking, Customer 360 multi-currency telemetry, Kafka DLQ recovery, versioned parameter governance, and immutable audit trails.
             </p>
 
             <div class="d-flex flex-wrap gap-2 justify-content-center justify-content-lg-start">
 
                 <a href="/login"
                    class="btn btn-primary btn-lg px-4 banking-primary-btn">
-                    <i class="bi bi-box-arrow-in-right me-1"></i>
-                    Sign In to Portal
+                    <i class="bi bi-shield-lock me-1"></i>
+                    Sign In to Admin Portal
                 </a>
 
-                <a href="/register"
+                <a href="/auth/switch?role=admin"
                    class="btn btn-outline-primary btn-lg px-4 banking-outline-btn">
-                    <i class="bi bi-person-vcard me-1"></i>
-                    Start KYC Onboarding
+                    <i class="bi bi-lightning-charge me-1"></i>
+                    Launch Admin Demo
                 </a>
 
             </div>
 
-            <!-- Trust Indicators -->
+            <!-- Operational Indicators -->
             <div class="hero-trust-row mt-4">
 
                 <div class="hero-trust-item">
                     <div class="trust-icon trust-green">
-                        <i class="bi bi-shield-check"></i>
+                        <i class="bi bi-shield-lock-fill"></i>
                     </div>
 
                     <div>
-                        <strong>Secure</strong>
-                        <small>Protected transactions</small>
+                        <strong>ROLE_ADMIN</strong>
+                        <small>Strict RBAC enforcement</small>
                     </div>
                 </div>
 
@@ -72,18 +71,18 @@
 
                     <div>
                         <strong>Auditable</strong>
-                        <small>Immutable ledger records</small>
+                        <small>Immutable SHA-256 hash chains</small>
                     </div>
                 </div>
 
                 <div class="hero-trust-item">
                     <div class="trust-icon trust-magenta">
-                        <i class="bi bi-lightning-charge"></i>
+                        <i class="bi bi-activity"></i>
                     </div>
 
                     <div>
                         <strong>Real-Time</strong>
-                        <small>Fast balance mutations</small>
+                        <small>11-stage telemetry &lt; 2s</small>
                     </div>
                 </div>
 
@@ -93,7 +92,7 @@
 
 
         <!-- =================================================
-             QUICK PERSONA ACCESS
+             STAFF QUICK ACCESS
              ================================================= -->
         <div class="col-lg-5">
 
@@ -103,17 +102,17 @@
 
                     <div>
                         <h5 class="fw-bold mb-1">
-                            <i class="bi bi-key-fill me-2"></i>
-                            Quick Persona Access
+                            <i class="bi bi-shield-lock me-2"></i>
+                            Staff Quick Access
                         </h5>
 
                         <p class="text-muted small mb-0">
-                            Jump straight into either user experience with pre-seeded test credentials.
+                            Jump straight into operational consoles with seeded administrative credentials.
                         </p>
                     </div>
 
                     <div class="persona-header-icon">
-                        <i class="bi bi-people-fill"></i>
+                        <i class="bi bi-person-gear"></i>
                     </div>
 
                 </div>
@@ -125,14 +124,13 @@
                     <a href="/auth/switch?role=admin"
                        class="btn persona-button persona-admin text-start p-3 d-flex align-items-center gap-3">
 
-                        <i class="bi bi-shield-lock-fill fs-3"></i>
+                        <i class="bi bi-shield-lock-fill fs-3 text-primary"></i>
 
-                        <div class="persona-content">
-                            <div class="fw-bold">Bank Administrator</div>
+                        <div class="persona-content flex-grow-1">
+                            <div class="fw-bold text-dark">Bank Administrator (Lead Ops)</div>
 
                             <small class="text-muted">
-                                Executive liquidity KPI, customer KYC review,
-                                account freeze/unfreeze, recon
+                                Full administrative governance: Account freeze, parameter store, DLQ replay, Customer 360 inspection
                             </small>
                         </div>
 
@@ -140,45 +138,33 @@
 
                     </a>
 
-
-                    <!-- Juan -->
-                    <a href="/auth/switch?role=juan"
-                       class="btn persona-button persona-juan text-start p-3 d-flex align-items-center gap-3">
-
-                        <i class="bi bi-person-circle fs-3"></i>
-
-                        <div class="persona-content">
-                            <div class="fw-bold">Juan Dela Cruz (Customer)</div>
-
-                            <small class="text-muted">
-                                PHP Savings + USD Checking accounts,
-                                fund transfers, statements
-                            </small>
+                    <!-- Direct Shortcuts -->
+                    <div class="mt-2 pt-2 border-top">
+                        <div class="small fw-semibold text-muted mb-2">Direct Console Links (Admin):</div>
+                        <div class="d-flex flex-wrap gap-1">
+                            <a href="/admin/customers/CUST-1001" class="btn btn-sm btn-outline-primary py-1 px-2" style="font-size: 0.75rem;">
+                                <i class="bi bi-person-bounding-box me-1"></i> Customer 360
+                            </a>
+                            <a href="/admin/monitoring" class="btn btn-sm btn-outline-primary py-1 px-2" style="font-size: 0.75rem;">
+                                <i class="bi bi-activity me-1"></i> Monitoring
+                            </a>
+                            <a href="/admin/dlq" class="btn btn-sm btn-outline-primary py-1 px-2" style="font-size: 0.75rem;">
+                                <i class="bi bi-inbox-fill me-1"></i> DLQ
+                            </a>
+                            <a href="/admin/parameters" class="btn btn-sm btn-outline-primary py-1 px-2" style="font-size: 0.75rem;">
+                                <i class="bi bi-sliders me-1"></i> Parameters
+                            </a>
+                            <a href="/admin/transfers/held" class="btn btn-sm btn-outline-primary py-1 px-2" style="font-size: 0.75rem;">
+                                <i class="bi bi-shield-exclamation me-1"></i> Held Queue
+                            </a>
+                            <a href="/admin/reconciliation" class="btn btn-sm btn-outline-primary py-1 px-2" style="font-size: 0.75rem;">
+                                <i class="bi bi-shield-check me-1"></i> Recon
+                            </a>
+                            <a href="/admin/audit" class="btn btn-sm btn-outline-primary py-1 px-2" style="font-size: 0.75rem;">
+                                <i class="bi bi-journal-check me-1"></i> Audit
+                            </a>
                         </div>
-
-                        <i class="bi bi-chevron-right persona-arrow"></i>
-
-                    </a>
-
-
-                    <!-- Maria -->
-                    <a href="/auth/switch?role=maria"
-                       class="btn persona-button persona-maria text-start p-3 d-flex align-items-center gap-3">
-
-                        <i class="bi bi-person-circle fs-3"></i>
-
-                        <div class="persona-content">
-                            <div class="fw-bold">Maria Santos (Customer)</div>
-
-                            <small class="text-muted">
-                                Multi-currency portfolio (PHP, EUR),
-                                digital wallet, instant payments
-                            </small>
-                        </div>
-
-                        <i class="bi bi-chevron-right persona-arrow"></i>
-
-                    </a>
+                    </div>
 
                 </div>
 
@@ -190,35 +176,40 @@
 
 
     <!-- =====================================================
-         SYSTEM STATUS
+         SYSTEM STATUS STRIP
          ===================================================== -->
     <div class="system-strip">
 
         <div class="system-strip-label">
             <span class="system-status-dot"></span>
-            <strong>Banking Platform Status</strong>
+            <strong>Admin Telemetry Active</strong>
         </div>
 
         <div class="system-status-list">
 
             <span>
                 <i class="bi bi-check-circle-fill"></i>
-                Core Banking
+                Customer 360
             </span>
 
             <span>
                 <i class="bi bi-check-circle-fill"></i>
-                Ledger
+                11-Stage Pipeline
             </span>
 
             <span>
                 <i class="bi bi-check-circle-fill"></i>
-                Kafka
+                DLQ Consumer
             </span>
 
             <span>
                 <i class="bi bi-check-circle-fill"></i>
-                Reconciliation
+                Daily Reconciliation
+            </span>
+
+            <span>
+                <i class="bi bi-check-circle-fill"></i>
+                Audit Ledger
             </span>
 
         </div>
@@ -227,23 +218,22 @@
 
 
     <!-- =====================================================
-         SYSTEM HIGHLIGHTS
+         ADMINISTRATIVE CONSOLES GRID
          ===================================================== -->
     <section class="mt-5 pt-3">
 
         <div class="banking-section-heading mb-4">
 
             <span class="section-eyebrow">
-                Platform Capabilities
+                Operational Consoles (Task T-011)
             </span>
 
             <h2>
-                Built for Reliable Retail Banking
+                Mission-Critical Banking Operations Suites
             </h2>
 
             <p class="mb-0">
-                A multi-service banking platform designed around transactional integrity,
-                multi-currency support, and auditable financial operations.
+                Centralized management suites designed for compliance officers, risk investigators, and system administrators.
             </p>
 
         </div>
@@ -251,176 +241,136 @@
 
         <div class="row g-4">
 
-            <!-- =================================================
-                 DUAL DATABASE
-                 ================================================= -->
+            <!-- Customer 360 -->
             <div class="col-md-4">
-
                 <div class="card feature-card p-4 h-100">
-
                     <div class="feature-icon purple-gradient mb-3">
-                        <i class="bi bi-database-lock"></i>
+                        <i class="bi bi-person-bounding-box"></i>
                     </div>
 
                     <h5 class="fw-bold">
-                        Dual-Database Architecture
+                        Customer 360 Dashboard
                     </h5>
 
-                    <p class="text-muted small mb-0">
-                        ACID master customer and account balances stored in Oracle XE 21c
-                        with SELECT FOR UPDATE row locking; immutable audit mutations
-                        recorded in PostgreSQL 15.
+                    <p class="text-muted small mb-3">
+                        Unified view of customer accounts, 3-tier pocket balances (Ledger, Held, Available), primary virtual debit cards, spending patterns, and explainable risk scores (0–100).
                     </p>
 
                     <div class="feature-footer">
-                        <span>ACID + Audit Trail</span>
-                        <i class="bi bi-arrow-up-right"></i>
+                        <span>DIG-103 · Unified Telemetry</span>
+                        <a href="/admin/customers/CUST-1001" class="text-decoration-none"><i class="bi bi-arrow-right"></i></a>
                     </div>
-
                 </div>
-
             </div>
 
-
-            <!-- =================================================
-                 FOREX
-                 ================================================= -->
+            <!-- Transaction Monitoring -->
             <div class="col-md-4">
-
                 <div class="card feature-card p-4 h-100">
-
                     <div class="feature-icon green-gradient mb-3">
-                        <i class="bi bi-currency-exchange"></i>
+                        <i class="bi bi-activity"></i>
                     </div>
 
                     <h5 class="fw-bold">
-                        Real-Time ForEx Engine
+                        Real-Time Monitoring Feed
                     </h5>
 
-                    <p class="text-muted small mb-0">
-                        Cross-currency transfers automatically query exchange rates
-                        (Frankfurter / ECB) and convert funds seamlessly between
-                        PHP, USD, EUR, GBP, and SGD.
+                    <p class="text-muted small mb-3">
+                        Live stream of transactions with visual 11-stage tracker, TR-MD03 status chips (SETTLED, SCREENING, FAILED), search by correlation ID, and sub-2s latency tracking.
                     </p>
 
                     <div class="feature-footer green-footer">
-                        <span>Multi-Currency</span>
-                        <i class="bi bi-arrow-up-right"></i>
+                        <span>DIG-102 · 11-Stage Tracker</span>
+                        <a href="/admin/monitoring" class="text-decoration-none"><i class="bi bi-arrow-right"></i></a>
                     </div>
-
                 </div>
-
             </div>
 
-
-            <!-- =================================================
-                 RECONCILIATION
-                 ================================================= -->
+            <!-- Held Transfers Queue -->
             <div class="col-md-4">
-
                 <div class="card feature-card p-4 h-100">
-
                     <div class="feature-icon purple-gradient mb-3">
-                        <i class="bi bi-shield-check"></i>
+                        <i class="bi bi-shield-exclamation"></i>
                     </div>
 
                     <h5 class="fw-bold">
-                        Automated Reconciliation
+                        Held Transfers Review Queue
                     </h5>
 
-                    <p class="text-muted small mb-0">
-                        Periodic reconciliation daemon checks master ledger balances
-                        against mutation logs, flagging variances, lag, and
-                        discrepancies with severity ratings.
+                    <p class="text-muted small mb-3">
+                        Operations queue for high-value and velocity-flagged transactions. Review suspicious transfers, approve for core balance mutation, or reject and trigger refunds.
                     </p>
 
                     <div class="feature-footer">
-                        <span>Ledger Integrity</span>
-                        <i class="bi bi-arrow-up-right"></i>
+                        <span>DIG-54 · AMLA &amp; Velocity</span>
+                        <a href="/admin/transfers/held" class="text-decoration-none"><i class="bi bi-arrow-right"></i></a>
                     </div>
-
                 </div>
-
             </div>
 
-        </div>
-
-    </section>
-
-
-    <!-- =====================================================
-         SECURITY SECTION
-         ===================================================== -->
-    <section class="mt-5 pt-4">
-
-        <div class="security-card">
-
-            <div class="security-visual">
-
-                <div class="security-glow"></div>
-
-                <div class="security-bank-card">
-
-                    <div class="security-card-top">
-                        <span>CORE BANKING</span>
-                        <i class="bi bi-wifi"></i>
+            <!-- DLQ Console -->
+            <div class="col-md-4">
+                <div class="card feature-card p-4 h-100">
+                    <div class="feature-icon magenta-gradient mb-3">
+                        <i class="bi bi-inbox-fill"></i>
                     </div>
 
-                    <div class="security-card-number">
-                        •••• •••• •••• 2026
-                    </div>
+                    <h5 class="fw-bold">
+                        Admin DLQ Console
+                    </h5>
 
-                    <div class="security-card-bottom">
-                        <span>SECURED LEDGER</span>
-                        <i class="bi bi-shield-check"></i>
-                    </div>
+                    <p class="text-muted small mb-3">
+                        Inspect poisoned Kafka messages, view exception stack traces, replay with original partition key without duplicates, or discard with mandatory audit justification.
+                    </p>
 
+                    <div class="feature-footer">
+                        <span>DIG-90 · Message Recovery</span>
+                        <a href="/admin/dlq" class="text-decoration-none"><i class="bi bi-arrow-right"></i></a>
+                    </div>
                 </div>
-
             </div>
 
-
-            <div class="security-content">
-
-                <span class="section-eyebrow">
-                    Transaction Security
-                </span>
-
-                <h2>
-                    Every Mutation Leaves a Trace
-                </h2>
-
-                <p>
-                    Financial transactions are protected through controlled balance
-                    mutations, database locking, immutable audit records, and
-                    asynchronous event processing.
-                </p>
-
-
-                <div class="security-list">
-
-                    <div>
-                        <i class="bi bi-check-circle-fill"></i>
-                        Row-level transaction locking
+            <!-- Parameter Store -->
+            <div class="col-md-4">
+                <div class="card feature-card p-4 h-100">
+                    <div class="feature-icon purple-gradient mb-3">
+                        <i class="bi bi-sliders"></i>
                     </div>
 
-                    <div>
-                        <i class="bi bi-check-circle-fill"></i>
-                        Append-only audit records
-                    </div>
+                    <h5 class="fw-bold">
+                        Versioned Parameter Store
+                    </h5>
 
-                    <div>
-                        <i class="bi bi-check-circle-fill"></i>
-                        Multi-service architecture
-                    </div>
+                    <p class="text-muted small mb-3">
+                        Dynamic system limits (daily transfer caps, high-value thresholds, OTP expiry, interest rates) with version auto-increment and mandatory change justification.
+                    </p>
 
-                    <div>
-                        <i class="bi bi-check-circle-fill"></i>
-                        Automated reconciliation
+                    <div class="feature-footer">
+                        <span>DIG-54 · Versioned Limits</span>
+                        <a href="/admin/parameters" class="text-decoration-none"><i class="bi bi-arrow-right"></i></a>
                     </div>
-
                 </div>
+            </div>
 
+            <!-- Audit Ledger & Recon -->
+            <div class="col-md-4">
+                <div class="card feature-card p-4 h-100">
+                    <div class="feature-icon green-gradient mb-3">
+                        <i class="bi bi-journal-check"></i>
+                    </div>
+
+                    <h5 class="fw-bold">
+                        Audit Ledger &amp; Reconciliation
+                    </h5>
+
+                    <p class="text-muted small mb-3">
+                        Immutable administrative audit trail with SHA-256 hash chaining alongside daily automated reconciliation between pocket balances and mutation ledgers.
+                    </p>
+
+                    <div class="feature-footer green-footer">
+                        <span>DIG-53 · Immutable Audit</span>
+                        <a href="/admin/audit" class="text-decoration-none"><i class="bi bi-arrow-right"></i></a>
+                    </div>
+                </div>
             </div>
 
         </div>
@@ -442,19 +392,18 @@
                 </span>
 
                 <h2>
-                    Ready to access the platform?
+                    Enter the Administrative Operations Console
                 </h2>
 
                 <p>
-                    Sign in to explore the customer and administrator experiences
-                    powered by the banking platform.
+                    Log in with authorized staff credentials to monitor real-time ledger health and manage operational controls.
                 </p>
 
             </div>
 
             <a href="/login" class="btn closing-btn">
-                <i class="bi bi-box-arrow-in-right me-1"></i>
-                Access Portal
+                <i class="bi bi-shield-lock me-1"></i>
+                Sign In to Portal
             </a>
 
         </div>
@@ -469,69 +418,6 @@
      ========================================================= -->
 <div th:replace="~{fragments/layout :: footer}"></div>
 
-
-<!-- =========================================================
-     THEME TOGGLE
-     ========================================================= -->
-<button
-    type="button"
-    class="theme-toggle"
-    id="themeToggle"
-    aria-label="Toggle dark mode"
-    title="Toggle dark mode">
-
-    <i class="bi bi-moon-fill" id="themeIcon"></i>
-
-</button>
-
-
-<!-- =========================================================
-     THEME SCRIPT
-     ========================================================= -->
-<script>
-    (function () {
-
-        const body = document.body;
-        const toggle = document.getElementById("themeToggle");
-        const icon = document.getElementById("themeIcon");
-
-        const savedTheme = localStorage.getItem("banking-theme");
-
-        if (savedTheme === "dark") {
-            body.classList.add("dark-mode");
-        }
-
-        function updateIcon() {
-            if (body.classList.contains("dark-mode")) {
-                icon.className = "bi bi-sun-fill";
-                toggle.setAttribute("aria-label", "Switch to light mode");
-                toggle.setAttribute("title", "Switch to light mode");
-            } else {
-                icon.className = "bi bi-moon-fill";
-                toggle.setAttribute("aria-label", "Switch to dark mode");
-                toggle.setAttribute("title", "Switch to dark mode");
-            }
-        }
-
-        updateIcon();
-
-        toggle.addEventListener("click", function () {
-
-            body.classList.toggle("dark-mode");
-
-            const isDark =
-                body.classList.contains("dark-mode");
-
-            localStorage.setItem(
-                "banking-theme",
-                isDark ? "dark" : "light"
-            );
-
-            updateIcon();
-        });
-
-    })();
-</script>
 
 </body>
 </html>

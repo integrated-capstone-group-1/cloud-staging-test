@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
 
-<head th:replace="~{fragments/layout :: head('Sign In')}"></head>
+<head th:replace="~{fragments/layout :: head('Admin Sign In')}"></head>
 
 <body class="banking-login">
 
@@ -23,11 +23,11 @@
             </div>
 
             <h3 class="fw-bold mb-1">
-                Account Sign In
+                Admin Portal Sign In
             </h3>
 
             <p class="text-muted small mb-0">
-                Access your accounts and banking ledger
+                Authorized access for banking operations, compliance, and systems administration
             </p>
 
         </div>
@@ -40,7 +40,7 @@
             <div class="mb-3">
 
                 <label class="form-label fw-semibold">
-                    Email address
+                    Staff Email Address
                 </label>
 
                 <div class="input-group">
@@ -54,7 +54,7 @@
                         id="emailInput"
                         class="form-control"
                         th:field="*{email}"
-                        placeholder="e.g. name@example.com"/>
+                        placeholder="e.g. admin@ledgerbank.com"/>
 
                 </div>
 
@@ -84,7 +84,7 @@
                         id="passwordInput"
                         class="form-control"
                         th:field="*{password}"
-                        placeholder="Enter password"/>
+                        placeholder="Enter admin password"/>
 
                 </div>
 
@@ -97,13 +97,13 @@
             </div>
 
 
-            <!-- SIGN IN -->
+            <!-- SIGN IN BUTTON -->
             <button
                 type="submit"
                 class="btn login-submit w-100">
 
-                <i class="bi bi-box-arrow-in-right me-1"></i>
-                Sign In
+                <i class="bi bi-shield-check me-1"></i>
+                Sign In to Admin Console
 
             </button>
 
@@ -114,46 +114,20 @@
         <div class="login-demo-section mt-4 pt-3">
 
             <div class="small fw-semibold text-muted mb-2 text-center">
-                Click to Quick-Fill Demo Credentials:
+                Click to Quick-Fill Administrative Credentials:
             </div>
 
             <div class="d-flex flex-column gap-2">
 
                 <button
                     type="button"
-                    class="btn btn-sm demo-login-button text-start"
+                    class="btn btn-sm demo-login-button text-start p-2"
                     onclick="fillDemo('admin@ledgerbank.com', 'admin123')">
 
                     <i class="bi bi-shield-fill text-danger me-1"></i>
 
-                    <strong>Admin:</strong>
+                    <strong>Administrator:</strong>
                     admin@ledgerbank.com (admin123)
-
-                </button>
-
-
-                <button
-                    type="button"
-                    class="btn btn-sm demo-login-button text-start"
-                    onclick="fillDemo('juan.delacruz@example.com', 'password123')">
-
-                    <i class="bi bi-person-fill text-primary me-1"></i>
-
-                    <strong>Customer:</strong>
-                    juan.delacruz@example.com (password123)
-
-                </button>
-
-
-                <button
-                    type="button"
-                    class="btn btn-sm demo-login-button text-start"
-                    onclick="fillDemo('maria.santos@example.com', 'password123')">
-
-                    <i class="bi bi-person-fill text-info me-1"></i>
-
-                    <strong>Customer:</strong>
-                    maria.santos@example.com (password123)
 
                 </button>
 
@@ -162,20 +136,11 @@
         </div>
 
 
-        <!-- REGISTER -->
-        <p class="text-center text-muted small mt-4 mb-0">
-
-            Don't have an account yet?
-
-            <a
-                href="/register"
-                class="fw-semibold login-register-link">
-
-                Start KYC Onboarding
-
-            </a>
-
-        </p>
+        <!-- STAFF POLICY NOTE -->
+        <div class="text-center text-muted small mt-4 mb-0 pt-2 border-top">
+            <i class="bi bi-shield-exclamation text-warning me-1"></i>
+            Restricted System: Access monitored and audited under compliance policy.
+        </div>
 
     </div>
 
@@ -183,116 +148,11 @@
 
 <div th:replace="~{fragments/layout :: footer}"></div>
 
-
-<!-- FLOATING THEME TOGGLE -->
-<button
-    type="button"
-    class="login-theme-toggle"
-    id="loginThemeToggle"
-    aria-label="Toggle dark mode"
-    title="Toggle dark mode">
-
-    <i class="bi bi-moon-fill" id="loginThemeIcon"></i>
-
-</button>
-
-
-<!-- THEME + DEMO SCRIPT -->
 <script>
-
-(function () {
-
-    const body = document.body;
-
-    const toggle =
-        document.getElementById("loginThemeToggle");
-
-    const icon =
-        document.getElementById("loginThemeIcon");
-
-    const savedTheme =
-        localStorage.getItem("banking-theme");
-
-
-    if (savedTheme === "dark") {
-        body.classList.add("dark-mode");
-    }
-
-
-    function updateIcon() {
-
-        if (body.classList.contains("dark-mode")) {
-
-            icon.className =
-                "bi bi-sun-fill";
-
-            toggle.setAttribute(
-                "aria-label",
-                "Switch to light mode"
-            );
-
-            toggle.setAttribute(
-                "title",
-                "Switch to light mode"
-            );
-
-        } else {
-
-            icon.className =
-                "bi bi-moon-fill";
-
-            toggle.setAttribute(
-                "aria-label",
-                "Switch to dark mode"
-            );
-
-            toggle.setAttribute(
-                "title",
-                "Switch to dark mode"
-            );
-
-        }
-
-    }
-
-
-    updateIcon();
-
-
-    toggle.addEventListener(
-        "click",
-        function () {
-
-            body.classList.toggle("dark-mode");
-
-            const isDark =
-                body.classList.contains("dark-mode");
-
-            localStorage.setItem(
-                "banking-theme",
-                isDark ? "dark" : "light"
-            );
-
-            updateIcon();
-
-        }
-    );
-
-})();
-
-
-function fillDemo(email, pass) {
-
-    document.getElementById(
-        "emailInput"
-    ).value = email;
-
-    document.getElementById(
-        "passwordInput"
-    ).value = pass;
-
+function fillDemo(email, password) {
+    document.getElementById("emailInput").value = email;
+    document.getElementById("passwordInput").value = password;
 }
-
 </script>
 
 </body>

@@ -88,14 +88,14 @@
                                         <i class="bi bi-arrow-repeat"></i> Replay
                                     </button>
                                 </form>
-                                <!-- Discard Form with Reason -->
-                                <form th:action="@{/admin/dlq/{id}/discard(id=${msg.id})}" method="post" class="d-flex gap-1"
-                                      onsubmit="return confirmDiscard(this)">
-                                    <input type="hidden" name="reason" value="Manually resolved and discarded by compliance admin"/>
-                                    <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2" title="Discard message with reason">
-                                        <i class="bi bi-trash"></i> Discard
-                                    </button>
-                                </form>
+                                <!-- Discard Button triggering Bootstrap Modal -->
+                                <button type="button" class="btn btn-sm btn-outline-danger py-0 px-2"
+                                        th:data-msg-id="${msg.id}"
+                                        th:data-msg-topic="${msg.topic}"
+                                        onclick="openDiscardModal(this.getAttribute('data-msg-id'), this.getAttribute('data-msg-topic'))"
+                                        title="Discard message with documented reason">
+                                    <i class="bi bi-trash"></i> Discard
+                                </button>
                             </div>
                             <div th:unless="${msg.pending}" class="small text-muted font-monospace">
                                 <span th:text="${msg.actionBy}">admin</span>
@@ -111,14 +111,72 @@
     </div>
 </main>
 
+<!-- Discard Regulatory Modal -->
+<div class="modal fade" id="discardModal" tabindex="-1" aria-labelledby="discardModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <form id="discardForm" method="post" action="">
+                <div class="modal-header bg-danger text-white py-2">
+                    <h6 class="modal-title fw-bold" id="discardModalLabel">
+                        <i class="bi bi-shield-exclamation me-2"></i>Discard Poison Message (Regulatory Justification)
+                    </h6>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-3">
+                    <div class="alert alert-warning py-2 small mb-3">
+                        <i class="bi bi-exclamation-triangle-fill me-1"></i>
+                        <strong>Compliance Notice (BSP Cir. 951 &amp; AMLA RA 9160):</strong>
+                        Permanently discarding an unprocessable dead-letter message requires an audited justification. This action is immutably logged to the administrative audit ledger.
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label small fw-semibold text-muted">Target Message &amp; Topic:</label>
+                        <div class="p-2 rounded bg-light border small font-monospace">
+                            <span class="badge bg-secondary me-2" id="modalMsgId">DLQ-MSG-101</span>
+                            <span class="text-muted">Topic:</span> <strong id="modalMsgTopic">txn.settlement</strong>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="standardReasonSelect" class="form-label small fw-semibold">Standard Regulatory Reason:</label>
+                        <select id="standardReasonSelect" class="form-select form-select-sm" onchange="onStandardReasonSelect(this.value)">
+                            <option value="">-- Select Standard Reason or type below --</option>
+                            <option value="Manually resolved upon core ledger reconciliation">Manually resolved upon core ledger reconciliation</option>
+                            <option value="Confirmed defective unparseable payload - malformed schema">Confirmed defective unparseable payload - malformed schema</option>
+                            <option value="Duplicate event - downstream mutation already committed">Duplicate event - downstream mutation already committed</option>
+                            <option value="Non-recoverable target account closure confirmed by operations">Non-recoverable target account closure confirmed by operations</option>
+                        </select>
+                    </div>
+                    <div class="mb-2">
+                        <label for="discardReasonInput" class="form-label small fw-semibold">Audit Justification Details <span class="text-danger">*</span>:</label>
+                        <textarea class="form-control form-control-sm" id="discardReasonInput" name="reason" rows="3" required placeholder="Describe regulatory or operational justification..."></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer py-2 bg-light">
+                    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-sm btn-danger px-3">
+                        <i class="bi bi-trash me-1"></i> Confirm &amp; Discard
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <script>
-function confirmDiscard(form) {
-    var reason = prompt("Please enter the regulatory reason for discarding this DLQ message:", "Manually resolved upon core ledger reconciliation");
-    if (reason && reason.trim() !== "") {
-        form.elements["reason"].value = reason.trim();
-        return true;
+function openDiscardModal(msgId, topic) {
+    var form = document.getElementById("discardForm");
+    form.action = "/admin/dlq/" + encodeURIComponent(msgId) + "/discard";
+    document.getElementById("modalMsgId").textContent = msgId;
+    document.getElementById("modalMsgTopic").textContent = topic || "N/A";
+    document.getElementById("standardReasonSelect").value = "";
+    document.getElementById("discardReasonInput").value = "Manually resolved upon core ledger reconciliation";
+    var modal = new bootstrap.Modal(document.getElementById("discardModal"));
+    modal.show();
+}
+
+function onStandardReasonSelect(val) {
+    if (val) {
+        document.getElementById("discardReasonInput").value = val;
     }
-    return false;
 }
 </script>
 

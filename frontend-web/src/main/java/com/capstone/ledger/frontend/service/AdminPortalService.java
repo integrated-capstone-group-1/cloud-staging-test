@@ -124,6 +124,12 @@ public class AdminPortalService {
     }
 
     private void seedMonitoringFeed() {
+        String[] stageNames = {
+                "GATEWAY_INGEST", "AUTH_VALIDATION", "IDEMPOTENCY_LOCK", "RISK_EVALUATION",
+                "AMLA_CTR_STR", "ORACLE_ROW_LOCK", "LEDGER_MUTATION", "KAFKA_DISPATCH",
+                "NOTIFICATION_EVENT", "POSTGRES_AUDIT_SYNC", "RECON_REGISTER"
+        };
+
         TransactionMonitoringView m1 = new TransactionMonitoringView();
         m1.setTxnId("TXN-MON-8801");
         m1.setCorrelationId("CORR-MON-8801");
@@ -136,22 +142,19 @@ public class AdminPortalService {
         m1.setAmount(new BigDecimal("12500.00"));
         m1.setCurrency("PHP");
         m1.setOverallStatus("SUCCESS");
-        m1.setCurrentStage(9);
+        m1.setCurrentStage(11);
         m1.setTotalDurationMs(840);
         m1.setTimestamp(LocalDateTime.now().minusMinutes(2));
 
-        String[] stageNames = {
-                "INITIATED", "VALIDATED", "SANCTION_CHECKED", "RISK_EVALUATED",
-                "HOLD_PLACED", "CORE_POSTED", "LEDGER_COMMITTED", "NOTIFIED", "COMPLETED"
-        };
         for (int i = 0; i < stageNames.length; i++) {
             m1.getStages().add(new TransactionMonitoringView.StageTracker(i + 1, stageNames[i], "GREEN", 50 + (i * 20)));
         }
         monitoringFeed.add(m1);
 
+        // Matches Held Queue item TXN-HELD-9021 (Maria Santos)
         TransactionMonitoringView m2 = new TransactionMonitoringView();
-        m2.setTxnId("TXN-MON-8802");
-        m2.setCorrelationId("CORR-MON-8802");
+        m2.setTxnId("TXN-HELD-9021");
+        m2.setCorrelationId("CORR-R71-001");
         m2.setRawCustomerName("Maria Santos");
         m2.setMaskedCustomerName("M*** S***");
         m2.setRawSourceAccount("ACCT-5001-PHP");
@@ -161,16 +164,40 @@ public class AdminPortalService {
         m2.setAmount(new BigDecimal("490000.00"));
         m2.setCurrency("PHP");
         m2.setOverallStatus("HELD");
-        m2.setCurrentStage(4);
+        m2.setCurrentStage(5);
         m2.setTotalDurationMs(320);
         m2.setTimestamp(LocalDateTime.now().minusMinutes(25));
 
-        m2.getStages().add(new TransactionMonitoringView.StageTracker(1, "INITIATED", "GREEN", 45));
-        m2.getStages().add(new TransactionMonitoringView.StageTracker(2, "VALIDATED", "GREEN", 60));
-        m2.getStages().add(new TransactionMonitoringView.StageTracker(3, "SANCTION_CHECKED", "GREEN", 85));
-        m2.getStages().add(new TransactionMonitoringView.StageTracker(4, "RISK_EVALUATED", "OUTLINE", 130));
-        m2.getStages().add(new TransactionMonitoringView.StageTracker(5, "HELD", "RED", 0));
+        m2.getStages().add(new TransactionMonitoringView.StageTracker(1, "GATEWAY_INGEST", "GREEN", 45));
+        m2.getStages().add(new TransactionMonitoringView.StageTracker(2, "AUTH_VALIDATION", "GREEN", 60));
+        m2.getStages().add(new TransactionMonitoringView.StageTracker(3, "IDEMPOTENCY_LOCK", "GREEN", 85));
+        m2.getStages().add(new TransactionMonitoringView.StageTracker(4, "RISK_EVALUATION", "GREEN", 130));
+        m2.getStages().add(new TransactionMonitoringView.StageTracker(5, "AMLA_CTR_STR", "RED", 0));
         monitoringFeed.add(m2);
+
+        // Matches Held Queue item TXN-HELD-9045 (Juan Dela Cruz)
+        TransactionMonitoringView m3 = new TransactionMonitoringView();
+        m3.setTxnId("TXN-HELD-9045");
+        m3.setCorrelationId("CORR-R71-002");
+        m3.setRawCustomerName("Juan Dela Cruz");
+        m3.setMaskedCustomerName("J*** D***");
+        m3.setRawSourceAccount("ACCT-1001-PHP");
+        m3.setMaskedSourceAccount("ACCT-****-1001");
+        m3.setRawDestAccount("ACCT-8811-PHP");
+        m3.setMaskedDestAccount("ACCT-****-8811");
+        m3.setAmount(new BigDecimal("260000.00"));
+        m3.setCurrency("PHP");
+        m3.setOverallStatus("HELD");
+        m3.setCurrentStage(5);
+        m3.setTotalDurationMs(210);
+        m3.setTimestamp(LocalDateTime.now().minusMinutes(12));
+
+        m3.getStages().add(new TransactionMonitoringView.StageTracker(1, "GATEWAY_INGEST", "GREEN", 40));
+        m3.getStages().add(new TransactionMonitoringView.StageTracker(2, "AUTH_VALIDATION", "GREEN", 50));
+        m3.getStages().add(new TransactionMonitoringView.StageTracker(3, "IDEMPOTENCY_LOCK", "GREEN", 40));
+        m3.getStages().add(new TransactionMonitoringView.StageTracker(4, "RISK_EVALUATION", "GREEN", 80));
+        m3.getStages().add(new TransactionMonitoringView.StageTracker(5, "AMLA_CTR_STR", "RED", 0));
+        monitoringFeed.add(m3);
     }
 
     // --- Customer 360 Aggregation (DIG-103) ---
@@ -419,6 +446,25 @@ public class AdminPortalService {
                 ht.setReviewedAt(LocalDateTime.now());
                 ht.setDecisionNotes(notes != null ? notes : "Approved by risk officer");
 
+                // Propagate approval to 11-Stage Live Monitoring Feed
+                for (TransactionMonitoringView tm : monitoringFeed) {
+                    if (tm.getTxnId().equalsIgnoreCase(txnId)) {
+                        tm.setOverallStatus("SUCCESS");
+                        tm.setCurrentStage(11);
+                        tm.getStages().clear();
+                        String[] sNames = {
+                                "GATEWAY_INGEST", "AUTH_VALIDATION", "IDEMPOTENCY_LOCK", "RISK_EVALUATION",
+                                "AMLA_RELEASED", "ORACLE_ROW_LOCK", "LEDGER_MUTATION", "KAFKA_DISPATCH",
+                                "NOTIFICATION_EVENT", "POSTGRES_AUDIT_SYNC", "RECON_REGISTER"
+                        };
+                        for (int i = 0; i < sNames.length; i++) {
+                            tm.getStages().add(new TransactionMonitoringView.StageTracker(i + 1, sNames[i], "GREEN", 40 + (i * 20)));
+                        }
+                        tm.setTotalDurationMs(560);
+                        tm.setTimestamp(LocalDateTime.now());
+                    }
+                }
+
                 logAudit("HELD_TXN_APPROVE", adminUser, "TRANSACTION", txnId,
                         "Held transfer approved and released for execution: " + ht.getDecisionNotes());
                 return true;
@@ -434,6 +480,22 @@ public class AdminPortalService {
                 ht.setReviewedBy(adminUser != null ? adminUser : "admin@ledgerbank.com");
                 ht.setReviewedAt(LocalDateTime.now());
                 ht.setDecisionNotes(notes != null ? notes : "Rejected by risk officer");
+
+                // Propagate rejection to 11-Stage Live Monitoring Feed
+                for (TransactionMonitoringView tm : monitoringFeed) {
+                    if (tm.getTxnId().equalsIgnoreCase(txnId)) {
+                        tm.setOverallStatus("FAILED");
+                        tm.setCurrentStage(5);
+                        tm.getStages().clear();
+                        tm.getStages().add(new TransactionMonitoringView.StageTracker(1, "GATEWAY_INGEST", "GREEN", 40));
+                        tm.getStages().add(new TransactionMonitoringView.StageTracker(2, "AUTH_VALIDATION", "GREEN", 50));
+                        tm.getStages().add(new TransactionMonitoringView.StageTracker(3, "IDEMPOTENCY_LOCK", "GREEN", 30));
+                        tm.getStages().add(new TransactionMonitoringView.StageTracker(4, "RISK_EVALUATION", "GREEN", 80));
+                        tm.getStages().add(new TransactionMonitoringView.StageTracker(5, "REJECTED_BY_ADMIN", "RED", 0));
+                        tm.setTotalDurationMs(200);
+                        tm.setTimestamp(LocalDateTime.now());
+                    }
+                }
 
                 logAudit("HELD_TXN_REJECT", adminUser, "TRANSACTION", txnId,
                         "Held transfer declined and cancelled: " + ht.getDecisionNotes());
@@ -459,6 +521,33 @@ public class AdminPortalService {
                 msg.setStatus("REPLAYED");
                 msg.setActionBy(adminUser != null ? adminUser : "admin@ledgerbank.com");
                 msg.setActionAt(LocalDateTime.now());
+
+                // Reflect replayed event in 11-Stage Live Monitoring Feed
+                TransactionMonitoringView replayed = new TransactionMonitoringView();
+                replayed.setTxnId("TXN-REPLAY-" + id);
+                replayed.setCorrelationId("CORR-DLQ-" + msg.getMessageKey());
+                replayed.setRawCustomerName("DLQ Replayed Event");
+                replayed.setMaskedCustomerName("D** R*******");
+                replayed.setRawSourceAccount("ACCT-1001-PHP");
+                replayed.setMaskedSourceAccount("ACCT-****-1001");
+                replayed.setRawDestAccount("ACCT-2001-PHP");
+                replayed.setMaskedDestAccount("ACCT-****-2001");
+                replayed.setAmount(new BigDecimal("1500.00"));
+                replayed.setCurrency("PHP");
+                replayed.setOverallStatus("SUCCESS");
+                replayed.setCurrentStage(11);
+                replayed.setTotalDurationMs(315);
+                replayed.setTimestamp(LocalDateTime.now());
+
+                String[] sNames = {
+                        "DLQ_REPLAY_INJECT", "KEY_DEDUP_VERIFY", "IDEMPOTENCY_LOCK", "RISK_EVALUATION",
+                        "AMLA_CTR_STR", "ORACLE_ROW_LOCK", "LEDGER_MUTATION", "KAFKA_DISPATCH",
+                        "NOTIFICATION_EVENT", "POSTGRES_AUDIT_SYNC", "RECON_REGISTER"
+                };
+                for (int i = 0; i < sNames.length; i++) {
+                    replayed.getStages().add(new TransactionMonitoringView.StageTracker(i + 1, sNames[i], "GREEN", 25 + (i * 20)));
+                }
+                monitoringFeed.add(0, replayed);
 
                 logAudit("DLQ_REPLAY", adminUser, "DLQ_MESSAGE", id,
                         String.format("Replayed message on topic '%s' with original key '%s'", msg.getTopic(), msg.getMessageKey()));
