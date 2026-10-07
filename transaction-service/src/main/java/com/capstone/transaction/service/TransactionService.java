@@ -448,23 +448,15 @@ public class TransactionService {
             String sourceCurrencyCode,
             String destCurrencyCode) {
 
-        String requestHash = idempotencyService.computePayloadHash(request);
-        Optional<TransactionResponse> cached = requestHash != null
-                ? idempotencyService.getCached(request.idempotencyKey(), requestHash)
-                : idempotencyService.getCached(request.idempotencyKey());
+        Optional<TransactionResponse> cached =
+                idempotencyService.getCached(request.idempotencyKey());
 
         if (cached.isPresent()) {
             return cached.get();
         }
 
-        boolean locked = requestHash != null
-                ? idempotencyService.tryLock(request.idempotencyKey(), requestHash)
-                : idempotencyService.tryLock(request.idempotencyKey());
-
-        if (!locked) {
-            Optional<TransactionResponse> completed = requestHash != null
-                    ? idempotencyService.getCached(request.idempotencyKey(), requestHash)
-                    : idempotencyService.getCached(request.idempotencyKey());
+        if (!idempotencyService.tryLock(request.idempotencyKey())) {
+            Optional<TransactionResponse> completed = idempotencyService.getCached(request.idempotencyKey());
             if (completed.isPresent()) {
                 return completed.get();
             }
@@ -474,6 +466,7 @@ public class TransactionService {
                             + request.idempotencyKey()
                             + "' is already being processed");
         }
+
 
         try {
 

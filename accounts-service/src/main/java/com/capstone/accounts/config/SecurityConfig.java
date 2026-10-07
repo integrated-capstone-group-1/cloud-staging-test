@@ -31,7 +31,7 @@ public class SecurityConfig {
                         .requestMatchers("/actuator/**").permitAll()
                         .requestMatchers("/api/admin/**", "/api/v1/admin/**").hasRole("ADMIN")
                         .requestMatchers("/api/accounts/**", "/api/v1/accounts/**", "/api/v1/recipients/**", "/api/recipients/**").hasAnyRole("CUSTOMER", "ADMIN", "INTERNAL")
-                        .requestMatchers("/internal/**").hasAnyRole("INTERNAL", "ADMIN")
+                        .requestMatchers("/internal/**", "/internal/parameters/**").hasAnyRole("INTERNAL", "ADMIN")
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();

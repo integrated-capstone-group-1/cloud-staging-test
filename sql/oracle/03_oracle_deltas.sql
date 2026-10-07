@@ -149,3 +149,43 @@ CREATE TABLE standing_instruction (
     CONSTRAINT ck_si_status CHECK (status IN ('ACTIVE','PAUSED','CANCELLED')),
     CONSTRAINT ck_si_amount CHECK (amount > 0)
 );
+
+
+-- 8. SYSTEM_PARAMETER (Parameter Store for DIG-17 - Owned by accounts-service)
+CREATE TABLE system_parameter (
+    param_key             VARCHAR2(100)  NOT NULL,
+    param_description     VARCHAR2(255),
+    param_value_numeric   NUMBER(18,4),
+    param_value_text      VARCHAR2(200),
+    param_version         NUMBER(10)     DEFAULT 1 NOT NULL,
+    is_active             CHAR(1)        DEFAULT 'Y' NOT NULL,
+    created_at            TIMESTAMP      DEFAULT SYSTIMESTAMP NOT NULL,
+    created_by            VARCHAR2(50)   NOT NULL,
+    updated_at            TIMESTAMP,
+    updated_by            VARCHAR2(50),
+    CONSTRAINT pk_system_parameter PRIMARY KEY (param_key),
+    CONSTRAINT ck_sysparam_active CHECK (is_active IN ('Y', 'N')),
+    CONSTRAINT ck_sysparam_value CHECK (
+        (param_value_numeric IS NOT NULL AND param_value_text IS NULL) 
+        OR 
+        (param_value_numeric IS NULL AND param_value_text IS NOT NULL)
+    )
+);
+
+-- Audit table for parameter changes (DIG-17)
+CREATE TABLE system_parameter_audit (
+    audit_id               VARCHAR2(36)   NOT NULL,
+    param_key              VARCHAR2(100)  NOT NULL,
+    param_version          NUMBER(10)     NOT NULL,
+    old_value_numeric      NUMBER(18,4),
+    new_value_numeric      NUMBER(18,4),
+    old_value_text         VARCHAR2(200),
+    new_value_text         VARCHAR2(200),
+    change_reason          VARCHAR2(255),
+    changed_by             VARCHAR2(100)  NOT NULL,
+    changed_at             TIMESTAMP      DEFAULT SYSTIMESTAMP NOT NULL,
+    CONSTRAINT pk_system_parameter_audit PRIMARY KEY (audit_id),
+    CONSTRAINT fk_sysparm_audit_key FOREIGN KEY (param_key)
+        REFERENCES system_parameter (param_key)
+);
+
