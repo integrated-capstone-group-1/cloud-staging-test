@@ -189,3 +189,24 @@ CREATE TABLE system_parameter_audit (
         REFERENCES system_parameter (param_key)
 );
 
+-- 9. SUSPICIOUS_REPORT (Admin Fraud Dispute Queue - DIG-91)
+CREATE TABLE suspicious_report (
+    case_id            VARCHAR2(36)   NOT NULL,
+    txn_id             VARCHAR2(36)   NOT NULL,
+    customer_id        VARCHAR2(36)   NOT NULL,
+    reason             VARCHAR2(100)  NOT NULL,
+    notes              VARCHAR2(1000),
+    amount             NUMBER(18,4),
+    currency_code      VARCHAR2(3),
+    status             VARCHAR2(30)   DEFAULT 'OPEN' NOT NULL,
+    created_at         TIMESTAMP      DEFAULT SYSTIMESTAMP NOT NULL,
+    updated_at         TIMESTAMP,
+    CONSTRAINT pk_suspicious_report PRIMARY KEY (case_id),
+    CONSTRAINT ck_suspicious_report_status CHECK (status IN ('OPEN','UNDER_REVIEW','RESOLVED','REJECTED'))
+);
+
+CREATE INDEX ix_suspicious_report_cust ON suspicious_report (customer_id);
+CREATE INDEX ix_suspicious_report_txn ON suspicious_report (txn_id);
+CREATE INDEX ix_suspicious_report_status ON suspicious_report (status);
+
+
