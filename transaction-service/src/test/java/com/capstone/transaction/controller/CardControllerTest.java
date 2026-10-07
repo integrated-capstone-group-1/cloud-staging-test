@@ -41,11 +41,17 @@ class CardControllerTest {
 
     @BeforeEach
     void setUp() {
+        SecurityContextHolder.clearContext();
         UsernamePasswordAuthenticationToken auth =
                 new UsernamePasswordAuthenticationToken(CUSTOMER_ID, null, Collections.emptyList());
         SecurityContext context = SecurityContextHolder.createEmptyContext();
         context.setAuthentication(auth);
         SecurityContextHolder.setContext(context);
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void tearDown() {
+        SecurityContextHolder.clearContext();
     }
 
     @Test

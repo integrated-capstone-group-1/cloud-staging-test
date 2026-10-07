@@ -16,6 +16,7 @@ import com.capstone.transaction.service.BalanceCacheInvalidator;
 import com.capstone.transaction.service.IdempotencyService;
 import com.capstone.transaction.service.TransactionService;
 import com.capstone.transaction.metrics.BankingMetricsService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.mockito.Mockito;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -93,7 +94,7 @@ class RefactoredPathBenchmarkTest {
         );
 
         // Lock-free in-memory IdempotencyService
-        IdempotencyService idempotencyService = new IdempotencyService(null, null) {
+        IdempotencyService idempotencyService = new IdempotencyService(null, new ObjectMapper().findAndRegisterModules()) {
             private final ConcurrentHashMap<String, TransactionResponse> cache = new ConcurrentHashMap<>();
             private final ConcurrentHashMap<String, Boolean> locks = new ConcurrentHashMap<>();
 
@@ -103,12 +104,27 @@ class RefactoredPathBenchmarkTest {
             }
 
             @Override
+            public Optional<TransactionResponse> getCached(String idempotencyKey, String payloadHash) {
+                return Optional.ofNullable(cache.get(idempotencyKey));
+            }
+
+            @Override
             public boolean tryLock(String idempotencyKey) {
                 return locks.putIfAbsent(idempotencyKey, Boolean.TRUE) == null;
             }
 
             @Override
+            public boolean tryLock(String idempotencyKey, String payloadHash) {
+                return locks.putIfAbsent(idempotencyKey, Boolean.TRUE) == null;
+            }
+
+            @Override
             public void storeResult(String idempotencyKey, TransactionResponse response) {
+                cache.put(idempotencyKey, response);
+            }
+
+            @Override
+            public void storeResult(String idempotencyKey, String payloadHash, TransactionResponse response) {
                 cache.put(idempotencyKey, response);
             }
 
