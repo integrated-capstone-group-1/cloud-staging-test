@@ -32,8 +32,8 @@
                     <i class="bi bi-unlock me-1"></i> Unlock Customer Login
                 </button>
             </form>
-            <a th:href="@{/transactions/new(sourceAccount=${c360.pockets != null && !c360.pockets.isEmpty() ? c360.pockets[0].accountId : ''})}" class="btn btn-primary btn-sm">
-                <i class="bi bi-arrow-left-right me-1"></i> Mutate Balance
+            <a href="/admin/monitoring" class="btn btn-outline-primary btn-sm">
+                <i class="bi bi-activity me-1"></i> Live Monitoring
             </a>
         </div>
     </div>
@@ -64,10 +64,10 @@
             </div>
         </div>
 
-        <!-- KYC Verification Status -->
+        <!-- Identity Status -->
         <div class="col-md-3">
             <div class="card p-3 border-start border-info border-4 h-100">
-                <div class="text-muted small text-uppercase fw-semibold">KYC Verification</div>
+                <div class="text-muted small text-uppercase fw-semibold">Identity Status</div>
                 <div class="mt-2">
                     <span class="badge"
                           th:classappend="${c360.kycStatus.name() == 'VERIFIED' ? 'bg-success' : (c360.kycStatus.name() == 'REJECTED' ? 'bg-danger' : 'bg-warning text-dark')}"
@@ -82,18 +82,18 @@
             <div class="card p-3 border-start border-secondary border-4 h-100">
                 <div class="text-muted small text-uppercase fw-semibold">Member History</div>
                 <div class="fw-semibold mt-2" th:text="${#temporals.format(c360.memberSince, 'MMM dd, yyyy')}">Jan 01, 2026</div>
-                <div class="small text-muted mt-auto">Verified Retail Customer</div>
+                <div class="small text-muted mt-auto">Active Customer</div>
             </div>
         </div>
     </div>
 
     <!-- Tabbed Profile Sections -->
     <div class="row g-4 mb-4">
-        <!-- Left Column: Legal KYC & Multi-Currency Pockets -->
+        <!-- Left Column: Identity & Multi-Currency Pockets -->
         <div class="col-lg-7">
-            <!-- KYC Details Card -->
+            <!-- Profile Details Card -->
             <div class="card p-3 mb-4">
-                <h5 class="fw-bold mb-3"><i class="bi bi-shield-lock text-primary me-2"></i>Legal Identity &amp; Contact Details</h5>
+                <h5 class="fw-bold mb-3"><i class="bi bi-person-vcard text-primary me-2"></i>Customer Profile &amp; Contact Details</h5>
                 <div class="row g-2 small">
                     <div class="col-sm-6">
                         <span class="text-muted">Full Legal Name:</span>
@@ -155,16 +155,16 @@
                                 <td class="text-end font-monospace small text-danger" th:text="${pocket.formattedHeld}">₱0.00</td>
                                 <td class="text-end font-monospace small fw-bold text-success" th:text="${pocket.formattedAvailable}">₱150,000.00</td>
                                 <td>
-                                    <!-- Admin Freeze / Unfreeze Button invoking POST /api/v1/admin/accounts/{id}/freeze -->
+                                    <!-- Admin Freeze / Unfreeze Button invoking POST /admin/accounts/{id}/freeze -->
                                     <form th:if="${pocket.accountStatus.name() == 'ACTIVE'}"
-                                          th:action="@{/api/v1/admin/accounts/{id}/freeze(id=${pocket.accountId})}" method="post" class="d-inline">
+                                          th:action="@{/admin/accounts/{id}/freeze(id=${pocket.accountId})}" method="post" class="d-inline">
                                         <input type="hidden" name="redirectCustId" th:value="${c360.customerId}"/>
                                         <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2" title="Freeze account">
                                             <i class="bi bi-pause-circle"></i> Freeze
                                         </button>
                                     </form>
                                     <form th:if="${pocket.accountStatus.name() == 'FROZEN'}"
-                                          th:action="@{/api/v1/admin/accounts/{id}/unfreeze(id=${pocket.accountId})}" method="post" class="d-inline">
+                                          th:action="@{/admin/accounts/{id}/unfreeze(id=${pocket.accountId})}" method="post" class="d-inline">
                                         <input type="hidden" name="redirectCustId" th:value="${c360.customerId}"/>
                                         <button type="submit" class="btn btn-sm btn-outline-success py-0 px-2" title="Unfreeze account">
                                             <i class="bi bi-play-circle"></i> Unfreeze
