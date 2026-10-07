@@ -302,15 +302,23 @@ public class TransactionService {
         String mutationType,
         String txnId) {
 
-        Optional<TransactionResponse> cached =
-                idempotencyService.getCached(request.idempotencyKey());
+        String requestHash = idempotencyService.computePayloadHash(request);
+        Optional<TransactionResponse> cached = requestHash != null
+                ? idempotencyService.getCached(request.idempotencyKey(), requestHash)
+                : idempotencyService.getCached(request.idempotencyKey());
 
         if (cached.isPresent()) {
             return cached.get();
         }
 
-        if (!idempotencyService.tryLock(request.idempotencyKey())) {
-            Optional<TransactionResponse> completed = idempotencyService.getCached(request.idempotencyKey());
+        boolean locked = requestHash != null
+                ? idempotencyService.tryLock(request.idempotencyKey(), requestHash)
+                : idempotencyService.tryLock(request.idempotencyKey());
+
+        if (!locked) {
+            Optional<TransactionResponse> completed = requestHash != null
+                    ? idempotencyService.getCached(request.idempotencyKey(), requestHash)
+                    : idempotencyService.getCached(request.idempotencyKey());
             if (completed.isPresent()) {
                 return completed.get();
             }
@@ -384,9 +392,16 @@ public class TransactionService {
                             false,
                             currencyCode);
 
-            idempotencyService.storeResult(
-                    request.idempotencyKey(),
-                    response);
+            if (requestHash != null) {
+                idempotencyService.storeResult(
+                        request.idempotencyKey(),
+                        requestHash,
+                        response);
+            } else {
+                idempotencyService.storeResult(
+                        request.idempotencyKey(),
+                        response);
+            }
 
             metricsService.recordSuccess(txnType, txnId);
 

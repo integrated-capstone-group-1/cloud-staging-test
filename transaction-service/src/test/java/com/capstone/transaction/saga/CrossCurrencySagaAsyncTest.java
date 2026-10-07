@@ -90,7 +90,6 @@ class CrossCurrencySagaAsyncTest {
     @BeforeEach
     void setUp() {
         org.springframework.security.core.context.SecurityContextHolder.clearContext();
-
         TransactionStatus mockStatus = mock(TransactionStatus.class);
         lenient().when(oracleTxManager.getTransaction(any())).thenReturn(mockStatus);
         lenient().when(postgresTxManager.getTransaction(any())).thenReturn(mockStatus);
@@ -274,5 +273,10 @@ class CrossCurrencySagaAsyncTest {
         // Verify cache invalidation for both accounts
         verify(balanceCacheInvalidator).evict(sourceAccountId);
         verify(balanceCacheInvalidator).evict(destAccountId);
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void tearDown() {
+        org.springframework.security.core.context.SecurityContextHolder.clearContext();
     }
 }
