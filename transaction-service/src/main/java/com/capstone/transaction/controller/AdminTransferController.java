@@ -21,6 +21,15 @@ public class AdminTransferController {
     private final ReversalCoordinator reversalCoordinator;
     private final com.capstone.transaction.batch.EodBatchScheduler eodBatchScheduler;
 
+    /**
+     * On-demand EOD batch execution endpoint.
+     * 
+     * [LEARNER GUIDE / W-H-Y MODEL]:
+     * - WHAT: Admin API triggering immediate execution of the EOD batch run.
+     * - HOW: Calls EodBatchScheduler.runEodBatch() synchronously and returns execution status.
+     * - WHY: Allows banking operators and automated integration test suites to initiate EOD runs
+     *        without waiting for midnight cron execution.
+     */
     @PostMapping("/batch/eod")
     public ResponseEntity<java.util.Map<String, String>> triggerEodBatch() {
         log.info("Triggering on-demand EOD batch execution via Admin API");
