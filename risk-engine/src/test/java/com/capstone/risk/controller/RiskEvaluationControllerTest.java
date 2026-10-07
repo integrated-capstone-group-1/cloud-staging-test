@@ -4,6 +4,7 @@ import com.capstone.risk.dto.RiskEvaluationRequest;
 import com.capstone.risk.dto.RiskEvaluationResponse;
 import com.capstone.risk.service.RiskEvaluationService;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,9 +19,13 @@ import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import com.capstone.risk.dto.RiskParametersDto;
+import com.capstone.risk.service.RiskParameterService;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -32,8 +37,18 @@ class RiskEvaluationControllerTest {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired
+    private RiskParameterService riskParameterService;
+
     @MockBean
     private RiskEvaluationService riskEvaluationService;
+
+    @BeforeEach
+    void setUp() {
+        if (riskParameterService != null) {
+            riskParameterService.resetToDefaults("test-setup");
+        }
+    }
 
     @Test
     @DisplayName("POST /internal/risk/evaluate matches CONTRACTS.md slice")
@@ -84,5 +99,44 @@ class RiskEvaluationControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(invalidJson))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("GET /internal/risk/parameters returns 200 OK with live parameters")
+    void testGetParameters_success() throws Exception {
+        mockMvc.perform(get("/internal/risk/parameters"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.weight_velocity").value(0.40))
+                .andExpect(jsonPath("$.data.threshold_medium_max").value(0.85));
+    }
+
+    @Test
+    @DisplayName("PUT /internal/risk/parameters dynamically updates parameters and returns updated version")
+    void testUpdateParameters_success() throws Exception {
+        RiskParametersDto updateReq = RiskParametersDto.builder()
+                .weightVelocity(0.45)
+                .thresholdMediumMax(0.80)
+                .build();
+
+        mockMvc.perform(put("/internal/risk/parameters")
+                        .header("X-Admin-User", "lead-risk-officer@capstonebank.com")
+                        .header("X-Audit-Reason", "Seasonal tuning")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(updateReq)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.weight_velocity").value(0.45))
+                .andExpect(jsonPath("$.data.threshold_medium_max").value(0.80))
+                .andExpect(jsonPath("$.data.updated_by").value("lead-risk-officer@capstonebank.com"));
+    }
+
+    @Test
+    @DisplayName("GET /internal/risk/alerts returns 200 OK with recent alert events list")
+    void testGetAlerts_success() throws Exception {
+        mockMvc.perform(get("/internal/risk/alerts"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data").isArray());
     }
 }

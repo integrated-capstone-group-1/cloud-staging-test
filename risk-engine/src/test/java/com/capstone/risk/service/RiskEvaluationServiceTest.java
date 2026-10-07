@@ -1,8 +1,10 @@
 package com.capstone.risk.service;
 
+import com.capstone.common.event.RiskAlertEvent;
 import com.capstone.risk.config.RiskEngineProperties;
 import com.capstone.risk.dto.RiskEvaluationRequest;
 import com.capstone.risk.dto.RiskEvaluationResponse;
+import com.capstone.risk.kafka.RiskAlertProducer;
 import com.capstone.risk.rules.AmountAnomalyRule;
 import com.capstone.risk.rules.DeviceAnomalyRule;
 import com.capstone.risk.rules.FxRoundTripAbuseRule;
@@ -12,6 +14,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -368,5 +371,56 @@ class RiskEvaluationServiceTest {
         assertEquals(1, response.getTriggeredRules().size());
         assertTrue(response.getTriggeredRules().contains(FxRoundTripAbuseRule.RULE_NAME),
                 "Triggered rules must include FX_ROUND_TRIP_ABUSE");
+    }
+
+    @Test
+    @DisplayName("DIG-79: High-risk HOLD decision (S > 0.85) emits Kafka risk alert event")
+    void testDig79_highRiskHoldEmitsKafkaAlert() {
+        RiskAlertProducer alertProducer = new RiskAlertProducer(null);
+        RiskEvaluationService riskServiceWithAlerts = new RiskEvaluationService(
+                velocityRule,
+                amountAnomalyRule,
+                deviceAnomalyRule,
+                fxRoundTripAbuseRule,
+                properties,
+                alertProducer
+        );
+
+        String customerId = "cust-syndicate-boss";
+        // Pre-seed 4 transfers to trigger Velocity (> 3 transfers => V = 1.0)
+        velocityRule.recordTransfer(customerId);
+        velocityRule.recordTransfer(customerId);
+        velocityRule.recordTransfer(customerId);
+        velocityRule.recordTransfer(customerId);
+
+        // Tripled Anomaly: V=1 (0.40) + A=1 (0.35) + D=1 (0.25) => Score = 1.00 > 0.85
+        RiskEvaluationRequest request = RiskEvaluationRequest.builder()
+                .transactionId("txn-syndicate-heist-01")
+                .customerId(customerId)
+                .amount(new BigDecimal("150000.0000")) // Exceeds 100,000 threshold (A = 1.0)
+                .currency("PHP")
+                .ipAddress("192.168.10.99")
+                .deviceId("dev-unverified-burner-phone") // Untrusted device (D = 1.0)
+                .build();
+
+        RiskEvaluationResponse response = riskServiceWithAlerts.evaluate(request, false);
+
+        assertEquals(1.00, response.getScore(), 0.001);
+        assertEquals("HIGH", response.getLevel());
+        assertEquals("HOLD", response.getDecision());
+
+        // Verify alert event was generated and buffered
+        List<RiskAlertEvent> recentAlerts = alertProducer.getRecentAlerts();
+        assertFalse(recentAlerts.isEmpty(), "Recent alerts must not be empty on high-risk HOLD");
+
+        RiskAlertEvent alert = recentAlerts.get(0);
+        assertEquals("txn-syndicate-heist-01", alert.transactionId());
+        assertEquals(customerId, alert.customerId());
+        assertEquals(1.00, alert.riskScore(), 0.001);
+        assertEquals("HIGH", alert.riskLevel());
+        assertEquals("HOLD", alert.riskDecision());
+        assertTrue(alert.triggeredRules().contains(VelocityRule.RULE_NAME));
+        assertTrue(alert.triggeredRules().contains(AmountAnomalyRule.RULE_NAME));
+        assertTrue(alert.triggeredRules().contains(DeviceAnomalyRule.RULE_NAME));
     }
 }

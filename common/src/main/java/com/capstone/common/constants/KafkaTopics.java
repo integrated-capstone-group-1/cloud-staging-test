@@ -48,5 +48,9 @@ public final class KafkaTopics {
     /** Published when a customer reports a transaction as suspicious (DIG-91). */
     public static final String SUSPICIOUS_TRANSACTION_REPORTED = "suspicious.transaction.reported";
     public static final String FRAUD_REPORTS                   = "fraud.reports";
+
+    // ── Risk & Fraud Alert Events (DIG-79) ─────────────────────────────────────────
+    /** Published when a risk screening produces a high-risk score / alert. */
+    public static final String RISK_ALERT                      = "risk.alert";
 }
 
