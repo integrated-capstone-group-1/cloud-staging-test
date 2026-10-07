@@ -134,6 +134,12 @@ END;
 -- 4. [R-05] ADMIN_APPROVAL (4-EYES MAKER-CHECKER FOR REVERSALS & HOLDS)
 -- =====================================================================
 
+BEGIN
+    EXECUTE IMMEDIATE 'ALTER TABLE transaction_master ADD (reversed_by_txn_id VARCHAR2(36))';
+EXCEPTION WHEN OTHERS THEN NULL;
+END;
+/
+
 CREATE TABLE admin_approval (
     approval_id       VARCHAR2(36)   NOT NULL,
     target_type       VARCHAR2(30)   NOT NULL, -- 'REVERSAL', 'HOLD_REVIEW', 'ACCOUNT_UNFREEZE'

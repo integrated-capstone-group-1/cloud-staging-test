@@ -40,6 +40,12 @@ class TransactionReversalTest {
     @Mock
     private AccountsServiceClient accountsServiceClient;
 
+    @Mock
+    private com.capstone.transaction.repository.oracle.AdminApprovalRepository adminApprovalRepository;
+
+    @Mock
+    private LifecycleService lifecycleService;
+
     @InjectMocks
     private ReversalCoordinator reversalCoordinator;
 
@@ -85,14 +91,25 @@ class TransactionReversalTest {
         assertThat(settlement.legs().get(1).accountId()).isEqualTo("acct-juan-eur-01");
         assertThat(settlement.legs().get(1).direction()).isEqualTo("CREDIT");
 
-        // Verify compensating transaction persisted with reversal_of_txn_id
+        // Verify compensating transaction persisted with reversal_of_txn_id and original marked REVERSED with reversed_by_txn_id
         ArgumentCaptor<TransactionMaster> txnCaptor = ArgumentCaptor.forClass(TransactionMaster.class);
-        verify(txnMasterRepository).save(txnCaptor.capture());
-        TransactionMaster savedReversal = txnCaptor.getValue();
-        assertThat(savedReversal.getTxnType()).isEqualTo("REVERSAL");
+        verify(txnMasterRepository, atLeastOnce()).save(txnCaptor.capture());
+        java.util.List<TransactionMaster> saved = txnCaptor.getAllValues();
+
+        TransactionMaster savedReversal = saved.stream()
+                .filter(t -> "REVERSAL".equals(t.getTxnType()))
+                .findFirst()
+                .orElseThrow();
         assertThat(savedReversal.getReversalOfTxnId()).isEqualTo("txn-5541-uuid");
         assertThat(savedReversal.getDebitAccountId()).isEqualTo("acct-maria-eur-01");
         assertThat(savedReversal.getCreditAccountId()).isEqualTo("acct-juan-eur-01");
+
+        TransactionMaster savedOriginal = saved.stream()
+                .filter(t -> "txn-5541-uuid".equals(t.getTxnId()))
+                .findFirst()
+                .orElseThrow();
+        assertThat(savedOriginal.getTxnStatus()).isEqualTo("REVERSED");
+        assertThat(savedOriginal.getReversedByTxnId()).isEqualTo(savedReversal.getTxnId());
     }
 
     @Test
@@ -143,5 +160,69 @@ class TransactionReversalTest {
                 .hasMessageContaining("Recipient pocket balance is insufficient");
 
         verifyNoInteractions(coreBankingClient);
+    }
+
+    @Test
+    @DisplayName("Delta 3: 4-Eyes Maker-Checker approval workflow executes reversal successfully")
+    void shouldProposeReversalAndApproveWithFourEyesRule() {
+        TransactionMaster originalTxn = TransactionMaster.builder()
+                .txnId("txn-9911-uuid")
+                .customerId("cust-maker-checker")
+                .txnType("TRANSFER")
+                .debitAccountId("acct-sender")
+                .creditAccountId("acct-recipient")
+                .mutationAmount(new BigDecimal("100.0000"))
+                .currencyCode("PHP")
+                .txnStatus("POSTED")
+                .stage("COMPLETED")
+                .build();
+
+        when(txnMasterRepository.findById("txn-9911-uuid")).thenReturn(Optional.of(originalTxn));
+        when(adminApprovalRepository.findByTargetTypeAndTargetIdAndStatus("REVERSAL", "txn-9911-uuid", "PENDING"))
+                .thenReturn(Optional.empty());
+        when(adminApprovalRepository.save(any(com.capstone.transaction.entity.oracle.AdminApproval.class)))
+                .thenAnswer(inv -> inv.getArgument(0));
+
+        // 1. Maker proposes reversal
+        com.capstone.transaction.entity.oracle.AdminApproval proposal =
+                reversalCoordinator.proposeReversal("txn-9911-uuid", "officer-alice", "Unauthorized debit claim");
+        assertThat(proposal.getStatus()).isEqualTo("PENDING");
+        assertThat(proposal.getMakerId()).isEqualTo("officer-alice");
+        assertThat(proposal.getTargetId()).isEqualTo("txn-9911-uuid");
+
+        // Setup for checker approval
+        when(adminApprovalRepository.findById(proposal.getApprovalId())).thenReturn(Optional.of(proposal));
+        when(accountsServiceClient.getAccount("acct-recipient"))
+                .thenReturn(new AccountDTO("acct-recipient", "cust-recip", "SAVINGS", "ACTIVE", new BigDecimal("500.0000"), "PHP", LocalDateTime.now(), BigDecimal.ZERO, "N"));
+        when(coreBankingClient.settle(any()))
+                .thenReturn(new CoreSettlementResponse("txn-rev-44", "FT8881", "SETTLED", LocalDateTime.now()));
+
+        // 2. Checker approves reversal (checker != maker)
+        ReversalResponse response = reversalCoordinator.approveReversal(proposal.getApprovalId(), "supervisor-bob");
+
+        assertThat(response).isNotNull();
+        assertThat(response.getStatus()).isEqualTo("POSTED");
+        assertThat(proposal.getStatus()).isEqualTo("APPROVED");
+        assertThat(proposal.getCheckerId()).isEqualTo("supervisor-bob");
+        assertThat(proposal.getDecidedAt()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("Delta 3: Maker cannot self-approve reversal (violates 4-eyes rule)")
+    void shouldRejectSelfApprovalUnderFourEyesRule() {
+        com.capstone.transaction.entity.oracle.AdminApproval pendingApproval = com.capstone.transaction.entity.oracle.AdminApproval.builder()
+                .approvalId("appr-101")
+                .targetType("REVERSAL")
+                .targetId("txn-9911-uuid")
+                .makerId("officer-alice")
+                .status("PENDING")
+                .build();
+
+        when(adminApprovalRepository.findById("appr-101")).thenReturn(Optional.of(pendingApproval));
+
+        // officer-alice attempts to self-approve
+        assertThatThrownBy(() -> reversalCoordinator.approveReversal("appr-101", "officer-alice"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("checker cannot be the same as maker");
     }
 }

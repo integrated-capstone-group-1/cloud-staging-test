@@ -113,6 +113,9 @@ public class TransactionMaster {
     @Column(name = "reversal_of_txn_id", length = 36)
     private String reversalOfTxnId;
 
+    @Column(name = "reversed_by_txn_id", length = 36)
+    private String reversedByTxnId;
+
     @Column(name = "idempotency_key", length = 64)
     private String idempotencyKey;
 }
