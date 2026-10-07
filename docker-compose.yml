@@ -269,14 +269,14 @@ services:
     ports:
       - "8087:8087"
     depends_on:
-      postgres-db:
+      oracle-db:
         condition: service_healthy
       kafka:
         condition: service_started
     environment:
-      POSTGRES_URL: jdbc:postgresql://postgres-db:5432/ledger_audit
-      POSTGRES_USERNAME: ledger_audit
-      POSTGRES_PASSWORD: LedgerAuditPass123
+      ORACLE_URL: jdbc:oracle:thin:@oracle-db:1521/XEPDB1
+      ORACLE_USERNAME: ledger_app
+      ORACLE_PASSWORD: LedgerAppPass123
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       REDIS_HOST: redis
       REDIS_PORT: 6379
