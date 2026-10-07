@@ -450,3 +450,92 @@ Published by `OutboxMasterRelayService` from `outbox_master`. Consumed by `Audit
 
 * **Idempotent Audit Consumer Invariant (B-04):**
   `AuditLedgerConsumer` generates `mutation_uuid` using UUIDv5 based on `(txn_id + "-leg-" + leg_no)`. This matches `UNIQUE (txn_id, leg_no)` in PostgreSQL, preventing duplicate rows on Kafka redelivery.
+
+---
+
+### 2.6 Transaction History, Suspicious Reports & Statement Downloads (T-001 / DIG-18, DIG-91, DIG-92)
+
+#### `GET /v1/transactions/{id}` (DIG-18)
+* **Headers:** `Authorization: Bearer <jwt>`
+* **Response (200 OK):**
+```json
+{
+  "transaction_id": "txn-5541-uuid",
+  "status": "COMMITTED",
+  "stage": "COMPLETED",
+  "txn_type": "TRANSFER",
+  "amount": 1500.0000,
+  "currency": "PHP",
+  "debit_account_id": "acct-juan-php-01",
+  "credit_account_id": "acct-maria-php-02",
+  "customer_id": "cust-juan-01",
+  "core_reference_id": "CORE-REF-9912",
+  "audit_ref": "/api/v1/ledger/audit/txn-5541-uuid",
+  "audit_trail_url": "/api/v1/ledger/audit/txn-5541-uuid",
+  "stages": [
+    {
+      "stage": "INITIATED",
+      "status": "COMPLETED",
+      "timestamp": "2026-10-07T10:00:00",
+      "description": "Transaction created and request validated"
+    },
+    {
+      "stage": "AUTHORIZED",
+      "status": "COMPLETED",
+      "timestamp": "2026-10-07T10:00:01",
+      "description": "Risk screening and balance check approved"
+    },
+    {
+      "stage": "PROCESSING",
+      "status": "COMPLETED",
+      "timestamp": "2026-10-07T10:00:02",
+      "description": "Atomic balance mutation executed in core ledger"
+    },
+    {
+      "stage": "SETTLED",
+      "status": "COMPLETED",
+      "timestamp": "2026-10-07T10:00:02",
+      "description": "Transaction posted and double-entry mutation committed"
+    }
+  ]
+}
+```
+
+#### `GET /v1/transactions?status=&from=&to=&page=&size=` (DIG-18)
+* **Headers:** `Authorization: Bearer <jwt>`
+* **Response (200 OK):** Paginated `PageResponse` containing transaction summaries with simplified stages and audit trail links.
+
+#### `POST /v1/reports/suspicious` (DIG-91)
+* **Headers:** `Authorization: Bearer <jwt>`, `Content-Type: application/json`
+* **Request Body:**
+```json
+{
+  "transaction_id": "txn-5541-uuid",
+  "reason": "UNAUTHORIZED_TRANSACTION",
+  "notes": "Did not recognize merchant charge",
+  "customer_id": "cust-juan-01"
+}
+```
+* **Response (201 Created):**
+```json
+{
+  "case_id": "CASE-4E3ABA4A",
+  "transaction_id": "txn-5541-uuid",
+  "customer_id": "cust-juan-01",
+  "status": "OPEN",
+  "reason": "UNAUTHORIZED_TRANSACTION",
+  "customer_notified": true,
+  "message": "Dispute registered successfully. Admin fraud investigation case created."
+}
+```
+
+#### `GET /v1/statements?from=YYYY-MM-DD&to=YYYY-MM-DD` (DIG-92)
+* **Headers:** `Authorization: Bearer <jwt>`
+* **Response (200 OK):**
+  * `Content-Type: application/pdf`
+  * `Content-Disposition: attachment; filename="statement-2026-09-07-2026-10-07.pdf"`
+  * Binary PDF 1.4 document stream containing bank header, account metadata, balance summary cards, zebra-striped transaction ledger, and regulatory footer.
+* **Reusable Generator Endpoints:**
+  * `GET /v1/statements/monthly?year=2026&month=10`
+  * `GET /v1/statements/eod?date=2026-10-07`
+

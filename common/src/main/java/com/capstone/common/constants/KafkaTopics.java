@@ -43,5 +43,10 @@ public final class KafkaTopics {
     // ── Ledger audit events (OUTBOX_AUDIT relay, Postgres side) ─────────────────
     /** Published by the Postgres outbox relay after a ledger_mutation_audit row is posted. */
     public static final String LEDGER_MUTATION_POSTED  = "ledger.mutation.posted";
+
+    // ── Fraud & Suspicious Activity ──────────────────────────────────────────────
+    /** Published when a customer reports a transaction as suspicious (DIG-91). */
+    public static final String SUSPICIOUS_TRANSACTION_REPORTED = "suspicious.transaction.reported";
+    public static final String FRAUD_REPORTS                   = "fraud.reports";
 }
 
