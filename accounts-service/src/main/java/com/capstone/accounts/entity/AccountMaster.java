@@ -108,6 +108,17 @@ public class AccountMaster {
         name = "updated_at"
     )
     private LocalDateTime updatedAt;
+    @Column(name = "normal_balance", columnDefinition = "CHAR(2)", nullable = false)
+    private String normalBalance;
+
+    @Builder.Default
+    @Column(name = "customer_locked", columnDefinition = "CHAR(1)", nullable = false)
+    private String customerLocked = "N";
+
+    @Builder.Default
+    @Column(name = "admin_frozen", columnDefinition = "CHAR(1)", nullable = false)
+    private String adminFrozen = "N";
+
 
     @Column(
         name = "updated_by",
