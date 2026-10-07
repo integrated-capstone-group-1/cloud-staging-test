@@ -5,7 +5,6 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
-import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
@@ -23,13 +22,13 @@ import com.capstone.accounts.entity.OutboxMaster;
 import com.capstone.accounts.entity.PostingReference;
 import com.capstone.accounts.repository.AccountHoldRepository;
 import com.capstone.accounts.repository.AccountRepository;
+import com.capstone.accounts.repository.LedgerEntryRepository;
 import com.capstone.accounts.repository.OutboxMasterRepository;
 import com.capstone.accounts.repository.PostingReferenceRepository;
 import com.capstone.common.dto.CoreSettlementRequest;
 import com.capstone.common.dto.CoreSettlementResponse;
 import com.capstone.common.dto.SettlementLegDto;
 import com.capstone.common.exception.InsufficientBalanceException;
-
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -45,6 +44,7 @@ public class CoreSettlementService {
     private final AccountHoldRepository accountHoldRepository;
     private final PostingReferenceRepository postingReferenceRepository;
     private final OutboxMasterRepository outboxMasterRepository;
+    private final LedgerEntryRepository ledgerEntryRepository;
     private final BalanceCacheService balanceCacheService;
     private final ObjectMapper objectMapper;
 
@@ -114,6 +114,13 @@ public class CoreSettlementService {
             if (!"ACTIVE".equalsIgnoreCase(account.getAccountStatus())) {
                 throw new IllegalStateException("Account " + account.getAccountId() + " is not ACTIVE");
             }
+            if ("Y".equalsIgnoreCase(account.getAdminFrozen())) {
+                throw new IllegalStateException("Account " + account.getAccountId() + " is ADMIN FROZEN");
+            }
+            if ("Y".equalsIgnoreCase(account.getCustomerLocked())) {
+                throw new IllegalStateException("Account " + account.getAccountId() + " is CUSTOMER LOCKED");
+            }
+
 
             if ("DEBIT".equalsIgnoreCase(leg.direction())) {
                 BigDecimal available = account.getAvailableBalance();

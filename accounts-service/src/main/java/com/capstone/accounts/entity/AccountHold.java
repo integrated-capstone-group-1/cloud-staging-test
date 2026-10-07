@@ -63,4 +63,16 @@ public class AccountHold {
 
     @Column(name = "updated_by", length = 50)
     private String updatedBy;
+    @Column(name = "captured_amount", precision = 18, scale = 4)
+    private BigDecimal capturedAmount;
+
+    @Column(name = "placed_by", length = 50)
+    private String placedBy;
+
+    @Column(name = "reason_code", length = 20)
+    private String reasonCode;
+
+    @Column(name = "resolved_at")
+    private LocalDateTime resolvedAt;
+
 }
