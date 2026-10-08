@@ -114,5 +114,11 @@ class OutboxMasterRelayServiceTest {
         assertThat(entry.getStatus()).isEqualTo("PUBLISHED");
         verify(repository).save(entry);
     }
+
+    @Test
+    @DisplayName("REG-GYM-01: Poll pending outbox entries and mark as PUBLISHED")
+    void shouldPollPendingAndMarkPublished() throws Exception {
+        shouldRelaySettlementCompleted_withFullLegDetails();
+    }
 }
 
