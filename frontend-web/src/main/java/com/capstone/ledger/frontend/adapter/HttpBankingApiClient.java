@@ -192,6 +192,7 @@ public class HttpBankingApiClient implements BankingApiClient {
             if (response != null && response.getData() != null) {
                 List<AccountView> allAccounts = getAllAccounts();
                 java.util.Map<String, List<AccountView>> accountsByCust = allAccounts.stream()
+                        .filter(a -> a.getCustomerId() != null)
                         .collect(java.util.stream.Collectors.groupingBy(AccountView::getCustomerId));
 
                 return response.getData().stream().map(c -> {

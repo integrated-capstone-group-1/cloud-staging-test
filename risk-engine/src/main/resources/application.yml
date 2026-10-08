@@ -9,8 +9,10 @@ spring:
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
-      acks: all
-
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
 jwt:
   secret: ${JWT_SECRET:CapstoneBankingSuperSecretSigningKeyMustBe256BitsLong!}
 

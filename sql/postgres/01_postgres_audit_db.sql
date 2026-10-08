@@ -31,7 +31,7 @@ CREATE TABLE ledger_mutation_audit (
     leg_no           INTEGER        DEFAULT 1 NOT NULL,
     account_id       VARCHAR(36)    NOT NULL,
     mutation_amount  NUMERIC(18,4)  NOT NULL,
-    currency_code    CHAR(3)        NOT NULL,
+    currency_code    VARCHAR(3)     NOT NULL,
     mutation_type    VARCHAR(10)    NOT NULL, -- 'DEBIT', 'CREDIT'
     txn_type         VARCHAR(30)    NOT NULL, -- 'WITHDRAWAL', 'DEPOSIT', 'TRANSFER', 'REVERSAL'
     audit_state      VARCHAR(20)    NOT NULL, -- 'PENDING', 'COMMITTED', 'ROLLED_BACK', 'POSTED', 'REVERSED'
