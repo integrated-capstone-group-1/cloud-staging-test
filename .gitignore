@@ -65,3 +65,5 @@ Desktop.ini
 .mvn/
 mvnw
 mvnw.cmd
+
+*.xlsx
