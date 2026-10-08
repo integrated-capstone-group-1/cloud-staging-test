@@ -43,6 +43,10 @@ public interface BankingApiClient {
     AccountView openAccount(String customerId, AccountType type, String currencyCode, BigDecimal initialDeposit);
     void updateAccountStatus(String accountId, AccountStatus status);
 
+    // --- Cards & Recurring Payments Domain ---
+    List<com.capstone.ledger.frontend.model.Customer360View.CardSummaryView> getCardsByCustomerId(String customerId);
+    List<com.capstone.ledger.frontend.model.Customer360View.StandingInstructionView> getStandingInstructionsByCustomerId(String customerId);
+
     // --- Transactions & Balance Mutation ---
     List<TransactionView> executeTransaction(TransactionForm form);
     List<TransactionView> getTransactionsByAccountId(String accountId);

@@ -172,6 +172,11 @@
                                     </form>
                                 </td>
                             </tr>
+                            <tr th:if="${c360.pockets == null || c360.pockets.isEmpty()}">
+                                <td colspan="7" class="text-center text-muted small py-3">
+                                    <i class="bi bi-wallet2 text-secondary me-1"></i>No provisioned currency pockets found for this profile.
+                                </td>
+                            </tr>
                         </tbody>
                     </table>
                 </div>
@@ -192,6 +197,9 @@
                                 <span th:text="${'Daily Limit: ' + card.formattedDailyLimit}">₱50,000</span>
                             </div>
                         </div>
+                        <div th:if="${c360.cards == null || c360.cards.isEmpty()}" class="text-muted small text-center py-3">
+                            <i class="bi bi-credit-card text-secondary me-1"></i>No virtual cards issued.
+                        </div>
                     </div>
                 </div>
                 <div class="col-md-6">
@@ -206,6 +214,9 @@
                                 <span th:text="${si.formattedAmount}">₱4,500.00</span>
                                 <span th:text="${'Next: ' + #temporals.format(si.nextRunDate, 'MMM dd')}">Nov 15</span>
                             </div>
+                        </div>
+                        <div th:if="${c360.standingInstructions == null || c360.standingInstructions.isEmpty()}" class="text-muted small text-center py-3">
+                            <i class="bi bi-calendar-check text-secondary me-1"></i>No active standing instructions.
                         </div>
                     </div>
                 </div>
@@ -276,6 +287,9 @@
                         <div class="progress-bar bg-primary" role="progressbar"
                              th:style="${'width: ' + entry.value + '%;'}"></div>
                     </div>
+                </div>
+                <div th:if="${c360.spendingPattern == null || c360.spendingPattern.empty}" class="text-center text-muted small py-3">
+                    <i class="bi bi-info-circle me-1"></i>No transaction history available to derive spending breakdown.
                 </div>
             </div>
         </div>

@@ -13,11 +13,13 @@ import java.time.LocalDateTime;
 public class AccountView {
 
     private String accountId;
+    private String accountNumber;
     private String customerId;
     private AccountType accountType;
     private String currencyCode;
     private AccountStatus accountStatus;
     private BigDecimal balance;
+    private BigDecimal heldAmount = BigDecimal.ZERO;
     private LocalDateTime createdAt;
 
     public AccountView() {
@@ -86,6 +88,12 @@ public class AccountView {
 
     public BigDecimal getBalance() { return balance; }
     public void setBalance(BigDecimal balance) { this.balance = balance; }
+
+    public BigDecimal getHeldAmount() { return heldAmount != null ? heldAmount : BigDecimal.ZERO; }
+    public void setHeldAmount(BigDecimal heldAmount) { this.heldAmount = heldAmount; }
+
+    public String getAccountNumber() { return accountNumber; }
+    public void setAccountNumber(String accountNumber) { this.accountNumber = accountNumber; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
