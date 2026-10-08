@@ -216,6 +216,8 @@ public class ReconciliationE2ETest {
         older.setRunId(UUID.randomUUID());
         older.setRunStatus(ReconRunAudit.Status.COMPLETED);
         older.setRunStartedAt(OffsetDateTime.now().minusDays(5));
+        run1.setRunStartedAt(OffsetDateTime.now().minusDays(1));
+        run2.setRunStartedAt(OffsetDateTime.now().minusHours(2));
 
         when(reconRunAuditRepository.findTop20ByOrderByRunStartedAtDesc())
                 .thenReturn(List.of(run2, run1, older)); // Newest first
