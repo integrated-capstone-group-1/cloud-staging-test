@@ -1,11 +1,5 @@
 package com.capstone.transaction.concurrency;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.junit.jupiter.api.Assumptions;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-
 import java.math.BigDecimal;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -25,6 +19,12 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import org.junit.jupiter.api.Assumptions;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * Acceptance Criteria:
@@ -135,6 +135,7 @@ public class ParallelWithdrawalConcurrencyTest {
                             .uri(URI.create(BASE_URL + "/api/v1/ledger/mutate"))
                             .header("Content-Type", "application/json")
                             .header("Authorization", "Bearer " + token)
+                            .header("Idempotency-Key", idempotencyKey)
                             .POST(HttpRequest.BodyPublishers.ofString(requestBody))
                             .timeout(Duration.ofSeconds(15))
                             .build();
@@ -193,7 +194,7 @@ public class ParallelWithdrawalConcurrencyTest {
         System.out.printf(Locale.US, "Actual Final Balance: $%.2f%n", finalBalance);
 
         // 6. Assert Concurrency Lock Invariants
-        assertThat(errorCount.get()).as("No unexpected 500 errors should occur under concurrency").isEqualTo(0);
+        assertThat(errorCount.get()).as("No unexpected HTTP errors should occur under concurrency").isEqualTo(0);
         assertThat(finalBalance).as("Actual balance must equal expected balance (no lost updates)")
                 .isEqualByComparingTo(expectedBalance);
         assertThat(finalBalance).as("Balance must never become negative under concurrent load")
@@ -378,24 +379,39 @@ public class ParallelWithdrawalConcurrencyTest {
     }
 
     private void deposit(String accountId, BigDecimal amount, String token) throws Exception {
-        String depositPayload = String.format(Locale.US, """
-                {
-                    "accountId": "%s",
-                    "counterpartyAccountId": null,
-                    "txnType": "DEPOSIT",
-                    "amount": %.2f,
-                    "idempotencyKey": "%s"
-                }
-                """, accountId, amount, UUID.randomUUID());
 
-        HttpRequest req = HttpRequest.newBuilder()
-                .uri(URI.create(BASE_URL + "/api/v1/ledger/mutate"))
-                .header("Content-Type", "application/json")
-                .header("Authorization", "Bearer " + token)
-                .POST(HttpRequest.BodyPublishers.ofString(depositPayload))
-                .build();
-        httpClient.send(req, HttpResponse.BodyHandlers.ofString());
+    String idempotencyKey = UUID.randomUUID().toString();
+
+    String depositPayload = String.format(Locale.US, """
+            {
+                "accountId": "%s",
+                "counterpartyAccountId": null,
+                "txnType": "DEPOSIT",
+                "amount": %.2f,
+                "idempotencyKey": "%s"
+            }
+            """, accountId, amount, idempotencyKey);
+
+    HttpRequest req = HttpRequest.newBuilder()
+            .uri(URI.create(BASE_URL + "/api/v1/ledger/mutate"))
+            .header("Content-Type", "application/json")
+            .header("Authorization", "Bearer " + token)
+            .header("Idempotency-Key", idempotencyKey)
+            .POST(HttpRequest.BodyPublishers.ofString(depositPayload))
+            .timeout(Duration.ofSeconds(15))
+            .build();
+
+    HttpResponse<String> response =
+            httpClient.send(req, HttpResponse.BodyHandlers.ofString());
+
+    if (response.statusCode() >= 400) {
+        throw new RuntimeException(
+                "Deposit failed. Status="
+                        + response.statusCode()
+                        + ", Body="
+                        + response.body());
     }
+}
 
     private BigDecimal getAccountBalance(String accountId, String token) {
         // Try REST API endpoint first

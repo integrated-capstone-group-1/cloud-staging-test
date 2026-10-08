@@ -1,23 +1,33 @@
 package com.capstone.accounts.service;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.capstone.accounts.entity.AccountMaster;
 import com.capstone.accounts.entity.Customer;
 import com.capstone.accounts.repository.AccountRepository;
 import com.capstone.accounts.repository.CustomerRepository;
 import com.capstone.common.dto.RecipientLookupResponse;
 import com.capstone.common.exception.ResourceNotFoundException;
-import lombok.RequiredArgsConstructor;
+
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class RecipientLookupService {
 
     private final AccountRepository accountRepository;
     private final CustomerRepository customerRepository;
+
+    @Autowired
+    public RecipientLookupService(
+            @Qualifier("accountRepository") AccountRepository accountRepository,
+            CustomerRepository customerRepository) {
+        this.accountRepository = accountRepository;
+        this.customerRepository = customerRepository;
+    }
 
     @Transactional(readOnly = true)
     public RecipientLookupResponse lookupRecipient(String accountId) {
