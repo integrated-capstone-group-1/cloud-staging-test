@@ -67,13 +67,11 @@ public class JwtAuthenticationGatewayFilterFactory
             return redisTemplate.opsForValue()
                     .get("token:" + token)
                     .defaultIfEmpty("")
-                    .onErrorReturn("")
                     .flatMap(value -> {
-
                         if ("BLACKLISTED".equals(value)) {
                             return unauthorized(
                                     exchange,
-                                    "Token has been revoked"
+                                    "TOKEN_REVOKED"
                             );
                         }
 
@@ -92,7 +90,11 @@ public class JwtAuthenticationGatewayFilterFactory
                                 chain,
                                 claims.get()
                         );
-                    });
+                    })
+                    .onErrorResume(ex -> unauthorized(
+                            exchange,
+                            "TOKEN_BLACKLIST_UNAVAILABLE: Fail-closed security policy"
+                    ));
         };
     }
 

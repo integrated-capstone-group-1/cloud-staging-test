@@ -147,21 +147,22 @@ flowchart TD
 #### Regression Test Procedures:
 * **REG-RUS-01: Inbound Header Sanitization (`T-005`, `BR-03`)**
   * *Objective:* Prevent spoofing by stripping incoming `X-Cust-Id` and `X-Cust-Role` headers.
-  * *Step 1:* Run `./mvnw test -pl api-gateway -Dtest=SecurityHeadersFilterTest#shouldStripUntrustedCustomerHeaders`.
+  * *Step 1:* Run `./mvnw test -pl api-gateway "-Dtest=SecurityHeadersFilterTest#shouldStripUntrustedCustomerHeaders"`.
   * *Step 2:* Send request with spoofed `X-Cust-Id: cust-admin-001`. Verify downstream service receives only the ID extracted from the verified JWT.
 * **REG-RUS-02: Internal Route Cloaking (`T-005`, `CONTRACTS.md` §1.1)**
   * *Objective:* Block direct caller access to internal mutation and CBS routes at the edge.
-  * *Step 1:* Run `./mvnw test -pl api-gateway -Dtest=GatewayRouteIsolationTest#shouldBlockInternalRoutes`.
+  * *Step 1:* Run `./mvnw test -pl api-gateway "-Dtest=GatewayRouteIsolationTest#shouldBlockInternalRoutes"`.
   * *Step 2:* Assert requests to `/internal/**`, `/api/accounts/*/credit`, `/api/accounts/*/debit` return `403 Forbidden`.
 * **REG-RUS-03: Token Blacklist Filter Fail-Closed (`DIG-8`, `T-005`)**
   * *Objective:* Ensure revoked tokens in Redis are blocked and Redis outage fails closed.
-  * *Step 1:* Run `./mvnw test -pl api-gateway -Dtest=JwtAuthenticationFilterTest#shouldRejectBlacklistedToken`.
-  * *Step 2:* Query Redis key `token:<jwt_hash>`. If present, gateway returns `401 Unauthorized` (`TOKEN_REVOKED`).
+  * *Step 1:* Run `./mvnw test -pl api-gateway "-Dtest=JwtAuthenticationGatewayFilterFactoryTest#shouldRejectBlacklistedToken"`.
+  * *Step 2:* Run `./mvnw test -pl api-gateway "-Dtest=JwtAuthenticationGatewayFilterFactoryTest#shouldFailClosedWhenRedisUnavailable"`.
+  * *Step 3:* Query Redis key `token:<jwt>`. If present, gateway returns `401 Unauthorized` (`TOKEN_REVOKED`). If Redis is down/times out, gateway fails closed returning `401 Unauthorized` (`TOKEN_BLACKLIST_UNAVAILABLE`).
 * **REG-RUS-04: Zero-Trust Host Port Cloaking (`CH-03`, `DIG-30`)**
   * *Objective:* Verify internal microservices and database ports are not published to host.
   * *Step 1:* Execute PowerShell port probe against Docker Compose:
     ```powershell
-    @(8081, 8082, 8083, 8084, 8085, 8086, 8087, 8088, 1521, 5432) | ForEach-Object {
+    @(8081, 8082, 8083, 8084, 8085, 8086, 8087, 8088, 8089, 1521, 5432) | ForEach-Object {
         $res = Test-NetConnection -ComputerName localhost -Port $_ -WarningAction SilentlyContinue
         if ($res.TcpTestSucceeded) { throw "Port $_ is LEAKED on host!" }
     }
