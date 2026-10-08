@@ -484,7 +484,6 @@ public class AccountService {
     private AccountDTO toDto(AccountMaster account) {
         return new AccountDTO(
                 account.getAccountId(),
-                account.getAccountNumber(),
                 account.getCustomerId(),
                 account.getAccountType(),
                 account.getAccountStatus(),
@@ -492,10 +491,7 @@ public class AccountService {
                 account.getCurrencyCode(),
                 account.getCreatedAt(),
                 account.getHeldAmount(),
-                account.getIsPrimary(),
-                account.getNormalBalance(),
-                account.getCustomerLocked(),
-                account.getAdminFrozen()
+                account.getIsPrimary()
         );
     }
 }
