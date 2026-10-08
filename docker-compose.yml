@@ -12,12 +12,14 @@ services:
   oracle-db:
     image: gvenzl/oracle-xe:21-slim
     container_name: oracle-db
+    cap_add:
+      - NET_ADMIN
     environment:
       ORACLE_PASSWORD: OraclePass123
       APP_USER: ledger_app
       APP_USER_PASSWORD: LedgerAppPass123
-    ports:
-      - "1521:1521"
+    expose:
+      - "1521"
     volumes:
       - oracle-data:/opt/oracle/oradata
       - ./sql/oracle:/container-entrypoint-initdb.d
@@ -37,8 +39,8 @@ services:
       POSTGRES_DB: ledger_audit
       POSTGRES_USER: ledger_audit
       POSTGRES_PASSWORD: LedgerAuditPass123
-    ports:
-      - "5432:5432"
+    expose:
+      - "5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./sql/postgres:/docker-entrypoint-initdb.d
@@ -53,8 +55,8 @@ services:
   redis:
     image: redis:7-alpine
     container_name: redis
-    ports:
-      - "6379:6379"
+    expose:
+      - "6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
@@ -77,13 +79,13 @@ services:
     container_name: kafka
     depends_on:
       - zookeeper
-    ports:
-      - "9092:9092"
+    expose:
+      - "9092"
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://kafka:9092
       KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,PLAINTEXT_HOST://0.0.0.0:9092
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
@@ -238,8 +240,8 @@ services:
       context: .
       dockerfile: notification-service/Dockerfile
     container_name: notification-service
-    ports:
-      - "8085:8085"
+    expose:
+      - "8085"
     depends_on:
       kafka:
         condition: service_started
@@ -266,8 +268,8 @@ services:
       context: .
       dockerfile: forex-service/Dockerfile
     container_name: forex-service
-    ports:
-      - "8087:8087"
+    expose:
+      - "8087"
     depends_on:
       oracle-db:
         condition: service_healthy
@@ -323,8 +325,8 @@ services:
       context: .
       dockerfile: reconciliation-service/Dockerfile
     container_name: reconciliation-service
-    ports:
-      - "8086:8086"
+    expose:
+      - "8086"
     depends_on:
       oracle-db:
         condition: service_healthy
@@ -353,8 +355,8 @@ services:
   prometheus:
     image: prom/prometheus:v2.53.1
     container_name: prometheus
-    ports:
-      - "9090:9090"
+    expose:
+      - "9090"
     volumes:
       - ./prometheus:/etc/prometheus
     networks:
@@ -366,8 +368,8 @@ services:
   loki:
     image: grafana/loki:2.9.0
     container_name: loki
-    ports:
-      - "3100:3100"
+    expose:
+      - "3100"
     command: -config.file=/etc/loki/loki-config.yml
     volumes:
       - ./loki:/etc/loki
@@ -411,8 +413,6 @@ services:
     container_name: grafana
     # Port 3000 cloaked from external NICs per DIG-30 & CH-03 zero-trust perimeter.
     # Accessible externally exclusively via Admin Portal reverse proxy (:8090/grafana/**)
-    ports:
-      - "127.0.0.1:3000:3000"
     expose:
       - "3000"
     volumes:
