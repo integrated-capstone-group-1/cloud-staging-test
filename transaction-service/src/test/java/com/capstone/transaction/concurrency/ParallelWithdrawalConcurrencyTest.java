@@ -80,8 +80,8 @@ public class ParallelWithdrawalConcurrencyTest {
     @Test
     @DisplayName("Executes parallel withdrawals against single account to verify concurrency locks")
     void testParallelWithdrawals() throws Exception {
-        // Skip if local server is not running during automated Maven build
-        Assumptions.assumeTrue(isServerAlive(), "Gateway/Transaction service is not running on " + BASE_URL);
+        // Skip if local server or Oracle DB is not running/reachable during automated Maven build
+        Assumptions.assumeTrue(isServerAlive() && isOracleAlive(), "Gateway/Transaction service or Oracle DB is not reachable on " + BASE_URL);
         executeParallelWithdrawalTest(null, null);
     }
 
@@ -263,6 +263,14 @@ public class ParallelWithdrawalConcurrencyTest {
                     .build();
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             return response.statusCode() > 0;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private boolean isOracleAlive() {
+        try (Connection conn = DriverManager.getConnection(ORACLE_URL, ORACLE_USER, ORACLE_PASSWORD)) {
+            return true;
         } catch (Exception e) {
             return false;
         }
