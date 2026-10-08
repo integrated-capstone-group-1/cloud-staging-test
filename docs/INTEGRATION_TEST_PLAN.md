@@ -118,12 +118,16 @@ docker compose up -d oracle-db postgres-db redis forex-service accounts-service 
 * **SEAM-ROH-01: CoreBankingClient Feign Bridge Seam (`DIG-14`)**
   * *Step 1:* Run Feign client contract test:
     ```bash
-    ./mvnw test -pl transaction-service -Dtest=CoreBankingClientIntegrationTest
+    ./mvnw test -pl transaction-service "-Dtest=CoreBankingClientIntegrationTest"
     ```
   * *Step 2:* Test issues settlement from `transaction-service` to `http://accounts-service:8083/internal/core/settlement`.
-  * *Step 3:* Assert: Feign client correctly serializes `CoreSettlementRequest`, handles `200 OK` response mapping, and translates `422 INSUFFICIENT_FUNDS` into domain `InsufficientFundsException`.
+  * *Step 3:* Assert: Feign client correctly serializes `CoreSettlementRequest`, handles `200 OK` response mapping, and translates `422 INSUFFICIENT_FUNDS` into domain `InsufficientBalanceException`.
 * **SEAM-ROH-02: Forex Quote & 30s Locked Rate Seam (`DIG-74`, `DIG-75`, `BR-04`)**
-  * *Step 1:* Request conversion quote from `forex-service`:
+  * *Step 1:* Run automated Maven FX quote test (or request conversion quote from live `forex-service`):
+    ```bash
+    ./mvnw test -pl forex-service "-Dtest=ForexQuoteAndSchedulerTest#quoteCalculatesSpreadAccurately"
+    ```
+    Live curl equivalent:
     ```bash
     curl -s "http://localhost:8087/api/v1/fx/quote?from=PHP&to=EUR&amount=100.00"
     ```
@@ -133,13 +137,17 @@ docker compose up -d oracle-db postgres-db redis forex-service accounts-service 
 * **SEAM-ROH-03: Compare-and-Set (CAS) Lifecycle Transition Seam (`DIG-80`, `BR-30`)**
   * *Step 1:* Run CAS transition test:
     ```bash
-    ./mvnw test -pl transaction-service -Dtest=TransactionLifecycleIntegrationTest#verifyCasClaimTransition
+    ./mvnw test -pl transaction-service "-Dtest=TransactionLifecycleIntegrationTest#verifyCasClaimTransition"
     ```
   * *Step 2:* Initiate transaction `TXN-CAS-1` in status `AUTHORIZED`.
   * *Step 3:* Two concurrent worker threads execute CAS claim to `PROCESSING`.
   * *Step 4:* Assert: Exactly 1 thread receives 1 updated row and proceeds to settlement; the 2nd thread receives 0 updated rows and safely aborts.
 * **SEAM-ROH-04: Smart Shortfall Multi-Currency Orchestration Seam (`DIG-73`, `BR-28`)**
-  * *Step 1:* Post payment where Juan pays €50.00 to Maria, with €10.00 in primary pocket and shortfall funded from PHP:
+  * *Step 1:* Run automated Smart Shortfall test (or post payment through thin orchestrator / transaction-service):
+    ```bash
+    ./mvnw test -pl transaction-service "-Dtest=SmartShortfallIntegrationTest#verifySmartShortfallOrchestration"
+    ```
+    Live curl equivalent:
     ```bash
     curl -X POST http://localhost:8084/api/v1/payments \
       -H "Content-Type: application/json" \
@@ -154,7 +162,7 @@ docker compose up -d oracle-db postgres-db redis forex-service accounts-service 
       }'
     ```
   * *Step 2:* Verify HTTP `200 OK` with status `POSTED`.
-  * *Step 3:* Check `funding_breakdown`: direct debited €10.00, converted shortfall €40.00, PHP debited ₱2,480.00.
+  * *Step 3:* Check `funding_breakdown`: direct debited €10.00, converted shortfall €40.00, PHP debited ₱2,517.20 (₱2,480.00 principal + 1.5% FX spread ₱37.20).
   * *Step 4:* Verify CBS settlement executed all 6 legs atomically.
 
 ---
