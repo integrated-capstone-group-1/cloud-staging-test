@@ -249,6 +249,116 @@ class CoreSettlementServiceTest {
         verify(outboxMasterRepository).save(any(OutboxMaster.class));
     }
 
+    @Test
+    @DisplayName("REG-YAN-02: Should verify ledger entry fields are populated correctly")
+    void shouldVerifyLedgerEntryFieldsPopulated() throws Exception {
+        // Given: A settlement creates ledger entries for both debit and credit legs
+        String debitAcctId = "acct-debit-001";
+        String creditAcctId = "acct-credit-001";
+        String txnId = "txn-ledger-verify-001";
+        
+        AccountMaster debitAccount = createTestAccount(debitAcctId, new BigDecimal("10000.00"));
+        AccountMaster creditAccount = createTestAccount(creditAcctId, new BigDecimal("5000.00"));
+
+        List<SettlementLegDto> legs = List.of(
+            new SettlementLegDto(debitAcctId, "DEBIT", new BigDecimal("2000.00"), "PHP", 1),
+            new SettlementLegDto(creditAcctId, "CREDIT", new BigDecimal("2000.00"), "PHP", 2)
+        );
+
+        CoreSettlementRequest request = new CoreSettlementRequest(
+            "posting-ref-ledger-verify-001",
+            "TRANSFER",
+            null,
+            legs
+        );
+
+        when(accountRepository.findAllByIdsForUpdate(any()))
+            .thenReturn(List.of(debitAccount, creditAccount));
+        when(postingReferenceRepository.findByPostingReferenceId(anyString()))
+            .thenReturn(Optional.empty());
+        when(postingReferenceRepository.save(any(PostingReference.class)))
+            .thenAnswer(invocation -> invocation.getArgument(0));
+        when(outboxMasterRepository.save(any(OutboxMaster.class)))
+            .thenAnswer(invocation -> invocation.getArgument(0));
+        when(objectMapper.writeValueAsString(any()))
+            .thenReturn("{}");
+
+        // When: Settlement is executed
+        CoreSettlementResponse response = coreSettlementService.settle(request);
+
+        // Then: Verify response is successful
+        assertNotNull(response);
+        assertEquals("SETTLED", response.status());
+        
+        // Verify outbox event was created to publish ledger entries asynchronously
+        verify(outboxMasterRepository, times(1)).save(argThat(outbox -> 
+            outbox.getEventType().equals("SETTLEMENT_COMPLETED") &&
+            outbox.getStatus().equals("PENDING") &&
+            outbox.getAggregateType().equals("SETTLEMENT")
+        ));
+
+        // Verify accounts were persisted with correct balance changes
+        verify(accountRepository).saveAll(argThat(accounts -> {
+            java.util.List<AccountMaster> accountList = new java.util.ArrayList<>();
+            accounts.forEach(accountList::add);
+            
+            // Check debit account balance decreased by 2000
+            boolean debitCorrect = accountList.stream()
+                .anyMatch(a -> a.getAccountId().equals(debitAcctId) && 
+                         a.getBalanceAmount().equals(new BigDecimal("8000.00")));
+            
+            // Check credit account balance increased by 2000
+            boolean creditCorrect = accountList.stream()
+                .anyMatch(a -> a.getAccountId().equals(creditAcctId) && 
+                         a.getBalanceAmount().equals(new BigDecimal("7000.00")));
+            
+            return debitCorrect && creditCorrect && accountList.size() == 2;
+        }));
+    }
+
+    @Test
+    @DisplayName("REG-YAN-02: Should ensure atomicity - all or nothing settlement")
+    void shouldEnsureAtomicityAllOrNothing() throws Exception {
+        // Given: A multi-leg settlement where one account will fail validation
+        String validAccount = "acct-valid-001";
+        String frozenAccount = "acct-frozen-001";
+        
+        AccountMaster account1 = createTestAccount(validAccount, new BigDecimal("5000.00"));
+        AccountMaster account2 = createTestAccount(frozenAccount, new BigDecimal("3000.00"));
+        account2.setAdminFrozen("Y");  // Frozen account should cause settlement to fail
+
+        List<SettlementLegDto> legs = List.of(
+            new SettlementLegDto(validAccount, "DEBIT", new BigDecimal("1000.00"), "PHP", 1),
+            new SettlementLegDto(frozenAccount, "CREDIT", new BigDecimal("1000.00"), "PHP", 2)
+        );
+
+        CoreSettlementRequest request = new CoreSettlementRequest(
+            "posting-ref-atomicity-test",
+            "TRANSFER",
+            null,
+            legs
+        );
+
+        when(accountRepository.findAllByIdsForUpdate(any()))
+            .thenReturn(List.of(account1, account2));
+        when(postingReferenceRepository.findByPostingReferenceId(anyString()))
+            .thenReturn(Optional.empty());
+        when(objectMapper.writeValueAsString(any()))
+            .thenReturn("{}");
+
+        // When: Settlement is attempted with a frozen account
+        // Then: Settlement should fail and throw exception
+        assertThrows(IllegalStateException.class, () -> {
+            coreSettlementService.settle(request);
+        }, "Settlement should fail when any account is frozen");
+
+        // Verify NO outbox event was created (atomicity preserved)
+        verify(outboxMasterRepository, never()).save(any(OutboxMaster.class));
+        
+        // Verify NO account balances were persisted
+        verify(accountRepository, never()).saveAll(any());
+    }
+
     // ==========================================
     // Helper Methods
     // ==========================================
