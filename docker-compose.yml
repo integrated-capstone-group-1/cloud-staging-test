@@ -5,6 +5,7 @@ networks:
 volumes:
   oracle-data:
   postgres-data:
+  channel-postgres-data:
   loki-data:
   promtail-positions:
 
@@ -46,6 +47,26 @@ services:
       - ./sql/postgres:/docker-entrypoint-initdb.d
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ledger_audit -d ledger_audit"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - banking-net
+
+  channel-db:
+    image: postgres:15
+    container_name: channel-db
+    environment:
+      POSTGRES_DB: channel_db
+      POSTGRES_USER: channel_user
+      POSTGRES_PASSWORD: ChannelUserPass123
+    expose:
+      - "5432"
+    volumes:
+      - channel-postgres-data:/var/lib/postgresql/data
+      - ./sql/channel:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U channel_user -d channel_db"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -135,11 +156,16 @@ services:
       dockerfile: registration-service/Dockerfile
     container_name: registration-service
     depends_on:
+      channel-db:
+        condition: service_healthy
       oracle-db:
         condition: service_healthy
       kafka:
         condition: service_started
     environment:
+      CHANNEL_DB_URL: jdbc:postgresql://channel-db:5432/channel_db
+      CHANNEL_DB_USERNAME: channel_user
+      CHANNEL_DB_PASSWORD: ChannelUserPass123
       ORACLE_URL: jdbc:oracle:thin:@oracle-db:1521/XEPDB1
       ORACLE_USERNAME: ledger_app
       ORACLE_PASSWORD: LedgerAppPass123
@@ -157,11 +183,16 @@ services:
       dockerfile: login-service/Dockerfile
     container_name: login-service
     depends_on:
+      channel-db:
+        condition: service_healthy
       oracle-db:
         condition: service_healthy
       redis:
         condition: service_healthy
     environment:
+      CHANNEL_DB_URL: jdbc:postgresql://channel-db:5432/channel_db
+      CHANNEL_DB_USERNAME: channel_user
+      CHANNEL_DB_PASSWORD: ChannelUserPass123
       ORACLE_URL: jdbc:oracle:thin:@oracle-db:1521/XEPDB1
       ORACLE_USERNAME: ledger_app
       ORACLE_PASSWORD: LedgerAppPass123
@@ -245,14 +276,14 @@ services:
     depends_on:
       kafka:
         condition: service_started
-      postgres-db:
+      channel-db:
         condition: service_healthy
       redis:
         condition: service_healthy
     environment:
-      POSTGRES_URL: jdbc:postgresql://postgres-db:5432/ledger_audit
-      POSTGRES_USERNAME: ledger_audit
-      POSTGRES_PASSWORD: LedgerAuditPass123
+      POSTGRES_URL: jdbc:postgresql://channel-db:5432/channel_db
+      POSTGRES_USERNAME: channel_user
+      POSTGRES_PASSWORD: ChannelUserPass123
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       REDIS_HOST: redis
       REDIS_PORT: 6379

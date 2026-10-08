@@ -5,17 +5,16 @@ import com.capstone.common.dto.AccountDTO;
 import com.capstone.common.dto.AccountMutationResponse;
 import com.capstone.common.dto.TransactionRequest;
 import com.capstone.common.dto.TransactionResponse;
+import com.capstone.common.event.ForexConversionRequestedEvent;
 import com.capstone.common.exception.InsufficientBalanceException;
 import com.capstone.common.exception.LedgerPersistenceException;
 import com.capstone.common.exception.ResourceNotFoundException;
 import com.capstone.transaction.client.AccountsServiceClient;
 import com.capstone.transaction.entity.oracle.TransactionMaster;
 import com.capstone.transaction.entity.postgres.LedgerMutationAudit;
-import com.capstone.transaction.entity.postgres.TransactionOutbox;
 import com.capstone.transaction.kafka.TransactionEventProducer;
 import com.capstone.transaction.repository.oracle.TransactionMasterRepository;
 import com.capstone.transaction.repository.postgres.LedgerMutationAuditRepository;
-import com.capstone.transaction.repository.postgres.TransactionOutboxRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -73,9 +72,6 @@ class TransactionServiceRefactorTest {
     private BalanceCacheInvalidator balanceCacheInvalidator;
 
     @Mock
-    private TransactionOutboxRepository outboxRepository;
-
-    @Mock
     private BankingMetricsService metricsService;
 
     private ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
@@ -101,7 +97,6 @@ class TransactionServiceRefactorTest {
                 idempotencyService,
                 eventProducer,
                 balanceCacheInvalidator,
-                outboxRepository,
                 objectMapper,
                 metricsService
         );
@@ -428,8 +423,8 @@ class TransactionServiceRefactorTest {
     }
 
     @Test
-    @DisplayName("transfer: cross-currency transfer initiates outbox event, creates PENDING transaction, and returns 200 with PENDING status")
-    void transfer_crossCurrency_initiatesOutboxEventAndReturnsPending() {
+    @DisplayName("transfer: cross-currency transfer publishes FOREX_CONVERSION_REQUESTED to Kafka, creates PENDING transaction, and returns 200 with PENDING status")
+    void transfer_crossCurrency_publishesForexRequestedEventAndReturnsPending() {
         UUID txnId = UUID.randomUUID();
         String sourceId = "acct-usd";
         String destId = "acct-php";
@@ -479,16 +474,20 @@ class TransactionServiceRefactorTest {
         assertThat(savedMaster.getIsCrossCurrency()).isEqualTo("Y");
         assertThat(savedMaster.getTxnStatus()).isEqualTo("PENDING");
 
-        // Verify OUTBOX_AUDIT saved with FOREX_CONVERSION_REQUESTED
-        ArgumentCaptor<TransactionOutbox> outboxCaptor = ArgumentCaptor.forClass(TransactionOutbox.class);
-        verify(outboxRepository).save(outboxCaptor.capture());
-        TransactionOutbox savedOutbox = outboxCaptor.getValue();
-        assertThat(savedOutbox.getSourceService()).isEqualTo("transaction-service");
-        assertThat(savedOutbox.getAggregateType()).isEqualTo("TRANSACTION");
-        assertThat(savedOutbox.getAggregateId()).isEqualTo(txnId.toString());
-        assertThat(savedOutbox.getEventType()).isEqualTo(KafkaTopics.FOREX_CONVERSION_REQUESTED);
-        assertThat(savedOutbox.getStatus()).isEqualTo("PENDING");
-        assertThat(savedOutbox.getPayload()).contains("USD").contains("PHP").contains("100.0000");
+        // Verify FOREX_CONVERSION_REQUESTED published directly to Kafka
+        ArgumentCaptor<ForexConversionRequestedEvent> forexCaptor = ArgumentCaptor.forClass(ForexConversionRequestedEvent.class);
+        verify(eventProducer).publishToTopic(
+                eq(KafkaTopics.FOREX_CONVERSION_REQUESTED),
+                eq(txnId.toString()),
+                forexCaptor.capture()
+        );
+        ForexConversionRequestedEvent capturedEvent = forexCaptor.getValue();
+        assertThat(capturedEvent.txnId()).isEqualTo(txnId);
+        assertThat(capturedEvent.sourceAccountId()).isEqualTo(sourceId);
+        assertThat(capturedEvent.destAccountId()).isEqualTo(destId);
+        assertThat(capturedEvent.sourceCurrency()).isEqualTo("USD");
+        assertThat(capturedEvent.destCurrency()).isEqualTo("PHP");
+        assertThat(capturedEvent.sourceAmount()).isEqualByComparingTo(amount);
 
         // Verify idempotency stored and event produced
         verify(idempotencyService).storeResult(eq(idemKey), eq(response));

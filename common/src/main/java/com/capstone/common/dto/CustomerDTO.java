@@ -16,10 +16,25 @@ public record CustomerDTO(
         LocalDate birthDate,
         String idType,
         String idNumber,
-        String address
+        String address,
+        String kycStatus
 ) {
     public CustomerDTO(String customerId, String firstName, String lastName, String email, String contactNo, LocalDate birthDate) {
-        this(customerId, firstName, lastName, email, contactNo, birthDate, null, null, null);
+        this(customerId, firstName, lastName, email, contactNo, birthDate, null, null, null, "PENDING");
+    }
+
+    public CustomerDTO(
+            String customerId,
+            String firstName,
+            String lastName,
+            String email,
+            String contactNo,
+            LocalDate birthDate,
+            String idType,
+            String idNumber,
+            String address
+    ) {
+        this(customerId, firstName, lastName, email, contactNo, birthDate, idType, idNumber, address, "PENDING");
     }
 
     public String residentialAddress() {

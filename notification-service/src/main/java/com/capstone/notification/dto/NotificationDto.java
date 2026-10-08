@@ -6,8 +6,13 @@ import java.util.UUID;
 public record NotificationDto(
         UUID notifId,
         String customerId,
+        String channel,
         String message,
         String status,
-        OffsetDateTime createdAt
+        OffsetDateTime createdAt,
+        OffsetDateTime readAt
 ) {
+    public NotificationDto(UUID notifId, String customerId, String message, String status, OffsetDateTime createdAt) {
+        this(notifId, customerId, "IN_APP", message, status, createdAt, null);
+    }
 }

@@ -32,14 +32,12 @@ import com.capstone.common.security.SecurityUtils;
 import com.capstone.transaction.client.AccountsServiceClient;
 import com.capstone.transaction.entity.oracle.TransactionMaster;
 import com.capstone.transaction.entity.postgres.LedgerMutationAudit;
-import com.capstone.transaction.entity.postgres.TransactionOutbox;
 import com.capstone.transaction.kafka.TransactionEventProducer;
 import com.capstone.transaction.metrics.BankingMetricsService;
 import com.capstone.transaction.model.MutationResult;
 import com.capstone.transaction.model.TransferResult;
 import com.capstone.transaction.repository.oracle.TransactionMasterRepository;
 import com.capstone.transaction.repository.postgres.LedgerMutationAuditRepository;
-import com.capstone.transaction.repository.postgres.TransactionOutboxRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import lombok.extern.slf4j.Slf4j;
@@ -65,7 +63,6 @@ public class TransactionService {
     private final IdempotencyService idempotencyService;
     private final TransactionEventProducer eventProducer;
     private final BalanceCacheInvalidator balanceCacheInvalidator;
-    private final TransactionOutboxRepository outboxRepository;
     private final ObjectMapper objectMapper;
 
     @org.springframework.beans.factory.annotation.Autowired
@@ -81,8 +78,6 @@ public class TransactionService {
             TransactionEventProducer eventProducer,
             BalanceCacheInvalidator balanceCacheInvalidator,
             @org.springframework.beans.factory.annotation.Autowired(required = false)
-            TransactionOutboxRepository outboxRepository,
-            @org.springframework.beans.factory.annotation.Autowired(required = false)
             ObjectMapper objectMapper,
             BankingMetricsService metricsService) {
 
@@ -94,7 +89,6 @@ public class TransactionService {
         this.idempotencyService = idempotencyService;
         this.eventProducer = eventProducer;
         this.balanceCacheInvalidator = balanceCacheInvalidator;
-        this.outboxRepository = outboxRepository;
         this.objectMapper = objectMapper != null ? objectMapper : new ObjectMapper().findAndRegisterModules();
         this.metricsService = metricsService;
     }
@@ -113,7 +107,7 @@ public class TransactionService {
             BankingMetricsService metricsService) {
 
         this(accountsServiceClient, txnMasterRepository, auditRepository, oracleTxManager, postgresTxManager,
-                idempotencyService, eventProducer, balanceCacheInvalidator, null, null, metricsService);
+                idempotencyService, eventProducer, balanceCacheInvalidator, null, metricsService);
     }
 
     // ── Public API ────────────────────────────────────────────────────────────
@@ -611,31 +605,11 @@ public class TransactionService {
                 txnMasterRepository.save(txnMaster);
             });
 
-            // Phase 2: PostgreSQL — Queue FOREX_CONVERSION_REQUESTED to outbox_audit
-            if (outboxRepository != null) {
-                postgresTx.executeWithoutResult(status -> {
-                    try {
-                        TransactionOutbox outbox = TransactionOutbox.builder()
-                                .sourceService("transaction-service")
-                                .aggregateType("TRANSACTION")
-                                .aggregateId(txnId.toString())
-                                .eventType(KafkaTopics.FOREX_CONVERSION_REQUESTED)
-                                .payload(objectMapper.writeValueAsString(outboxEvent))
-                                .status("PENDING")
-                                .createdAt(OffsetDateTime.now())
-                                .build();
-
-                        outboxRepository.save(outbox);
-                    } catch (Exception e) {
-                        throw new RuntimeException("Failed to serialize ForexConversionRequestedEvent to outbox_audit", e);
-                    }
-                });
-            } else {
-                eventProducer.publishToTopic(
-                        KafkaTopics.FOREX_CONVERSION_REQUESTED,
-                        txnId.toString(),
-                        outboxEvent);
-            }
+            // Phase 2: Publish FOREX_CONVERSION_REQUESTED to Kafka
+            eventProducer.publishToTopic(
+                    KafkaTopics.FOREX_CONVERSION_REQUESTED,
+                    txnId.toString(),
+                    outboxEvent);
 
             eventProducer.publishCreated(
                     new TransactionCreatedEvent(

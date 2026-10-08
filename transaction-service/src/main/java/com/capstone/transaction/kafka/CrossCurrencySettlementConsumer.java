@@ -5,10 +5,8 @@ import com.capstone.common.event.CrossCurrencySettlementCompletedEvent;
 import com.capstone.common.event.TransactionCompletedEvent;
 import com.capstone.transaction.entity.oracle.TransactionMaster;
 import com.capstone.transaction.entity.postgres.LedgerMutationAudit;
-import com.capstone.transaction.entity.postgres.TransactionOutbox;
 import com.capstone.transaction.repository.oracle.TransactionMasterRepository;
 import com.capstone.transaction.repository.postgres.LedgerMutationAuditRepository;
-import com.capstone.transaction.repository.postgres.TransactionOutboxRepository;
 import com.capstone.transaction.service.BalanceCacheInvalidator;
 import com.capstone.transaction.metrics.BankingMetricsService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -21,7 +19,6 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
-import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -36,7 +33,7 @@ public class CrossCurrencySettlementConsumer {
 
     private final LedgerMutationAuditRepository auditRepository;
     private final TransactionMasterRepository txnMasterRepository;
-    private final TransactionOutboxRepository outboxRepository;
+    private final TransactionEventProducer eventProducer;
     private final BalanceCacheInvalidator balanceCacheInvalidator;
     private final BankingMetricsService metricsService;
     private final TransactionTemplate oracleTx;
@@ -46,7 +43,7 @@ public class CrossCurrencySettlementConsumer {
     public CrossCurrencySettlementConsumer(
             LedgerMutationAuditRepository auditRepository,
             TransactionMasterRepository txnMasterRepository,
-            TransactionOutboxRepository outboxRepository,
+            TransactionEventProducer eventProducer,
             BalanceCacheInvalidator balanceCacheInvalidator,
             BankingMetricsService metricsService,
             @Qualifier("oracleTransactionManager") PlatformTransactionManager oracleTxManager,
@@ -54,7 +51,7 @@ public class CrossCurrencySettlementConsumer {
             ObjectMapper objectMapper) {
         this.auditRepository = auditRepository;
         this.txnMasterRepository = txnMasterRepository;
-        this.outboxRepository = outboxRepository;
+        this.eventProducer = eventProducer;
         this.balanceCacheInvalidator = balanceCacheInvalidator;
         this.metricsService = metricsService;
         this.oracleTx = new TransactionTemplate(oracleTxManager);
@@ -99,12 +96,12 @@ public class CrossCurrencySettlementConsumer {
         String txnId = event.txnId().toString();
 
         // 1. Post double-entry audit records in PostgreSQL
-        postgresTx.executeWithoutResult(status -> {
+        boolean isDuplicate = Boolean.TRUE.equals(postgresTx.execute(status -> {
             List<LedgerMutationAudit> existingAudits = auditRepository.findByTxnId(txnId);
             if (!existingAudits.isEmpty()) {
                 log.info("Skipping duplicate settlement audit for txnId={} existingRows={}",
                         txnId, existingAudits.size());
-                return;
+                return true;
             }
 
             auditRepository.save(
@@ -133,38 +130,8 @@ public class CrossCurrencySettlementConsumer {
                             .build()
             );
 
-            // Queue notification outbox event
-            try {
-                TransactionCompletedEvent completedEvent = new TransactionCompletedEvent(
-                        event.txnId(),
-                        event.sourceAccountId(),
-                        event.destAccountId(),
-                        "TRANSFER",
-                        event.sourceAmount(),
-                        event.sourceBalanceAfter(),
-                        Instant.now(),
-                        event.destCurrency(),
-                        event.fxRate(),
-                        event.destAmount(),
-                        null,
-                        true
-                );
-
-                outboxRepository.save(
-                        TransactionOutbox.builder()
-                                .sourceService("transaction-service")
-                                .aggregateType("TRANSACTION")
-                                .aggregateId(txnId)
-                                .eventType("TRANSACTION_COMPLETED")
-                                .payload(objectMapper.writeValueAsString(completedEvent))
-                                .status("PENDING")
-                                .createdAt(OffsetDateTime.now())
-                                .build()
-                );
-            } catch (Exception ex) {
-                log.warn("Failed to stage notification outbox for cross-currency txnId={}: {}", txnId, ex.getMessage());
-            }
-        });
+            return false;
+        }));
 
         // 2. Commit transaction_master in Oracle
         oracleTx.executeWithoutResult(status -> {
@@ -183,7 +150,30 @@ public class CrossCurrencySettlementConsumer {
             }
         });
 
-        // 3. Cache eviction
+        // 3. Publish notification event if not duplicate
+        if (!isDuplicate) {
+            try {
+                TransactionCompletedEvent completedEvent = new TransactionCompletedEvent(
+                        event.txnId(),
+                        event.sourceAccountId(),
+                        event.destAccountId(),
+                        "TRANSFER",
+                        event.sourceAmount(),
+                        event.sourceBalanceAfter(),
+                        Instant.now(),
+                        event.destCurrency(),
+                        event.fxRate(),
+                        event.destAmount(),
+                        null,
+                        true
+                );
+                eventProducer.publishCompleted(completedEvent);
+            } catch (Exception ex) {
+                log.warn("Failed to publish notification for cross-currency txnId={}: {}", txnId, ex.getMessage());
+            }
+        }
+
+        // 4. Cache eviction
         balanceCacheInvalidator.evict(event.sourceAccountId());
         balanceCacheInvalidator.evict(event.destAccountId());
 

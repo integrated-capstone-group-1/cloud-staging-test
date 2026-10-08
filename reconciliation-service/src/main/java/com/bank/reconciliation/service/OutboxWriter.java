@@ -1,33 +1,31 @@
 package com.bank.reconciliation.service;
 
-import com.bank.reconciliation.entity.postgres.OutboxAudit;
-import com.bank.reconciliation.repository.postgres.OutboxAuditRepository;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 
 @Component
 public class OutboxWriter {
 
-    private final OutboxAuditRepository outboxAuditRepository;
-    private final ObjectMapper objectMapper;
+    private static final Logger log = LoggerFactory.getLogger(OutboxWriter.class);
 
-    public OutboxWriter(OutboxAuditRepository outboxAuditRepository, ObjectMapper objectMapper) {
-        this.outboxAuditRepository = outboxAuditRepository;
-        this.objectMapper = objectMapper;
+    private final KafkaTemplate<String, Object> kafkaTemplate;
+
+    public OutboxWriter(KafkaTemplate<String, Object> kafkaTemplate) {
+        this.kafkaTemplate = kafkaTemplate;
     }
 
     /**
-     * Call this from inside the SAME @Transactional method that persists
-     * the recon rows. aggregateType/aggregateId/eventType match the real
-     * outbox_audit columns (e.g. aggregateType="TRANSACTION",
-     * aggregateId=txnId, eventType="reconciliation.discrepancy").
+     * Publishes reconciliation events directly to Kafka topics.
+     * aggregateId is used as the partition key.
      */
     public void enqueue(String aggregateType, String aggregateId, String eventType, Object payload) {
         try {
-            String json = objectMapper.writeValueAsString(payload);
-            outboxAuditRepository.save(OutboxAudit.of(aggregateType, aggregateId, eventType, json));
+            kafkaTemplate.send(eventType, aggregateId, payload);
+            log.info("Published recon event {} with key {}", eventType, aggregateId);
         } catch (Exception e) {
-            throw new IllegalStateException("Failed to serialize outbox payload for event " + eventType, e);
+            log.error("Failed to publish recon event {} with key {}", eventType, aggregateId, e);
         }
     }
 }

@@ -118,5 +118,33 @@ public class TransactionMaster {
 
     @Column(name = "idempotency_key", length = 64)
     private String idempotencyKey;
+
+    @Column(name = "hold_id", length = 36)
+    private String holdId;
+
+    @Column(name = "original_txn_id", length = 36)
+    private String originalTxnId;
+
+    @Builder.Default
+    @Column(name = "reversed", columnDefinition = "CHAR(1)", nullable = false)
+    private String reversed = "N";
+
+    @Column(name = "reversal_txn_id", length = 36)
+    private String reversalTxnId;
+
+    @Column(name = "business_date")
+    private java.time.LocalDate businessDate;
+
+    @Column(name = "failure_code", length = 50)
+    private String failureCode;
+
+    @Column(name = "risk_score", precision = 5, scale = 2)
+    private BigDecimal riskScore;
+
+    @Column(name = "risk_decision", length = 20)
+    private String riskDecision;
+
+    @Column(name = "risk_rules", length = 500)
+    private String riskRules;
 }
 

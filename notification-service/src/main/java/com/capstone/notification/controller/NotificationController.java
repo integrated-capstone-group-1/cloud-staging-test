@@ -41,9 +41,11 @@ public class NotificationController {
                 .map(a -> new NotificationDto(
                         a.getNotifId(),
                         a.getCustomerId(),
+                        a.getChannel(),
                         a.getMessage(),
                         a.getStatus(),
-                        a.getCreatedAt()))
+                        a.getCreatedAt(),
+                        a.getReadAt()))
                 .toList();
 
         return ResponseEntity.ok(ApiResponse.ok(dtos));
@@ -53,6 +55,7 @@ public class NotificationController {
     public ResponseEntity<ApiResponse<Void>> markAsRead(@PathVariable("id") UUID id) {
         auditRepository.findById(id).ifPresent(audit -> {
             audit.setStatus("READ");
+            audit.setReadAt(java.time.OffsetDateTime.now());
             auditRepository.save(audit);
         });
         return ResponseEntity.ok(ApiResponse.ok("Notification marked as read", null));

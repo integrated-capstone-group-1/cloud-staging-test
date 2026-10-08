@@ -43,8 +43,8 @@ public final class KafkaTopics {
     // ── Reconciliation ───────────────────────────────────────────────────────────
     public static final String RECON_DISCREPANCY       = "reconciliation.discrepancy";
 
-    // ── Ledger audit events (OUTBOX_AUDIT relay, Postgres side) ─────────────────
-    /** Published by the Postgres outbox relay after a ledger_mutation_audit row is posted. */
+    // ── Ledger audit events ──────────────────────────────────────────────────────
+    /** Published after a ledger_mutation_audit row is posted. */
     public static final String LEDGER_MUTATION_POSTED  = "ledger.mutation.posted";
 
     // ── Fraud & Suspicious Activity ──────────────────────────────────────────────

@@ -69,10 +69,12 @@ public class AccountHold {
     @Column(name = "placed_by", length = 50)
     private String placedBy;
 
-    @Column(name = "reason_code", length = 20)
-    private String reasonCode;
-
     @Column(name = "resolved_at")
     private LocalDateTime resolvedAt;
 
+    @Column(name = "txn_id", length = 36)
+    private String txnId;
+
+    @Column(name = "customer_reason", length = 255)
+    private String customerReason;
 }

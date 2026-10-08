@@ -3,12 +3,7 @@ package com.capstone.forex.service;
 import com.capstone.common.constants.KafkaTopics;
 import com.capstone.common.event.ForexConversionCompletedEvent;
 import com.capstone.common.event.ForexConversionRequestedEvent;
-import com.capstone.forex.entity.ForexOutbox;
-import com.capstone.forex.entity.FxConversionAudit;
-import com.capstone.forex.repository.ForexOutboxRepository;
-import com.capstone.forex.repository.FxConversionAuditRepository;
 import com.capstone.forex.metrics.ForexMetricsService;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -16,13 +11,14 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.kafka.core.KafkaTemplate;
 
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -32,29 +28,23 @@ class ForexConversionServiceTest {
     @Mock
     private FxRateService fxRateService;
     @Mock
-    private FxConversionAuditRepository auditRepository;
-    @Mock
-    private ForexOutboxRepository outboxRepository;
+    private KafkaTemplate<String, Object> kafkaTemplate;
     @Mock
     private ForexMetricsService metricsService;
 
     private ForexConversionService conversionService;
-    private ObjectMapper objectMapper;
 
     @BeforeEach
     void setUp() {
-        objectMapper = new ObjectMapper().findAndRegisterModules();
         conversionService = new ForexConversionService(
                 fxRateService,
-                auditRepository,
-                outboxRepository,
-                metricsService,
-                objectMapper
+                kafkaTemplate,
+                metricsService
         );
     }
 
     @Test
-    @DisplayName("FC-45, FC-46: processConversion computes converted amount, persists audit and outbox row")
+    @DisplayName("FC-45, FC-46: processConversion computes converted amount and publishes event to Kafka")
     void processConversion_success() {
         UUID txnId = UUID.randomUUID();
         String srcAcct = "acct-php-01";
@@ -86,20 +76,14 @@ class ForexConversionServiceTest {
         assertThat(response.destAmount()).isEqualByComparingTo("100.0000");
         assertThat(response.fxRate()).isEqualByComparingTo(rate);
 
-        // Verify audit persistence
-        ArgumentCaptor<FxConversionAudit> auditCaptor = ArgumentCaptor.forClass(FxConversionAudit.class);
-        verify(auditRepository).save(auditCaptor.capture());
-        assertThat(auditCaptor.getValue().getTxnId()).isEqualTo(txnId.toString());
-        assertThat(auditCaptor.getValue().getConversionStatus()).isEqualTo("COMPLETED");
-        assertThat(auditCaptor.getValue().getDestAmount()).isEqualByComparingTo("100.0000");
-
-        // Verify outbox persistence
-        ArgumentCaptor<ForexOutbox> outboxCaptor = ArgumentCaptor.forClass(ForexOutbox.class);
-        verify(outboxRepository).save(outboxCaptor.capture());
-        assertThat(outboxCaptor.getValue().getAggregateId()).isEqualTo(txnId.toString());
-        assertThat(outboxCaptor.getValue().getSourceService()).isEqualTo("forex-service");
-        assertThat(outboxCaptor.getValue().getEventType()).isEqualTo(KafkaTopics.FOREX_CONVERSION_COMPLETED);
-        assertThat(outboxCaptor.getValue().getStatus()).isEqualTo("PENDING");
+        // Verify Kafka publication
+        ArgumentCaptor<ForexConversionCompletedEvent> eventCaptor = ArgumentCaptor.forClass(ForexConversionCompletedEvent.class);
+        verify(kafkaTemplate).send(eq(KafkaTopics.FOREX_CONVERSION_COMPLETED), eq(txnId.toString()), eventCaptor.capture());
+        ForexConversionCompletedEvent published = eventCaptor.getValue();
+        assertThat(published.txnId()).isEqualTo(txnId);
+        assertThat(published.sourceAccountId()).isEqualTo(srcAcct);
+        assertThat(published.destAccountId()).isEqualTo(destAcct);
+        assertThat(published.destAmount()).isEqualByComparingTo("100.0000");
 
         // Verify metrics
         verify(metricsService).recordSuccess(txnId.toString(), "PHP", "USD");

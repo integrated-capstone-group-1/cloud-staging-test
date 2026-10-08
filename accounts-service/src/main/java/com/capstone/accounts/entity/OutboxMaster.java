@@ -52,6 +52,10 @@ public class OutboxMaster {
     @Column(name = "status", nullable = false, length = 20)
     private String status;
 
+    @Builder.Default
+    @Column(name = "attempt_count", nullable = false)
+    private Integer attemptCount = 0;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 

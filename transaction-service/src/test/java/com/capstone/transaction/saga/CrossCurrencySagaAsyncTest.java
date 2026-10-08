@@ -6,21 +6,20 @@ import com.capstone.common.dto.TransactionRequest;
 import com.capstone.common.dto.TransactionResponse;
 import com.capstone.common.event.CrossCurrencySettlementCompletedEvent;
 import com.capstone.common.event.ForexConversionRequestedEvent;
+import com.capstone.common.event.TransactionCompletedEvent;
 import com.capstone.transaction.client.AccountsServiceClient;
 import com.capstone.transaction.entity.oracle.TransactionMaster;
 import com.capstone.transaction.entity.postgres.LedgerMutationAudit;
-import com.capstone.transaction.entity.postgres.TransactionOutbox;
 import com.capstone.transaction.kafka.CrossCurrencySettlementConsumer;
 import com.capstone.transaction.kafka.TransactionEventProducer;
 import com.capstone.transaction.repository.oracle.TransactionMasterRepository;
 import com.capstone.transaction.repository.postgres.LedgerMutationAuditRepository;
-import com.capstone.transaction.repository.postgres.TransactionOutboxRepository;
 import com.capstone.transaction.service.BalanceCacheInvalidator;
 import com.capstone.transaction.service.IdempotencyService;
-import com.capstone.transaction.service.OutboxRelayService;
 import com.capstone.transaction.service.TransactionService;
 import com.capstone.transaction.metrics.BankingMetricsService;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -45,8 +44,8 @@ import static org.mockito.Mockito.*;
 
 /**
  * FC-50: End-to-end async saga loop verification for cross-currency transfers.
- * Validates the full multi-service contract across Step 1 (Initiation & Outbox in Postgres),
- * Step 2 (Outbox Relay to ForEx), and Step 4 (Accounts Settlement Completion & Audit Commitment).
+ * Validates the full multi-service contract across Step 1 (Initiation & Forex request event to Kafka)
+ * and Step 2 (Settlement Completion & Audit Commitment in PostgreSQL).
  */
 @ExtendWith(MockitoExtension.class)
 class CrossCurrencySagaAsyncTest {
@@ -59,9 +58,6 @@ class CrossCurrencySagaAsyncTest {
 
     @Mock
     private LedgerMutationAuditRepository auditRepository;
-
-    @Mock
-    private TransactionOutboxRepository outboxRepository;
 
     @Mock
     private PlatformTransactionManager oracleTxManager;
@@ -77,14 +73,13 @@ class CrossCurrencySagaAsyncTest {
 
     @Mock
     private BalanceCacheInvalidator balanceCacheInvalidator;
+
     @Mock
     private BankingMetricsService metricsService;
-
 
     private final ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
 
     private TransactionService transactionService;
-    private OutboxRelayService outboxRelayService;
     private CrossCurrencySettlementConsumer settlementConsumer;
 
     @BeforeEach
@@ -106,21 +101,14 @@ class CrossCurrencySagaAsyncTest {
                 idempotencyService,
                 eventProducer,
                 balanceCacheInvalidator,
-                outboxRepository,
                 objectMapper,
                 metricsService
-        );
-
-        outboxRelayService = new OutboxRelayService(
-                outboxRepository,
-                eventProducer,
-                objectMapper
         );
 
         settlementConsumer = new CrossCurrencySettlementConsumer(
                 auditRepository,
                 txnMasterRepository,
-                outboxRepository,
+                eventProducer,
                 balanceCacheInvalidator,
                 metricsService,
                 oracleTxManager,
@@ -130,7 +118,7 @@ class CrossCurrencySagaAsyncTest {
     }
 
     @Test
-    @DisplayName("FC-50 Full Saga: Step 1 (outbox stage) -> Step 2 (relay to Kafka) -> Step 4 (settlement commit & audit)")
+    @DisplayName("FC-50 Full Saga: Step 1 (Initiation & Forex request to Kafka) -> Step 2 (Settlement commit & audit)")
     void fullCrossCurrencySagaAsyncFlow() throws Exception {
         UUID txnId = UUID.randomUUID();
         String sourceAccountId = "acct-usd-01";
@@ -174,23 +162,7 @@ class CrossCurrencySagaAsyncTest {
         assertThat(stagedMaster.getTxnStatus()).isEqualTo("PENDING");
         assertThat(stagedMaster.getIsCrossCurrency()).isEqualTo("Y");
 
-        // Verify OUTBOX_AUDIT stored atomically in PostgreSQL with FOREX_CONVERSION_REQUESTED
-        ArgumentCaptor<TransactionOutbox> outboxCaptor = ArgumentCaptor.forClass(TransactionOutbox.class);
-        verify(outboxRepository).save(outboxCaptor.capture());
-        TransactionOutbox stagedOutbox = outboxCaptor.getValue();
-        assertThat(stagedOutbox.getSourceService()).isEqualTo("transaction-service");
-        assertThat(stagedOutbox.getEventType()).isEqualTo(KafkaTopics.FOREX_CONVERSION_REQUESTED);
-        assertThat(stagedOutbox.getStatus()).isEqualTo("PENDING");
-
-        // ═══════════════════════════════════════════════════════════════════════════
-        // STEP 2: OutboxRelayService polls OUTBOX_AUDIT and relays to Kafka
-        // ═══════════════════════════════════════════════════════════════════════════
-        when(outboxRepository.findBySourceServiceAndStatusOrderByCreatedAtAsc("transaction-service", "PENDING"))
-                .thenReturn(List.of(stagedOutbox));
-
-        outboxRelayService.processOutbox();
-
-        // Verify event relayed to Kafka topic FOREX_CONVERSION_REQUESTED
+        // Verify event published directly to Kafka topic FOREX_CONVERSION_REQUESTED
         ArgumentCaptor<ForexConversionRequestedEvent> forexEventCaptor =
                 ArgumentCaptor.forClass(ForexConversionRequestedEvent.class);
         verify(eventProducer).publishToTopic(
@@ -205,12 +177,8 @@ class CrossCurrencySagaAsyncTest {
         assertThat(dispatchedEvent.destCurrency()).isEqualTo("PHP");
         assertThat(dispatchedEvent.sourceAmount()).isEqualByComparingTo(transferAmount);
 
-        // Verify OUTBOX_AUDIT marked PUBLISHED
-        assertThat(stagedOutbox.getStatus()).isEqualTo("PUBLISHED");
-        assertThat(stagedOutbox.getPublishedAt()).isNotNull();
-
         // ═══════════════════════════════════════════════════════════════════════════
-        // STEP 3 & 4: Accounts Service settlements completes -> Transaction Service receives
+        // STEP 2: Accounts Service settlement completes -> Transaction Service receives
         // ═══════════════════════════════════════════════════════════════════════════
         CrossCurrencySettlementCompletedEvent settlementEvent = new CrossCurrencySettlementCompletedEvent(
                 txnId,
@@ -261,21 +229,21 @@ class CrossCurrencySagaAsyncTest {
         assertThat(stagedMaster.getFxRate()).isEqualByComparingTo(new BigDecimal("58.50000000"));
         assertThat(stagedMaster.getCompletedAt()).isNotNull();
 
-        // Verify notification outbox entry queued in PostgreSQL
-        ArgumentCaptor<TransactionOutbox> notifCaptor = ArgumentCaptor.forClass(TransactionOutbox.class);
-        verify(outboxRepository, atLeast(2)).save(notifCaptor.capture());
-        TransactionOutbox stagedNotif = notifCaptor.getValue();
-        assertThat(stagedNotif.getSourceService()).isEqualTo("transaction-service");
-        assertThat(stagedNotif.getAggregateType()).isEqualTo("TRANSACTION");
-        assertThat(stagedNotif.getEventType()).isEqualTo("TRANSACTION_COMPLETED");
-        assertThat(stagedNotif.getStatus()).isEqualTo("PENDING");
+        // Verify notification event published to Kafka
+        ArgumentCaptor<TransactionCompletedEvent> notifCaptor = ArgumentCaptor.forClass(TransactionCompletedEvent.class);
+        verify(eventProducer).publishCompleted(notifCaptor.capture());
+        TransactionCompletedEvent stagedNotif = notifCaptor.getValue();
+        assertThat(stagedNotif.txnId()).isEqualTo(txnId);
+        assertThat(stagedNotif.accountId()).isEqualTo(sourceAccountId);
+        assertThat(stagedNotif.counterpartyAccountId()).isEqualTo(destAccountId);
+        assertThat(stagedNotif.amount()).isEqualByComparingTo(transferAmount);
 
         // Verify cache invalidation for both accounts
         verify(balanceCacheInvalidator).evict(sourceAccountId);
         verify(balanceCacheInvalidator).evict(destAccountId);
     }
 
-    @org.junit.jupiter.api.AfterEach
+    @AfterEach
     void tearDown() {
         org.springframework.security.core.context.SecurityContextHolder.clearContext();
     }

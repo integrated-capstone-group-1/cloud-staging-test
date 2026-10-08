@@ -1,12 +1,12 @@
 package com.capstone.transaction.kafka;
 
 import com.capstone.common.event.CrossCurrencySettlementCompletedEvent;
+import com.capstone.common.event.TransactionCompletedEvent;
 import com.capstone.transaction.entity.oracle.TransactionMaster;
 import com.capstone.transaction.entity.postgres.LedgerMutationAudit;
-import com.capstone.transaction.entity.postgres.TransactionOutbox;
+import com.capstone.transaction.kafka.TransactionEventProducer;
 import com.capstone.transaction.repository.oracle.TransactionMasterRepository;
 import com.capstone.transaction.repository.postgres.LedgerMutationAuditRepository;
-import com.capstone.transaction.repository.postgres.TransactionOutboxRepository;
 import com.capstone.transaction.service.BalanceCacheInvalidator;
 import com.capstone.transaction.metrics.BankingMetricsService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -40,7 +40,7 @@ class CrossCurrencySettlementConsumerTest {
     private TransactionMasterRepository txnMasterRepository;
 
     @Mock
-    private TransactionOutboxRepository outboxRepository;
+    private TransactionEventProducer eventProducer;
 
     @Mock
     private BalanceCacheInvalidator balanceCacheInvalidator;
@@ -67,7 +67,7 @@ class CrossCurrencySettlementConsumerTest {
         consumer = new CrossCurrencySettlementConsumer(
                 auditRepository,
                 txnMasterRepository,
-                outboxRepository,
+                eventProducer,
                 balanceCacheInvalidator,
                 metricsService,
                 oracleTxManager,
@@ -134,14 +134,13 @@ class CrossCurrencySettlementConsumerTest {
         assertThat(creditAudit.getCurrencyCode()).isEqualTo("PHP");
         assertThat(creditAudit.getAuditState()).isEqualTo("COMMITTED");
 
-        // Verify notification outbox record
-        ArgumentCaptor<TransactionOutbox> outboxCaptor = ArgumentCaptor.forClass(TransactionOutbox.class);
-        verify(outboxRepository).save(outboxCaptor.capture());
-        TransactionOutbox savedOutbox = outboxCaptor.getValue();
-        assertThat(savedOutbox.getSourceService()).isEqualTo("transaction-service");
-        assertThat(savedOutbox.getEventType()).isEqualTo("TRANSACTION_COMPLETED");
-        assertThat(savedOutbox.getAggregateId()).isEqualTo(txnId.toString());
-        assertThat(savedOutbox.getStatus()).isEqualTo("PENDING");
+        // Verify notification event published
+        ArgumentCaptor<TransactionCompletedEvent> completedCaptor = ArgumentCaptor.forClass(TransactionCompletedEvent.class);
+        verify(eventProducer).publishCompleted(completedCaptor.capture());
+        TransactionCompletedEvent savedCompleted = completedCaptor.getValue();
+        assertThat(savedCompleted.txnId()).isEqualTo(txnId);
+        assertThat(savedCompleted.accountId()).isEqualTo(srcAccountId);
+        assertThat(savedCompleted.counterpartyAccountId()).isEqualTo(destAccountId);
 
         // Verify TransactionMaster committed
         verify(txnMasterRepository).save(pendingMaster);
@@ -190,7 +189,7 @@ class CrossCurrencySettlementConsumerTest {
         consumer.processSettlement(event);
 
         verify(auditRepository, never()).save(any(LedgerMutationAudit.class));
-        verify(outboxRepository, never()).save(any(TransactionOutbox.class));
+        verify(eventProducer, never()).publishCompleted(any(TransactionCompletedEvent.class));
         verify(txnMasterRepository).save(pendingMaster);
         assertThat(pendingMaster.getTxnStatus()).isEqualTo("COMMITTED");
         verify(balanceCacheInvalidator).evict("acct-usd");

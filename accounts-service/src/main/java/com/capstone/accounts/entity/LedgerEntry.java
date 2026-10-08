@@ -51,4 +51,13 @@ public class LedgerEntry {
 
     @Column(name = "narrative", length = 255)
     private String narrative;
+
+    @Column(name = "hold_id", length = 36)
+    private String holdId;
+
+    @Column(name = "reversal_of_entry", length = 36)
+    private String reversalOfEntry;
+
+    @Column(name = "posted_at")
+    private LocalDateTime postedAt;
 }

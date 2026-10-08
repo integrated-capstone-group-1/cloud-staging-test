@@ -24,6 +24,12 @@ public class ReconRunAudit {
     @Column(name = "run_id", updatable = false, nullable = false)
     private UUID runId;
 
+    @Column(name = "business_date")
+    private java.time.LocalDate businessDate;
+
+    @Column(name = "scope", length = 50)
+    private String scope = "ALL";
+
     @Column(name = "run_started_at", nullable = false)
     private OffsetDateTime runStartedAt;
 
@@ -52,6 +58,8 @@ public class ReconRunAudit {
     public static ReconRunAudit start(OffsetDateTime windowStart, OffsetDateTime windowEnd) {
         ReconRunAudit run = new ReconRunAudit();
         run.runId = UUID.randomUUID();
+        run.businessDate = java.time.LocalDate.now();
+        run.scope = "ALL";
         run.runStartedAt = OffsetDateTime.now();
         run.windowStart = windowStart;
         run.windowEnd = windowEnd;

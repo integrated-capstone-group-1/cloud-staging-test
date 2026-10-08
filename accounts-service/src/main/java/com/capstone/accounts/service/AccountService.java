@@ -88,15 +88,20 @@ public class AccountService {
         }
 
         String accountId = UUID.randomUUID().toString();
+        String accountNumber = "1000" + String.format("%08d", Math.abs(accountId.hashCode() % 100000000));
         LocalDateTime now = LocalDateTime.now();
 
         AccountMaster account = AccountMaster.builder()
                 .accountId(accountId)
+                .accountNumber(accountNumber)
                 .customerId(request.customerId())
                 .accountType(request.accountType())
                 .currencyCode(request.currencyCode())
                 .accountStatus("ACTIVE")
                 .balanceAmount(BigDecimal.ZERO)
+                .normalBalance("CR")
+                .customerLocked("N")
+                .adminFrozen("N")
                 .createdAt(now)
                 .createdBy("SYSTEM")
                 .build();
@@ -479,12 +484,18 @@ public class AccountService {
     private AccountDTO toDto(AccountMaster account) {
         return new AccountDTO(
                 account.getAccountId(),
+                account.getAccountNumber(),
                 account.getCustomerId(),
                 account.getAccountType(),
                 account.getAccountStatus(),
                 account.getBalanceAmount(),
                 account.getCurrencyCode(),
-                account.getCreatedAt()
+                account.getCreatedAt(),
+                account.getHeldAmount(),
+                account.getIsPrimary(),
+                account.getNormalBalance(),
+                account.getCustomerLocked(),
+                account.getAdminFrozen()
         );
     }
 }

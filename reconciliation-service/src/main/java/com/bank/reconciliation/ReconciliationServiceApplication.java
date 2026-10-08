@@ -13,7 +13,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  *
  * Read-only against Oracle (account_master / transaction_master),
  * read-write against Postgres (recon_run_audit / recon_result_audit /
- * ledger_mutation_audit / outbox_audit). Both datasources are wired
+ * ledger_mutation_audit). Both datasources are wired
  * explicitly in the config package, so the default Spring Boot
  * DataSource/JPA autoconfiguration is disabled here on purpose.
  *

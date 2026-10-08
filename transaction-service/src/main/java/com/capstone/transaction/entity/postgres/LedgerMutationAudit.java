@@ -84,6 +84,9 @@ public class LedgerMutationAudit {
     @Column(name = "audit_state", nullable = false, length = 20)
     private String auditState;
 
+    @Column(name = "business_date")
+    private java.time.LocalDate businessDate;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 }

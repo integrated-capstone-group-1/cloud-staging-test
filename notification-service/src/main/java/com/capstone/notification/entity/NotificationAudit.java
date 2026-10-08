@@ -16,16 +16,16 @@ import java.time.OffsetDateTime;
 import java.util.UUID;
 
 /**
- * Maps to NOTIFICATION_AUDIT (PostgreSQL 15+).
+ * Maps to NOTIFICATION_LOG (PostgreSQL 15+ Channel DB).
  *
- * Per ERD v3: NOTIFICATION_AUDIT is owned by notification-service.
- * One row is persisted for every transaction event consumed from Kafka,
- * regardless of whether the downstream alert dispatch (email/SMS/push) succeeded.
+ * Owned exclusively by notification-service.
+ * Stores omnichannel alert history and customer in-app notifications.
  *
- * status CHECK : PENDING | SENT | FAILED
+ * status CHECK : PENDING | SENT | FAILED | READ
+ * channel CHECK : PUSH | EMAIL | IN_APP
  */
 @Entity
-@Table(name = "notification_audit")
+@Table(name = "notification_log")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -38,17 +38,24 @@ public class NotificationAudit {
     @Column(name = "notif_id", updatable = false, nullable = false)
     private UUID notifId;
 
-    /** References CUSTOMER_MASTER.customer_id (Oracle) — no cross-engine FK, indexed. */
+    /** References customer_master.customer_id (Oracle) — logical reference. */
     @Column(name = "customer_id", nullable = false, length = 36)
     private String customerId;
+
+    @Builder.Default
+    @Column(name = "channel", nullable = false, length = 20)
+    private String channel = "IN_APP";
 
     @Column(name = "message", nullable = false, columnDefinition = "TEXT")
     private String message;
 
-    /** PENDING → SENT | FAILED after dispatch attempt. */
+    /** PENDING | SENT | FAILED | READ */
     @Column(name = "status", nullable = false, length = 20)
     private String status;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;
+
+    @Column(name = "read_at")
+    private OffsetDateTime readAt;
 }

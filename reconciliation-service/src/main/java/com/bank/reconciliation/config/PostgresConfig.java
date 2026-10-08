@@ -21,7 +21,7 @@ import java.util.Map;
 /**
  * Postgres audit DB - the one recon actually writes to:
  * recon_run_audit, recon_result_audit, plus reads on
- * ledger_mutation_audit, and outbox_audit writes for the relay.
+ * ledger_mutation_audit.
  * Marked @Primary so plain @Transactional (no manager named) defaults
  * to this datasource.
  */

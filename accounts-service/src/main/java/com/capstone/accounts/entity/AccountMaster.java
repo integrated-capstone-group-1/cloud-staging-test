@@ -31,9 +31,16 @@ public class AccountMaster {
     private String accountId;
 
     @Column(
+        name = "account_number",
+        length = 20,
+        nullable = false,
+        unique = true
+    )
+    private String accountNumber;
+
+    @Column(
         name = "customer_id",
-        length = 36,
-        nullable = false
+        length = 36
     )
     private String customerId;
 
@@ -108,8 +115,10 @@ public class AccountMaster {
         name = "updated_at"
     )
     private LocalDateTime updatedAt;
+
+    @Builder.Default
     @Column(name = "normal_balance", columnDefinition = "CHAR(2)", nullable = false)
-    private String normalBalance;
+    private String normalBalance = "CR";
 
     @Builder.Default
     @Column(name = "customer_locked", columnDefinition = "CHAR(1)", nullable = false)
@@ -118,6 +127,10 @@ public class AccountMaster {
     @Builder.Default
     @Column(name = "admin_frozen", columnDefinition = "CHAR(1)", nullable = false)
     private String adminFrozen = "N";
+
+    @jakarta.persistence.Version
+    @Column(name = "version")
+    private Long version;
 
 
     @Column(

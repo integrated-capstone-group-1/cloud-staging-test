@@ -43,6 +43,9 @@ public class LedgerMutationAudit {
     @Column(name = "account_id", nullable = false, length = 36)
     private String accountId;
 
+    @Column(name = "leg_no", nullable = false)
+    private Integer legNo;
+
     @Column(name = "mutation_amount", precision = 18, scale = 4, nullable = false)
     private BigDecimal mutationAmount;
 
@@ -57,6 +60,9 @@ public class LedgerMutationAudit {
 
     @Column(name = "audit_state", nullable = false, length = 20)
     private String auditState; // PENDING / COMMITTED / ROLLED_BACK
+
+    @Column(name = "business_date")
+    private java.time.LocalDate businessDate;
 
     @Column(name = "created_at", nullable = false)
     private OffsetDateTime createdAt;

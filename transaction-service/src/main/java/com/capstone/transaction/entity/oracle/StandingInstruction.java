@@ -43,6 +43,10 @@ public class StandingInstruction {
     @Column(name = "status", nullable = false, length = 20)
     private String status;
 
+    @Builder.Default
+    @Column(name = "consecutive_failures", nullable = false)
+    private Integer consecutiveFailures = 0;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 

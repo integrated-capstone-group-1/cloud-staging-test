@@ -29,12 +29,8 @@ import java.util.List;
  *      leg (MatchingService / ExpectedLeg — a TRANSFER yields two legs)
  *   3. classify every leg-pair + every orphan ledger leg (ExceptionClassifier)
  *   4. persist one recon_result_audit row per leg
- *   5. for every EXCEPTION, enqueue a reconciliation.discrepancy outbox row
- *   6. close the run (COMPLETED/FAILED) and enqueue a run-completed outbox row
- *
- * Steps 4-6 happen in one @Transactional method so recon_run_audit,
- * recon_result_audit and outbox_audit commit atomically. Kafka
- * publishing itself happens later, out of band, in OutboxRelay.
+ *   5. for every EXCEPTION, publish a reconciliation.discrepancy event
+ *   6. close the run (COMPLETED/FAILED) and publish a run-completed event
  */
 @Service
 public class ReconciliationEngine {

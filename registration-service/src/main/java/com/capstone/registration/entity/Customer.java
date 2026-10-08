@@ -57,6 +57,10 @@ public class Customer {
     @Column(name = "residential_address", length = 255)
     private String residentialAddress;
 
+    @Builder.Default
+    @Column(name = "kyc_status", nullable = false, length = 20)
+    private String kycStatus = "PENDING";
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
