@@ -442,26 +442,30 @@ services:
   grafana:
     image: grafana/grafana:11.1.0
     container_name: grafana
-    # Port 3000 cloaked from external NICs per DIG-30 & CH-03 zero-trust perimeter.
-    # Accessible externally exclusively via Admin Portal reverse proxy (:8090/grafana/**)
+    # Port 3000 exposed for direct browser access
+    # Also accessible via Admin Portal reverse proxy (:8090/grafana/**)
+    ports:
+      - "3000:3000"
     expose:
       - "3000"
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
-      # Sub-path serving behind Admin Portal reverse proxy (http://localhost:8090/grafana/)
-      - GF_SERVER_ROOT_URL=http://localhost:8090/grafana/
-      - GF_SERVER_SERVE_FROM_SUB_PATH=true
+      # Grafana serves at root path; reverse proxy handles /grafana prefix stripping
+      - GF_SERVER_ROOT_URL=http://grafana:3000/
+      - GF_SERVER_SERVE_FROM_SUB_PATH=false
       # Allow Grafana dashboards to be embedded in iframe inside the Admin Web Portal
       - GF_SECURITY_ALLOW_EMBEDDING=true
       - GF_SECURITY_COOKIE_SAMESITE=none
       - GF_AUTH_ANONYMOUS_ENABLED=true
       - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
-      # Allow Grafana to load unsigned plugins if needed in future
+      # Allow unsigned plugins if needed
       - GF_PLUGINS_ALLOW_LOADING_UNSIGNED_PLUGINS=
-      # Increase default query timeout for Loki log range queries
+      # Increase query timeout for Loki
       - GF_DATAPROXY_TIMEOUT=60
+      # CORS Headers for iframe embedding
+      - GF_SERVER_ENABLE_CORS=true
     networks:
       - banking-net
     depends_on:

@@ -69,7 +69,7 @@ public class LedgerMutationAudit {
     @Column(name = "mutation_amount", nullable = false, precision = 18, scale = 4)
     private BigDecimal mutationAmount;
 
-    @Column(name = "currency_code", nullable = false, length = 3)
+    @Column(name = "currency_code", nullable = false, columnDefinition = "CHAR(3)")
     private String currencyCode;
 
     // DEBIT | CREDIT — determines which side of the double-entry this row is

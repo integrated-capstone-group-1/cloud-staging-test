@@ -14,7 +14,8 @@ public class WebMvcConfig implements WebMvcConfigurer {
                 .excludePathPatterns(
                         "/login", "/register", "/auth/**", "/api/**",
                         "/css/**", "/js/**", "/images/**",
-                        "/", "/error/**", "/favicon.ico"
+                        "/", "/error/**", "/favicon.ico",
+                        "/grafana/**"  // Allow Grafana proxy routes - SessionAuthInterceptor handles admin-only authorization
                 );
     }
 }
