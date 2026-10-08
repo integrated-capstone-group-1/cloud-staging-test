@@ -60,6 +60,10 @@ public class LedgerMutationAudit {
     @Column(name = "account_id", nullable = false, length = 36)
     private String accountId;
 
+    // 1-indexed leg sequence per txn_id; UNIQUE (txn_id, leg_no) per 03_postgres_deltas.sql
+    @Column(name = "leg_no", nullable = false)
+    private Integer legNo;
+
     // NUMERIC(18,4) — matches NUMBER(18,4) on the Oracle side so the two
     // legs can never disagree on precision
     @Column(name = "mutation_amount", nullable = false, precision = 18, scale = 4)

@@ -22,6 +22,11 @@ public interface LedgerMutationAuditRepository extends JpaRepository<LedgerMutat
     // Used by TransactionController GET /{txnId} to surface audit legs
     List<LedgerMutationAudit> findByTxnId(String txnId);
 
+    // Used for idempotent deduplication before appending legs
+    boolean existsByTxnId(String txnId);
+
+    boolean existsByTxnIdAndLegNo(String txnId, Integer legNo);
+
     // Used by reconciliation queries to find all legs for an account
     List<LedgerMutationAudit> findByAccountId(String accountId);
 }
