@@ -34,7 +34,7 @@ flowchart TD
 | Workstream | Owner | Subsystems & Boundaries Tested | Primary Task Cards | Mapped Jira Issues |
 |:---|:---|:---|:---|:---|
 | **Workstream 1** | **Yancey** | `accounts-service` $\leftrightarrow$ Oracle XE `CBS` schema & `reconciliation-service` read replica. | `T-002`, `T-012` | `DIG-3`, `DIG-4`, `DIG-52`, `DIG-66`, `DIG-84`, `DIG-85`, `DIG-112` |
-| **Workstream 2** | **Rohan** | `transaction-service` $\leftrightarrow$ `accounts-service` (Feign) & `forex-service` (Quotes & CAS claims). | `T-001`, `T-007` | `DIG-14`, `DIG-15`, `DIG-73`, `DIG-74`, `DIG-75`, `DIG-80`, `DIG-83` |
+| **Workstream 2** | **Rohan** | `orchestrator-service` (:8089) $\leftrightarrow$ `transaction-service` (:8084) $\leftrightarrow$ `accounts-service` (Feign) & `forex-service` (Quotes & CAS). | `T-001`, `T-007` | `DIG-14`, `DIG-15`, `DIG-70`, `DIG-71`, `DIG-73`, `DIG-74`, `DIG-75`, `DIG-80`, `DIG-83` |
 | **Workstream 3** | **PK** | `login-service` / `registration-service` $\leftrightarrow$ `accounts-service`, `risk-engine` & `frontend-web`. | `T-003`, `T-006`, `T-011` | `DIG-6`, `DIG-7`, `DIG-12`, `DIG-21`, `DIG-22`, `DIG-23`, `DIG-50`, `DIG-54`, `DIG-90` |
 | **Workstream 4** | **Russel** | `api-gateway` (:8080) $\leftrightarrow$ Downstream Microservices, Redis 7, and Zero-Trust Network. | `T-005`, `T-014` | `DIG-8`, `DIG-25`, `DIG-26`, `DIG-28`, `DIG-30`, `DIG-31` |
 | **Workstream 5** | **Gym** | Oracle `outbox_master` $\leftrightarrow$ Kafka Broker $\leftrightarrow$ `AuditLedgerConsumer` $\leftrightarrow$ PostgreSQL Audit DB. | `T-004`, `T-014` | `DIG-5`, `DIG-20`, `DIG-32`, `DIG-88`, `DIG-89` |
@@ -162,8 +162,52 @@ docker compose up -d oracle-db postgres-db redis forex-service accounts-service 
       }'
     ```
   * *Step 2:* Verify HTTP `200 OK` with status `POSTED`.
-  * *Step 3:* Check `funding_breakdown`: direct debited €10.00, converted shortfall €40.00, PHP debited ₱2,517.20 (₱2,480.00 principal + 1.5% FX spread ₱37.20).
   * *Step 4:* Verify CBS settlement executed all 6 legs atomically.
+* **SEAM-ROH-05: Channel Orchestrator Payment Forwarding & Ownership Enforcement Seam (`DIG-14`, `DIG-70`, `BR-01`)**
+  * *Step 1:* Run Channel Orchestrator payment and ownership integration tests:
+    ```bash
+    ./mvnw test -pl orchestrator-service "-Dtest=ChannelOrchestratorIntegrationTest#shouldOrchestratePaymentJourneyEndToEnd,ChannelOrchestratorIntegrationTest#shouldBlockUnauthorizedPaymentBeforeReachingCoreLedger"
+    ```
+    Live curl equivalent (Forwarding to Transaction Service):
+    ```bash
+    curl -X POST http://localhost:8089/api/v1/payments \
+      -H "Content-Type: application/json" \
+      -H "Authorization: Bearer <customer-jwt>" \
+      -H "X-Idempotency-Key: idemp-orch-001" \
+      -d '{
+        "sender_account_id": "acct-juan-eur-01",
+        "recipient_account_id": "acct-maria-eur-01",
+        "amount": 50.00,
+        "currency": "EUR"
+      }'
+    ```
+  * *Step 2:* Verify caller identity and account ownership check (`cust-user-101` owns `acct-juan-eur-01`).
+  * *Step 3:* Verify orchestrator forwards valid authenticated payment to Transaction Service (`:8084`) and returns `200 OK` with `status: POSTED` and `transaction_id`.
+  * *Step 4:* Attempt unauthorized payment from an unowned sender account (`acct-victim-php-01`).
+  * *Step 5:* Assert orchestrator rejects with `403 Forbidden` (`Access denied: You do not own account`) before reaching Transaction Service or core ledger.
+* **SEAM-ROH-06: Backend-for-Frontend (BFF) Home Dashboard Aggregation Seam (`DIG-39`, `DIG-41`)**
+  * *Step 1:* Run BFF Home Dashboard aggregation test:
+    ```bash
+    ./mvnw test -pl orchestrator-service "-Dtest=ChannelOrchestratorIntegrationTest#shouldAggregateHomeDashboardAcrossAllThreeServices"
+    ```
+    Live curl equivalent:
+    ```bash
+    curl -s http://localhost:8089/api/v1/dashboard/home \
+      -H "Authorization: Bearer <customer-jwt>"
+    ```
+  * *Step 2:* Assert `orchestrator-service` aggregates accounts from `accounts-service` (`:8083`), recent payments from `transaction-service` (`:8084`), and notifications from `notification-service` (`:8085`) into a single unified JSON response in 1 network roundtrip.
+* **SEAM-ROH-07: Multi-Currency Pockets Presentation & Ownership Seam (`DIG-71`, `BR-01`)**
+  * *Step 1:* Run pockets query test:
+    ```bash
+    ./mvnw test -pl orchestrator-service "-Dtest=ChannelOrchestratorIntegrationTest#shouldRetrieveMultiCurrencyPockets"
+    ```
+    Live curl equivalent:
+    ```bash
+    curl -s http://localhost:8089/api/v1/accounts/acct-php-01/pockets \
+      -H "Authorization: Bearer <customer-jwt>"
+    ```
+  * *Step 2:* Assert caller ownership is verified before querying multi-currency pockets.
+  * *Step 3:* Assert JSON array contains all customer multi-currency accounts (e.g. PHP, EUR, USD) with accurate balances and currency codes.
 
 ---
 
