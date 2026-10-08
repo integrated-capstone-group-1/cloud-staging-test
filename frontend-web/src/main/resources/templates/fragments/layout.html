@@ -3,7 +3,7 @@
 <head th:fragment="head(title)">
     <meta charset="UTF-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1"/>
-    <title th:text="${title} + ' · Core Retail Banking &amp; Ledger'">Core Retail Banking &amp; Ledger</title>
+    <title th:text="${title} + ' · North South Bank'">North South Bank</title>
     <!-- Early theme init to prevent flash of light mode -->
     <script>
         (function() {
@@ -53,7 +53,7 @@
     <div class="container-fluid">
         <a class="navbar-brand" th:href="${session.user != null && session.user.isAdmin() ? '/admin/dashboard' : '/'}">
             <i class="bi bi-bank2 text-primary"></i>
-            <span>Core Retail Ledger</span>
+            <span>North South Bank</span>
             <span class="badge bg-primary ms-1 small" style="font-size: 0.65rem; letter-spacing: 0.5px;">ADMIN PORTAL</span>
         </a>
 
@@ -149,8 +149,8 @@
     <div class="container text-center">
         <div class="row align-items-center">
             <div class="col-md-6 text-md-start mb-2 mb-md-0">
-                <strong>Core Retail Ledger &amp; Balance Mutation Engine</strong>
-                <div class="small text-muted">Multi-Service Banking Platform · Java 21 · Spring Boot 3 · Thymeleaf</div>
+                <strong>North South Bank · Operations Command &amp; Ledger Engine</strong>
+                <div class="small text-muted">North South Bank Platform · Java 21 · Spring Boot 3 · Thymeleaf</div>
             </div>
             <div class="col-md-6 text-md-end">
                 <span th:if="${backendMode == 'gateway'}" class="badge bg-success text-white border me-1"><i class="bi bi-broadcast-pin me-1"></i>Live Gateway (<span th:text="${gatewayUrl}">http://localhost:8080</span>)</span>

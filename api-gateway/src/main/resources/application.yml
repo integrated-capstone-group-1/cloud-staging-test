@@ -47,7 +47,7 @@ spring:
         - id: accounts-service
           uri: http://accounts-service:8083
           predicates:
-            - Path=/api/accounts/**
+            - Path=/api/accounts/**,/api/v1/accounts/**,/api/recipients/**,/api/v1/recipients/**
           filters:
             - JwtAuthentication
 
@@ -78,7 +78,7 @@ spring:
         - id: transaction-service
           uri: http://transaction-service:8084
           predicates:
-            - Path=/api/v1/ledger/**
+            - Path=/api/v1/ledger/**,/api/v1/payments/**,/api/v1/cards/**,/api/v1/transactions/**,/v1/transactions/**,/api/v1/statements/**,/v1/statements/**,/api/v1/admin/**
           filters:
             - JwtAuthentication
 
@@ -97,7 +97,7 @@ spring:
         - id: reconciliation-service
           uri: http://reconciliation-service:8086
           predicates:
-            - Path=/api/recon/**
+            - Path=/api/recon/**,/api/v1/recon/**
           filters:
             - JwtAuthentication
 

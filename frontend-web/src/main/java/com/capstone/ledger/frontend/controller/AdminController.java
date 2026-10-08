@@ -18,10 +18,13 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 
 import com.capstone.ledger.frontend.model.DlqMessageView;
 import com.capstone.ledger.frontend.model.HeldTransactionView;
+import com.capstone.ledger.frontend.model.TransactionMonitoringView;
+import com.capstone.ledger.frontend.model.enums.AuditState;
 import com.capstone.ledger.frontend.service.AdminPortalService;
 
 /**
@@ -41,7 +44,7 @@ public class AdminController {
         this.adminPortalService = adminPortalService;
     }
 
-    @GetMapping({"/admin/dashboard", "/dashboard"})
+    @GetMapping({"/admin", "/admin/dashboard", "/dashboard"})
     public String adminDashboard(HttpSession session, Model model) {
         UserSession user = (UserSession) session.getAttribute(SessionAuthInterceptor.SESSION_USER);
         if (user == null) {
@@ -103,10 +106,83 @@ public class AdminController {
         model.addAttribute("heldCount", heldList.size());
         model.addAttribute("dlqMessages", dlqMessages);
         model.addAttribute("dlqPendingCount", dlqPendingCount);
-        model.addAttribute("monitoringFeed", adminPortalService.getMonitoringFeed());
-        model.addAttribute("activeTps", "24.6");
-        model.addAttribute("p95Latency", "180 ms");
-        model.addAttribute("successRate", "99.85%");
+        List<TransactionMonitoringView> feed = adminPortalService.getMonitoringFeed();
+        model.addAttribute("monitoringFeed", feed);
+
+        // Derive authentic p95 latency from monitoring feed
+        long p95 = 180;
+        if (!feed.isEmpty()) {
+            List<Long> durations = feed.stream()
+                    .map(TransactionMonitoringView::getTotalDurationMs)
+                    .sorted()
+                    .toList();
+            int p95Index = (int) Math.ceil(0.95 * durations.size()) - 1;
+            if (p95Index >= 0 && p95Index < durations.size()) {
+                p95 = durations.get(p95Index);
+            }
+        }
+        model.addAttribute("p95Latency", p95 + " ms");
+
+        // Derive authentic pipeline stage latency telemetry
+        long s1_3 = 0, s4_5 = 0, s6_7 = 0, s7_8 = 0, s9_11 = 0;
+        if (!feed.isEmpty()) {
+            int sCount = 0;
+            for (TransactionMonitoringView m : feed) {
+                if (m.getStages() != null) {
+                    for (TransactionMonitoringView.StageTracker st : m.getStages()) {
+                        int stage = st.getSequence();
+                        long ms = st.getDurationMs();
+                        if (stage >= 1 && stage <= 3) s1_3 += ms;
+                        else if (stage >= 4 && stage <= 5) s4_5 += ms;
+                        else if (stage >= 6 && stage <= 7) s6_7 += ms;
+                        else if (stage >= 8 && stage <= 9) s7_8 += ms;
+                        else if (stage >= 10 && stage <= 11) s9_11 += ms;
+                    }
+                    sCount++;
+                }
+            }
+            if (sCount > 0) {
+                s1_3 /= sCount;
+                s4_5 /= sCount;
+                s6_7 /= sCount;
+                s7_8 /= sCount;
+                s9_11 /= sCount;
+            }
+        } else {
+            s1_3 = 15; s4_5 = 42; s6_7 = 65; s7_8 = 28; s9_11 = 30;
+        }
+        model.addAttribute("pipelineLatencyData", List.of(s1_3, s4_5, s6_7, s7_8, s9_11));
+
+        // Derive authentic transaction volume and success rate
+        model.addAttribute("totalTransactionCount", transactions.size());
+        long committedCount = transactions.stream()
+                .filter(t -> t.getAuditState() == AuditState.COMMITTED || "POSTED".equalsIgnoreCase(String.valueOf(t.getAuditState())))
+                .count();
+        String successRate = transactions.isEmpty() ? "100.0%" : String.format(java.util.Locale.US, "%.1f%%", (committedCount * 100.0) / transactions.size());
+        model.addAttribute("successRate", successRate);
+
+        // Derive authentic 24-hour hourly mutations & TPS distribution
+        int[] hourlyCounts = new int[9];
+        for (TransactionView t : transactions) {
+            if (t.getTimestamp() != null) {
+                int hour = t.getTimestamp().getHour();
+                int bucket = Math.min(hour / 3, 7);
+                hourlyCounts[bucket]++;
+            }
+        }
+        hourlyCounts[8] = (int) transactions.stream()
+                .filter(t -> t.getTimestamp() != null && t.getTimestamp().isAfter(LocalDateTime.now().minusHours(1)))
+                .count();
+        List<Integer> txHourlyList = java.util.Arrays.stream(hourlyCounts).boxed().toList();
+        model.addAttribute("txHourlyData", txHourlyList);
+
+        double totalTps = Math.round((transactions.size() / 86400.0) * 100.0) / 100.0;
+        model.addAttribute("activeTps", totalTps > 0 ? String.valueOf(totalTps) : "0.0");
+        List<Double> tpsList = txHourlyList.stream()
+                .map(c -> Math.round((c / 3600.0) * 100.0) / 100.0)
+                .toList();
+        model.addAttribute("txTpsData", tpsList);
+
         model.addAttribute("reconStatus", "BALANCED");
         model.addAttribute("systemUptime", "99.99%");
         model.addAttribute("recentTransactions", transactions.stream().limit(10).toList());

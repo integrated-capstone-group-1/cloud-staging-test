@@ -78,6 +78,29 @@ class CardControllerTest {
     }
 
     @Test
+    @DisplayName("GET /api/v1/cards/customer/{customerId} returns customer cards for staff/admin")
+    void getCardsByCustomer_success() {
+        CardResponse card = CardResponse.builder()
+                .cardId(CARD_ID)
+                .maskedPan("4532-XXXX-XXXX-8821")
+                .expiryDate("12/28")
+                .cardStatus("ACTIVE")
+                .ecomEnabled(1)
+                .dailyLimit(new BigDecimal("50000.00"))
+                .build();
+
+        when(cardService.getCards(CUSTOMER_ID)).thenReturn(List.of(card));
+
+        ResponseEntity<ApiResponse<List<CardResponse>>> response = cardController.getCardsByCustomer(CUSTOMER_ID);
+
+        assertThat(response.getStatusCode().is2xxSuccessful()).isTrue();
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().data()).hasSize(1);
+        assertThat(response.getBody().data().get(0).getCardId()).isEqualTo(CARD_ID);
+        verify(cardService).getCards(CUSTOMER_ID);
+    }
+
+    @Test
     @DisplayName("PUT /api/v1/cards/{id}/status updates card status")
     void updateCardStatus_success() {
         CardStatusRequest request = new CardStatusRequest("FROZEN");
