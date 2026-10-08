@@ -26,13 +26,13 @@ To guarantee that all 7 engineers can execute non-functional tests simultaneousl
 ```mermaid
 flowchart TD
     subgraph NFRTracks["7 Non-Overlapping NFR Workstreams"]
-        GYM_Track["<b>Track 1: Gym (Platform Lead)</b><br/>Concurrency Races & JMeter Soak Suite<br/>(TS-01, TS-02, JMeter >=800 TPS, Soak)"]
-        RUS_Track["<b>Track 2: Russel (Cloud Lead)</b><br/>Graded Chaos & Zero-Trust Perimeter<br/>(CH-01, CH-02, CH-03 Port Cloaking, CH-04)"]
-        ROH_Track["<b>Track 3: Rohan (Channel Lead)</b><br/>Lifecycle Races & Sweeper Resilience<br/>(TS-04 Cancel Race, TS-05 Funding Race, CH-06, CH-08)"]
-        YAN_Track["<b>Track 4: Yancey (CBS Lead)</b><br/>Audit Immutability & Pool Exhaustion<br/>(TS-06 Trigger Stress, TS-07 Lock Precedence, HikariCP)"]
-        PK_Track["<b>Track 5: PK (Security Lead)</b><br/>Risk Engine Soak & DDoA Defense<br/>(Risk <=200ms Under Load, Brute Force, CH-09)"]
-        LAN_Track["<b>Track 6: Lanz (Mobile Lead)</b><br/>Client Network Degradation & Breaker<br/>(Packet Loss Simulation, Dio Breaker Tripping)"]
-        ANG_Track["<b>Track 7: Angge (Mobile UX Lead)</b><br/>Rapid Multi-Tap & UI Frame Rate Soak<br/>(Double-Tap Debouncing, 60 FPS Carousel Soak)"]
+        GYM_Track["Track 1 - Gym: Concurrency Races and JMeter Soak Suite"]
+        RUS_Track["Track 2 - Russel: Graded Chaos and Zero-Trust Perimeter"]
+        ROH_Track["Track 3 - Rohan: Lifecycle Races and Sweeper Resilience"]
+        YAN_Track["Track 4 - Yancey: Audit Immutability and Connection Pool Stress"]
+        PK_Track["Track 5 - PK: Risk Engine Soak and DDoA Defense"]
+        LAN_Track["Track 6 - Lanz: Client Network Degradation and Circuit Breaker"]
+        ANG_Track["Track 7 - Angge: Rapid Multi-Tap and UI Frame Rate Soak"]
     end
 ```
 

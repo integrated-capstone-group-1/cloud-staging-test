@@ -23,13 +23,13 @@ To allow all 7 team members to work completely in parallel without file conflict
 ```mermaid
 flowchart TD
     subgraph ParallelWorkstreams["7 Parallel Non-Overlapping Regression Workstreams"]
-        Y["<b>Yancey</b><br/>CBS Core Invariants & Database Guards<br/>(Oracle XE, Locks, Holds, Trigger Immutability)"]
-        R["<b>Rohan</b><br/>Transaction Lifecycle, Sagas & FX<br/>(CAS Claim, 5s Cancel Window, Idempotency Replay)"]
-        P["<b>PK</b><br/>Identity, Risk Engine & Admin Security<br/>(BCrypt, JWT TTL, Risk <=200ms SLA, Dynamic Reload)"]
-        RU["<b>Russel</b><br/>Perimeter Gateway & Header Sanitization<br/>(Port Cloaking, Header Stripping, Route Blocking)"]
-        G["<b>Gym</b><br/>Messaging Bus, Caching & Load Invariants<br/>(Kafka Retry/DLQ, Outbox Relay, JMeter Race TS-01)"]
-        L["<b>Lanz</b><br/>Mobile Core Client & Network Contracts<br/>(Dio JWT Injection, KeyStore, Client Breaker)"]
-        A["<b>Angge</b><br/>Mobile UI State & Input Validation<br/>(PIN Pad, Shortfall Timer, Card Toggle Widgets)"]
+        Y["Yancey: CBS Invariants and DB Guards (Locks, Holds, Triggers)"]
+        R["Rohan: Transaction Lifecycle, CAS Sagas and FX Quotes"]
+        P["PK: Identity, Risk SLA under 200ms and Admin Security"]
+        RU["Russel: Gateway Perimeter, Header Stripping and Port Cloaking"]
+        G["Gym: Messaging Bus, Kafka DLQ and JMeter Race Load"]
+        L["Lanz: Mobile Core Dio Client, KeyStore and Circuit Breaker"]
+        A["Angge: Mobile UI Widgets, PIN Keypad and Shortfall Timer"]
     end
 ```
 

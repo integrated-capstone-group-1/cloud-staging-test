@@ -25,13 +25,13 @@ To allow all 7 team members to write and execute E2E test journeys concurrently 
 ```mermaid
 flowchart TD
     subgraph E2ETracks["7 Non-Overlapping E2E Functional Tracks"]
-        PK_Track["<b>Track 1: PK</b><br/>Auth, Onboarding & Staff Admin Workflows<br/>(Journeys E2E-01, E2E-05, E2E-06)"]
-        ROH_Track["<b>Track 2: Rohan</b><br/>Payments, FX Shortfall & CAS Sagas<br/>(Journeys E2E-02, E2E-03, E2E-04)"]
-        YAN_Track["<b>Track 3: Yancey</b><br/>CBS Ledgers, Recon & Batch Processing<br/>(Journeys E2E-07, E2E-08)"]
-        RUS_Track["<b>Track 4: Russel</b><br/>Edge Perimeter Ingress & Security Routing<br/>(Journey E2E-09)"]
-        GYM_Track["<b>Track 5: Gym</b><br/>Async Event Bus & Audit DLQ Lifecycle<br/>(Journey E2E-10)"]
-        LAN_Track["<b>Track 6: Lanz</b><br/>Mobile Client Network Integration Journeys<br/>(Journey E2E-11)"]
-        ANG_Track["<b>Track 7: Angge</b><br/>Mobile UI Screen Flow & User Walkthrough<br/>(Journey E2E-12)"]
+        PK_Track["Track 1 - PK: Auth, Onboarding and Staff Admin Workflows"]
+        ROH_Track["Track 2 - Rohan: Payments, FX Shortfall and CAS Sagas"]
+        YAN_Track["Track 3 - Yancey: CBS Ledgers, Recon and Batch Processing"]
+        RUS_Track["Track 4 - Russel: Edge Perimeter Ingress and Security Routing"]
+        GYM_Track["Track 5 - Gym: Async Event Bus and Audit DLQ Lifecycle"]
+        LAN_Track["Track 6 - Lanz: Mobile Client Network Integration Journeys"]
+        ANG_Track["Track 7 - Angge: Mobile UI Screen Flow and User Walkthrough"]
     end
 ```
 

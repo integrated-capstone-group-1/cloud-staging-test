@@ -451,7 +451,7 @@ flowchart TD
     end
 
     subgraph CH02["CH-02: Risk Engine Kill"]
-        C2_Inj["docker stop risk-engine"] --> C2_SLA["TimeLimiter SLA triggers in <= 200ms"]
+        C2_Inj["docker stop risk-engine"] --> C2_SLA["TimeLimiter SLA triggers in under 200ms"]
         C2_SLA --> C2_Fail["Payment fails closed with 503 SECURITY_CHECK_UNAVAILABLE"]
         C2_Fail --> C2_State["Zero partial debits written in Oracle"]
     end
@@ -462,9 +462,9 @@ flowchart TD
     end
 
     subgraph CH04["CH-04: Postgres Audit Outage"]
-        C4_Inj["docker stop postgres-audit-db"] --> C4_Cont["Oracle payments & Forex continue normally"]
+        C4_Inj["docker stop postgres-audit-db"] --> C4_Cont["Oracle payments and Forex continue normally"]
         C4_Cont --> C4_Pause["Kafka Audit Consumer pauses and retries with backoff"]
-        C4_Pause --> C4_Rec["docker start postgres-audit-db -> 100% audit parity restored"]
+        C4_Pause --> C4_Rec["docker start postgres-audit-db restores 100% parity"]
     end
 ```
 

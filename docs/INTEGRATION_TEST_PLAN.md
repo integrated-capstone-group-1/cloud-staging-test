@@ -21,13 +21,13 @@ To guarantee that all 7 engineers can execute integration testing simultaneously
 ```mermaid
 flowchart TD
     subgraph ParallelIntegration["7 Non-Overlapping Integration Workstreams"]
-        W1["<b>Workstream 1: Yancey</b><br/>CBS Engine & Oracle XE Seams<br/>(Row Locks, Ledger Entries, Holds Engine)"]
-        W2["<b>Workstream 2: Rohan</b><br/>Channel Orchestrator & FX Seams<br/>(CoreBankingClient Feign, Quotes, CAS State Claim)"]
-        W3["<b>Workstream 3: PK</b><br/>Identity, Risk & Admin Portal Seams<br/>(Registration KYC, Risk SLA <=200ms, Admin REST)"]
-        W4["<b>Workstream 4: Russel</b><br/>API Gateway & Perimeter Seams<br/>(Fast-Path JWT, Rate Limiter, Port Cloaking)"]
-        W5["<b>Workstream 5: Gym</b><br/>Event Bus, Outbox & Audit Seams<br/>(Kafka Polling Relay, Audit Consumer, DLQ Routing)"]
-        W6["<b>Workstream 6: Lanz</b><br/>Mobile Core Client & Network Seams<br/>(Dio Client, KeyStore, Idempotency-Key Interceptor)"]
-        W7["<b>Workstream 7: Angge</b><br/>Mobile UI State & Widget Seams<br/>(Pockets Carousel, Shortfall Sheet, Card Controls)"]
+        W1["Workstream 1 - Yancey: CBS Engine and Oracle XE Seams"]
+        W2["Workstream 2 - Rohan: Channel Orchestrator and FX Seams"]
+        W3["Workstream 3 - PK: Identity, Risk SLA and Admin Portal Seams"]
+        W4["Workstream 4 - Russel: API Gateway and Perimeter Seams"]
+        W5["Workstream 5 - Gym: Event Bus, Outbox Relay and Audit Seams"]
+        W6["Workstream 6 - Lanz: Mobile Core Client and Network Seams"]
+        W7["Workstream 7 - Angge: Mobile UI State and Widget Seams"]
     end
 ```
 
