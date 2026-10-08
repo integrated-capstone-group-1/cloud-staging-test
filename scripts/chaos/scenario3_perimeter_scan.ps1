@@ -27,6 +27,7 @@ $InternalPorts = @(
     @{ Port = 8086; Name = "reconciliation-service" },
     @{ Port = 8087; Name = "forex-service" },
     @{ Port = 8088; Name = "risk-engine" },
+    @{ Port = 8089; Name = "orchestrator-service" },
     @{ Port = 3000; Name = "Grafana Direct Port" },
     @{ Port = 9090; Name = "Prometheus Direct Port" },
     @{ Port = 3100; Name = "Loki Direct Port" }

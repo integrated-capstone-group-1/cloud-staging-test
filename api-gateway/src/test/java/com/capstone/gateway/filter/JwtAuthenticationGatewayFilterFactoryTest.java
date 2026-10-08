@@ -130,4 +130,56 @@ class JwtAuthenticationGatewayFilterFactoryTest {
         assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
         assertThat(exchange.getResponse().getHeaders().getFirst("X-Auth-Error")).isEqualTo("Invalid or expired token");
     }
+
+    @Test
+    @DisplayName("REG-RUS-03: Revoked token in Redis is rejected with HTTP 401 and TOKEN_REVOKED")
+    void shouldRejectBlacklistedToken() {
+        String token = Jwts.builder()
+                .subject("cust-uuid-12345")
+                .claim("email", "john.doe@example.com")
+                .issuedAt(new Date())
+                .expiration(new Date(System.currentTimeMillis() + 60_000))
+                .signWith(signingKey)
+                .compact();
+
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.get("token:" + token)).thenReturn(Mono.just("BLACKLISTED"));
+
+        MockServerHttpRequest request = MockServerHttpRequest.get("/api/accounts/123")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .build();
+        MockServerWebExchange exchange = MockServerWebExchange.from(request);
+
+        StepVerifier.create(filter.filter(exchange, chain))
+                .verifyComplete();
+
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(exchange.getResponse().getHeaders().getFirst("X-Auth-Error")).isEqualTo("TOKEN_REVOKED");
+    }
+
+    @Test
+    @DisplayName("REG-RUS-03: Redis outage during blacklist check fails closed with HTTP 401")
+    void shouldFailClosedWhenRedisUnavailable() {
+        String token = Jwts.builder()
+                .subject("cust-uuid-12345")
+                .claim("email", "john.doe@example.com")
+                .issuedAt(new Date())
+                .expiration(new Date(System.currentTimeMillis() + 60_000))
+                .signWith(signingKey)
+                .compact();
+
+        when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+        when(valueOperations.get("token:" + token)).thenReturn(Mono.error(new RuntimeException("Redis connection timed out")));
+
+        MockServerHttpRequest request = MockServerHttpRequest.get("/api/accounts/123")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .build();
+        MockServerWebExchange exchange = MockServerWebExchange.from(request);
+
+        StepVerifier.create(filter.filter(exchange, chain))
+                .verifyComplete();
+
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(exchange.getResponse().getHeaders().getFirst("X-Auth-Error")).contains("TOKEN_BLACKLIST_UNAVAILABLE");
+    }
 }
