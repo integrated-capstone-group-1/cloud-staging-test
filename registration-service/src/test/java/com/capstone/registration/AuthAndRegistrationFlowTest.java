@@ -133,4 +133,26 @@ class AuthAndRegistrationFlowTest {
         verify(appUserRepository, never()).save(any());
         verify(accountsServiceClient, never()).createAccount(any());
     }
+
+    @Test
+    @DisplayName("Delta 2: CBS primary account auto-provisioning failure aborts registration without Kafka publish")
+    void testRegistration_cbsAccountProvisioningFails_rollsBackAndThrowsException() {
+        when(customerRepository.existsByEmail(EMAIL)).thenReturn(false);
+        when(passwordEncoder.encode(PASSWORD)).thenReturn(HASHED_PASSWORD);
+        when(accountsServiceClient.createAccount(any(CreateAccountRequest.class)))
+                .thenThrow(new RuntimeException("CBS Accounts Service unavailable (Connection refused)"));
+
+        RegisterRequest request = new RegisterRequest(
+                "Maria", "Santos", EMAIL, "+63-917-123-4567",
+                LocalDate.of(1995, 3, 20), PASSWORD, "CUSTOMER",
+                "PASSPORT", "P1234567", "Manila, Philippines"
+        );
+
+        assertThatThrownBy(() -> registrationService.register(request))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Failed to auto-provision primary PHP account in CBS");
+
+        // Verify Kafka event was NOT published due to provisioning failure
+        verify(kafkaTemplate, never()).send(anyString(), anyString(), any());
+    }
 }

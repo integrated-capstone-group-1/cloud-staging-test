@@ -1,4 +1,3 @@
-
 package com.capstone.registration.service;
 
 import com.capstone.common.constants.KafkaTopics;
@@ -27,6 +26,8 @@ import java.util.UUID;
  * 
  * BR-16: Registration auto-provisions one primary PHP account per customer
  * BR-07: BCrypt password hashing
+ * Delta 1: Single-database fallback (Oracle XE) for customer_master and app_user_master
+ * Delta 2: Transactional rollback guarantee if CBS account creation fails
  */
 @Service
 @RequiredArgsConstructor
@@ -41,14 +42,11 @@ public class RegistrationService {
 
     /**
      * Atomically inserts into CUSTOMER_MASTER and APP_USER_MASTER,
-     * then auto-provisions one primary PHP pocket.
+     * and auto-provisions one primary PHP pocket in CBS.
      * 
-     * Both database inserts share the same @Transactional boundary — if either fails,
-     * Oracle rolls back both writes. Account provisioning is called AFTER the
-     * transaction commits to ensure the customer exists before creating accounts.
-     *
-     * created_by is set to "SYSTEM" for the self-registration flow; an admin
-     * flow would pass the caller's customerId.
+     * All writes participate in the @Transactional boundary — if CBS primary account
+     * provisioning fails, an IllegalStateException is thrown, rolling back customer
+     * and credential records cleanly (Delta 2: Transactional Rollback Guarantee).
      */
     @Transactional
     public RegisterResponse register(RegisterRequest request) {
@@ -90,13 +88,14 @@ public class RegistrationService {
         customerRepository.save(customer);
         appUserRepository.save(appUser);
 
-        // Kafka publish is outside the @Transactional boundary by design —
-        // we publish ONLY after the DB commit succeeds. If Kafka is down,
-        // the registration is still durable in Oracle; a retry/outbox pattern
-        // can replay the event later.
+        // BR-16 / Delta 2: Auto-provision primary PHP pocket in CBS.
+        // If CBS provisioning fails, exception rolls back customer and app_user records cleanly.
+        provisionPrimaryAccount(customerId);
+
         RegisterResponse response = new RegisterResponse(
                 customerId, customer.getFirstName(), customer.getLastName(), customer.getEmail());
 
+        // Publish customer.registered event ONLY after DB writes and account provisioning succeed
         kafkaTemplate.send(KafkaTopics.CUSTOMER_REGISTERED, customerId, response)
                 .whenComplete((result, ex) -> {
                     if (ex != null) {
@@ -105,10 +104,6 @@ public class RegistrationService {
                         log.debug("Published customer.registered for customerId={}", customerId);
                     }
                 });
-
-        // BR-16: Auto-provision primary PHP pocket AFTER customer is created
-        // This is called outside the @Transactional to ensure customer exists
-        provisionPrimaryAccount(customerId);
 
         return response;
     }
@@ -128,16 +123,16 @@ public class RegistrationService {
             );
 
             AccountDTO account = accountsServiceClient.createAccount(accountRequest);
+            if (account == null || account.accountId() == null) {
+                throw new IllegalStateException("AccountsServiceClient returned null account for customerId=" + customerId);
+            }
             log.info("Auto-provisioned primary PHP account for customerId={}, accountId={}",
                     customerId, account.accountId());
 
         } catch (Exception e) {
-            // Log but don't fail registration if account provisioning fails.
-            // Account can be created manually later or via admin retry.
             log.error("Failed to auto-provision primary PHP account for customerId={}. " +
-                    "Registration successful but account provisioning pending. Error: {}",
-                    customerId, e.getMessage(), e);
+                    "Rolling back registration transaction: {}", customerId, e.getMessage());
+            throw new IllegalStateException("Failed to auto-provision primary PHP account in CBS: " + e.getMessage(), e);
         }
     }
 }
-
