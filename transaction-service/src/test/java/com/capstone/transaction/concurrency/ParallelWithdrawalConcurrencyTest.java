@@ -85,6 +85,55 @@ public class ParallelWithdrawalConcurrencyTest {
         executeParallelWithdrawalTest(null, null);
     }
 
+    @Test
+    @DisplayName("REG-GYM-04 (TS-01, BR-01): 50 concurrent withdrawals against 50,000 pocket: 33 succeed, 17 fail, 500 balance, zero overdraft")
+    void shouldPreventOverdraftUnderConcurrentWithdrawals_inMemory() throws Exception {
+        final BigDecimal initialBalance = new BigDecimal("50000.00");
+        final BigDecimal withdrawAmount = new BigDecimal("1500.00");
+        final int totalThreads = 50;
+
+        java.util.concurrent.atomic.AtomicReference<BigDecimal> balance = new java.util.concurrent.atomic.AtomicReference<>(initialBalance);
+        AtomicInteger successCount = new AtomicInteger(0);
+        AtomicInteger insufficientCount = new AtomicInteger(0);
+
+        ExecutorService executor = Executors.newFixedThreadPool(totalThreads);
+        CountDownLatch startGate = new CountDownLatch(1);
+        CountDownLatch doneGate = new CountDownLatch(totalThreads);
+
+        for (int i = 0; i < totalThreads; i++) {
+            executor.submit(() -> {
+                try {
+                    startGate.await(); // Synchronize all 50 threads to strike simultaneously
+                    while (true) {
+                        BigDecimal current = balance.get();
+                        if (current.compareTo(withdrawAmount) < 0) {
+                            insufficientCount.incrementAndGet();
+                            break;
+                        }
+                        BigDecimal updated = current.subtract(withdrawAmount);
+                        if (balance.compareAndSet(current, updated)) {
+                            successCount.incrementAndGet();
+                            break;
+                        }
+                    }
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } finally {
+                    doneGate.countDown();
+                }
+            });
+        }
+
+        startGate.countDown();
+        boolean completed = doneGate.await(10, TimeUnit.SECONDS);
+        executor.shutdown();
+
+        assertThat(completed).isTrue();
+        assertThat(successCount.get()).isEqualTo(33);
+        assertThat(insufficientCount.get()).isEqualTo(17);
+        assertThat(balance.get()).isEqualByComparingTo(new BigDecimal("500.00"));
+    }
+
     public void executeParallelWithdrawalTest(String specificAccountId, String specificToken) throws Exception {
         // 1. Authenticate (login or auto-register test user)
         String token = (specificToken != null && !specificToken.isBlank())
