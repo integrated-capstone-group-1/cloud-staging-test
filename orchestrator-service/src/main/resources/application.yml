@@ -1,0 +1,30 @@
+server:
+  port: 8089
+
+spring:
+  application:
+    name: orchestrator-service
+
+jwt:
+  secret: ${JWT_SECRET:CapstoneBankingSuperSecretSigningKeyMustBe256BitsLong!}
+
+# Downstream Tier 4 Core and Tier 3 Peer Service Endpoints
+# ponytail: Simple URL properties read by RestClient rather than service discovery registry
+services:
+  accounts-url: ${ACCOUNTS_SERVICE_URL:http://localhost:8083}
+  transaction-url: ${TRANSACTION_SERVICE_URL:http://localhost:8084}
+  notification-url: ${NOTIFICATION_SERVICE_URL:http://localhost:8085}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    com.capstone.orchestrator: DEBUG
+
