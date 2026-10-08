@@ -3,6 +3,7 @@ package com.capstone.transaction.service;
 import com.capstone.common.dto.CoreSettlementRequest;
 import com.capstone.common.dto.CoreSettlementResponse;
 import com.capstone.common.dto.HoldResponse;
+import com.capstone.common.exception.IdempotencyConflictException;
 import com.capstone.common.exception.SecurityCheckUnavailableException;
 import com.capstone.transaction.client.CoreBankingClient;
 import com.capstone.transaction.client.RiskScreeningClient;
@@ -51,7 +52,7 @@ class PaymentOrchestratorTest {
 
     @BeforeEach
     void setUp() {
-        when(txnMasterRepository.save(any(TransactionMaster.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        lenient().when(txnMasterRepository.save(any(TransactionMaster.class))).thenAnswer(invocation -> invocation.getArgument(0));
     }
 
     @Test
@@ -184,5 +185,70 @@ class PaymentOrchestratorTest {
         assertThat(response.getHoldId()).isEqualTo("hold-8812-uuid");
         verify(lifecycleService).markReserved(anyString(), eq("hold-8812-uuid"));
         verify(coreBankingClient, never()).settle(any());
+    }
+
+    @Test
+    @DisplayName("REG-ROH-01: Replaying identical request with duplicate idempotency key returns cached response")
+    void shouldReplayResponseOnDuplicateKey() {
+        PaymentRequest request = PaymentRequest.builder()
+                .recipientAccountId("acct-maria-eur-01")
+                .amount(new BigDecimal("50.0000"))
+                .currency("EUR")
+                .senderAccountId("acct-juan-eur-01")
+                .build();
+
+        TransactionMaster cachedTxn = TransactionMaster.builder()
+                .txnId("txn-cached-001")
+                .customerId("cust-user-001")
+                .creditAccountId("acct-maria-eur-01")
+                .mutationAmount(new BigDecimal("50.0000"))
+                .currencyCode("EUR")
+                .txnStatus("POSTED")
+                .stage("COMPLETED")
+                .coreReferenceId("FT2627800001")
+                .createdAt(LocalDateTime.now())
+                .build();
+
+        when(txnMasterRepository.findByCustomerIdAndIdempotencyKey("cust-user-001", "idemp-dup-key"))
+                .thenReturn(Optional.of(cachedTxn));
+
+        PaymentResponse response = paymentOrchestrator.processPayment(request, "idemp-dup-key", "cust-user-001");
+
+        assertThat(response).isNotNull();
+        assertThat(response.getStatus()).isEqualTo("POSTED");
+        assertThat(response.getTransactionId()).isEqualTo("txn-cached-001");
+        assertThat(response.getCoreReferenceId()).isEqualTo("FT2627800001");
+        verifyNoInteractions(riskScreeningClient);
+        verifyNoInteractions(coreBankingClient);
+    }
+
+    @Test
+    @DisplayName("REG-ROH-01: Duplicate idempotency key with modified payload throws 409 IdempotencyConflictException")
+    void shouldRejectModifiedPayloadWithSameKey() {
+        PaymentRequest request = PaymentRequest.builder()
+                .recipientAccountId("acct-maria-eur-01")
+                .amount(new BigDecimal("100.0000")) // Modified amount (was 50.0000)
+                .currency("EUR")
+                .senderAccountId("acct-juan-eur-01")
+                .build();
+
+        TransactionMaster cachedTxn = TransactionMaster.builder()
+                .txnId("txn-cached-001")
+                .customerId("cust-user-001")
+                .creditAccountId("acct-maria-eur-01")
+                .mutationAmount(new BigDecimal("50.0000"))
+                .currencyCode("EUR")
+                .txnStatus("POSTED")
+                .build();
+
+        when(txnMasterRepository.findByCustomerIdAndIdempotencyKey("cust-user-001", "idemp-dup-key"))
+                .thenReturn(Optional.of(cachedTxn));
+
+        assertThatThrownBy(() -> paymentOrchestrator.processPayment(request, "idemp-dup-key", "cust-user-001"))
+                .isInstanceOf(IdempotencyConflictException.class)
+                .hasMessageContaining("PAYLOAD_MISMATCH");
+
+        verifyNoInteractions(riskScreeningClient);
+        verifyNoInteractions(coreBankingClient);
     }
 }

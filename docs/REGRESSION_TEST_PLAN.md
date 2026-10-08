@@ -82,33 +82,33 @@ flowchart TD
 
 #### Regression Test Procedures:
 * **REG-ROH-01: Idempotency-Key Response Replay Invariant (`BR-05`)**
-  * *Objective:* Ensure replaying an identical request returns the cached response without double posting.
-  * *Step 1:* Run `./mvnw test -pl transaction-service -Dtest=PaymentOrchestratorTest#shouldReplayResponseOnDuplicateKey`.
-  * *Step 2:* Verify: First request returns `200 POSTED`. Immediate second request with identical `X-Idempotency-Key` and payload returns identical `200 POSTED` from Redis/DB cache.
-  * *Step 3:* Run `./mvnw test -pl transaction-service -Dtest=PaymentOrchestratorTest#shouldRejectModifiedPayloadWithSameKey`.
-  * *Step 4:* Verify: Second request with identical key but different amount returns `409 Conflict` or `422`.
+  * *Objective:* Ensure replaying an identical request returns the cached response without double posting, and modified payload with same key is rejected.
+  * *Step 1:* Run `mvn test -pl transaction-service "-Dtest=PaymentOrchestratorTest#shouldReplayResponseOnDuplicateKey"`.
+  * *Step 2:* Verify: Immediate second request with identical `X-Idempotency-Key` and payload returns identical `200 POSTED` from cache without re-invoking risk or CBS.
+  * *Step 3:* Run `mvn test -pl transaction-service "-Dtest=PaymentOrchestratorTest#shouldRejectModifiedPayloadWithSameKey"`.
+  * *Step 4:* Verify: Second request with identical key but modified amount throws `409 Conflict` (`IdempotencyConflictException`).
 * **REG-ROH-02: 7-Status CAS Forward-Only State Machine (`BR-30`)**
   * *Objective:* Ensure transactions only progress along valid state transitions (`INITIATED` $\to$ `AUTHORIZED` $\to$ `PROCESSING` $\to$ `POSTED`).
-  * *Step 1:* Run `./mvnw test -pl transaction-service -Dtest=TransactionLifecycleTest#shouldEnforceCasClaimOnProcessing`.
-  * *Step 2:* Verify SQL assertion executes:
+  * *Step 1:* Run `mvn test -pl transaction-service "-Dtest=TransactionLifecycleTest#shouldClaimAuthorizedForSettlement"`.
+  * *Step 2:* Verify CAS assertion executes:
     ```sql
     UPDATE transaction_master SET txn_status = 'PROCESSING' 
     WHERE txn_id = ? AND txn_status = 'AUTHORIZED'
     ```
-  * *Step 3:* Assert that if updated rows == 0, processing aborts immediately.
+  * *Step 3:* Assert that if updated rows == 1, CAS claim succeeds; if rows == 0, processing aborts immediately.
 * **REG-ROH-03: Hold Release on Cancelled `RESERVED` Status (`PLAN.md` Delta §3.2)**
   * *Objective:* Verify that cancelling a transaction in `RESERVED` status releases CBS held funds back to available balance.
-  * *Step 1:* Run `./mvnw test -pl transaction-service -Dtest=PaymentOrchestratorTest#shouldReleaseHoldWhenCancellingReservedTransaction`.
-  * *Step 2:* Assert `CoreBankingClient.releaseHold(holdId)` is invoked when `cancelPayment()` is called for `status == 'RESERVED'`.
+  * *Step 1:* Run `mvn test -pl transaction-service "-Dtest=TransactionLifecycleTest#shouldCancelWhenReservedAndReleaseHold"`.
+  * *Step 2:* Assert `AccountsServiceClient.releaseHold(debitAccountId, holdId)` is invoked when `cancelPayment()` is called for `status == 'RESERVED'`.
 * **REG-ROH-04: FX Stale Rate Guard & 30s Locked Quote Expiry (`BR-04`, `BR-26`)**
   * *Objective:* Ensure cross-currency payments reject expired quotes or rates older than 24h.
-  * *Step 1:* Run `./mvnw test -pl forex-service -Dtest=ForexQuoteAndSchedulerTest#shouldExpireQuoteAfter30Seconds`.
-  * *Step 2:* Run `./mvnw test -pl forex-service -Dtest=ForexQuoteAndSchedulerTest#shouldBlockStaleRatesOlderThan24Hours`.
+  * *Step 1:* Run `mvn test -pl forex-service "-Dtest=ForexQuoteAndSchedulerTest#ownPocketConversionWithQuoteAndExpiration"`.
+  * *Step 2:* Run `mvn test -pl forex-service "-Dtest=ForexQuoteAndSchedulerTest#quoteOlderThan24HoursReturnsFxRateStale"`.
   * *Step 3:* Assert quote verification returns `400 QUOTE_EXPIRED` after 30s and `422 FX_RATE_STALE` after 24h.
 * **REG-ROH-05: Stuck Transaction Sweeper Invariant (`DIG-86`)**
   * *Objective:* Ensure transactions stuck in `PROCESSING` are resolved without double posting.
-  * *Step 1:* Run `./mvnw test -pl transaction-service -Dtest=StuckTransactionSweeperTest`.
-  * *Step 2:* Verify: If CBS confirms core settlement exists $\implies$ updates to `POSTED`. If CBS has no record $\implies$ marks `FAILED`.
+  * *Step 1:* Run `mvn test -pl transaction-service "-Dtest=StuckTransactionSweeperTest"`.
+  * *Step 2:* Verify: If CBS confirms core settlement exists $\implies$ updates to `POSTED`. If CBS has no record (404) $\implies$ marks `FAILED`.
 
 ---
 
