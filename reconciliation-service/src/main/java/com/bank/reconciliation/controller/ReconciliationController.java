@@ -55,6 +55,13 @@ public class ReconciliationController {
         return ResponseEntity.ok(RunSummaryResponse.from(run, results));
     }
 
+    @PostMapping("/runs/balance")
+    public ResponseEntity<RunSummaryResponse> triggerBalanceReconciliation() {
+        ReconRunAudit run = reconciliationEngine.reconcileAccountBalances();
+        List<ReconResultAudit> results = reconResultAuditRepository.findByRunId(run.getRunId());
+        return ResponseEntity.ok(RunSummaryResponse.from(run, results));
+    }
+
     @GetMapping("/runs")
     public List<RunSummaryResponse> recentRuns(
             @RequestParam(name = "includeResults", defaultValue = "true") boolean includeResults) {

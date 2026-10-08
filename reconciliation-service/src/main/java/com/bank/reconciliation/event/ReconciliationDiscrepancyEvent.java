@@ -24,17 +24,21 @@ public record ReconciliationDiscrepancyEvent(
         OffsetDateTime detectedAt
 ) {
     public static ReconciliationDiscrepancyEvent from(ReconResultAudit result) {
+        BigDecimal variance = result.getVarianceAmount();
+        if (variance == null && result.getActualAmount() != null && result.getExpectedAmount() != null) {
+            variance = result.getActualAmount().subtract(result.getExpectedAmount());
+        }
         return new ReconciliationDiscrepancyEvent(
                 result.getResultId(),
                 result.getRunId(),
                 result.getTxnId(),
                 result.getAccountId(),
                 result.getExceptionType() != null ? result.getExceptionType().name() : null,
-                result.getSeverity().name(),
+                result.getSeverity() != null ? result.getSeverity().name() : "HIGH",
                 result.getExpectedAmount(),
                 result.getActualAmount(),
-                result.getVarianceAmount(),
-                result.getCreatedAt()
+                variance,
+                result.getCreatedAt() != null ? result.getCreatedAt() : OffsetDateTime.now()
         );
     }
 }
