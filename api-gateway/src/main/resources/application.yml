@@ -23,6 +23,27 @@ spring:
           predicates:
             - Path=/api/auth/**,/v1/auth/**,/api/v1/auth/**
 
+        - id: orchestrator-payments
+          uri: http://orchestrator-service:8089
+          predicates:
+            - Path=/api/v1/payments,/api/v1/payments/**
+          filters:
+            - JwtAuthentication
+
+        - id: orchestrator-dashboard
+          uri: http://orchestrator-service:8089
+          predicates:
+            - Path=/api/v1/dashboard/**
+          filters:
+            - JwtAuthentication
+
+        - id: orchestrator-pockets
+          uri: http://orchestrator-service:8089
+          predicates:
+            - Path=/api/v1/accounts/*/pockets,/api/v1/accounts/*/pockets/**
+          filters:
+            - JwtAuthentication
+
         - id: accounts-service
           uri: http://accounts-service:8083
           predicates:
