@@ -62,7 +62,8 @@ public class LedgerMutationAudit {
 
     // 1-indexed leg sequence per txn_id; UNIQUE (txn_id, leg_no) per 03_postgres_deltas.sql
     @Column(name = "leg_no", nullable = false)
-    private Integer legNo;
+    @Builder.Default
+    private Integer legNo = 1;
 
     // NUMERIC(18,4) — matches NUMBER(18,4) on the Oracle side so the two
     // legs can never disagree on precision
@@ -85,9 +86,11 @@ public class LedgerMutationAudit {
     private String auditState;
 
     @Column(name = "business_date")
-    private java.time.LocalDate businessDate;
+    @Builder.Default
+    private java.time.LocalDate businessDate = java.time.LocalDate.now();
 
     @Column(name = "created_at", nullable = false, updatable = false)
-    private Instant createdAt;
+    @Builder.Default
+    private Instant createdAt = Instant.now();
 }
 

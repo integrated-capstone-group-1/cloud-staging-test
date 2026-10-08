@@ -83,10 +83,13 @@ public class CrossCurrencyTimeoutService {
                             LedgerMutationAudit.builder()
                                     .txnId(txnId)
                                     .accountId(master.getDebitAccountId())
+                                    .legNo(1)
                                     .mutationAmount(master.getMutationAmount() != null ? master.getMutationAmount() : BigDecimal.ZERO)
+                                    .currencyCode(master.getCurrencyCode() != null ? master.getCurrencyCode() : "PHP")
                                     .mutationType("DEBIT")
                                     .txnType(master.getTxnType() != null ? master.getTxnType() : "TRANSFER")
                                     .auditState("ROLLED_BACK")
+                                    .businessDate(java.time.LocalDate.now())
                                     .createdAt(Instant.now())
                                     .build()
                     );

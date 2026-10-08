@@ -800,11 +800,13 @@ public class TransactionService {
                             LedgerMutationAudit.builder()
                                     .txnId(txnId)
                                     .accountId(accountId)
+                                    .legNo(1)
                                     .mutationAmount(amount)
                                     .currencyCode(currencyCode)
                                     .mutationType(mutationType)
                                     .txnType(txnType)
                                     .auditState("COMMITTED")
+                                    .businessDate(java.time.LocalDate.now())
                                     .createdAt(Instant.now())
                                     .build()));
 
@@ -850,12 +852,14 @@ public class TransactionService {
                                 .txnId(txnId)
                                 .accountId(
                                         request.accountId())
+                                .legNo(1)
                                 .mutationAmount(
                                         request.amount())
                                 .currencyCode(sourceCurrencyCode)
                                 .mutationType("DEBIT")
                                 .txnType("TRANSFER")
                                 .auditState("COMMITTED")
+                                .businessDate(java.time.LocalDate.now())
                                 .createdAt(Instant.now())
                                 .build());
 
@@ -864,12 +868,14 @@ public class TransactionService {
                                 .txnId(txnId)
                                 .accountId(
                                         request.counterpartyAccountId())
+                                .legNo(2)
                                 .mutationAmount(
                                         request.amount())
                                 .currencyCode(destCurrencyCode)
                                 .mutationType("CREDIT")
                                 .txnType("TRANSFER")
                                 .auditState("COMMITTED")
+                                .businessDate(java.time.LocalDate.now())
                                 .createdAt(Instant.now())
                                 .build());
             });
