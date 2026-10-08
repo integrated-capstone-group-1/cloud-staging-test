@@ -5,6 +5,7 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -234,7 +235,7 @@ public class MockBankingApiClient implements BankingApiClient {
         String initialCurrency = form.getCurrencyCode() != null ? form.getCurrencyCode() : "PHP";
         openAccount(custId, initialType, initialCurrency, BigDecimal.ZERO);
 
-        seedNotification(custId, "Welcome to Core Retail Ledger! Your registration is received and under verification.", "EMAIL", LocalDateTime.now(), false);
+        seedNotification(custId, "Welcome to North South Bank! Your registration is received and under verification.", "EMAIL", LocalDateTime.now(), false);
 
         return customer;
     }
@@ -317,6 +318,41 @@ public class MockBankingApiClient implements BankingApiClient {
             acct.setAccountStatus(status);
             seedNotification(acct.getCustomerId(), "Security Notice: Account " + accountId + " status is now " + status.getDisplayName(), "SMS", LocalDateTime.now(), false);
         }
+    }
+
+    @Override
+    public List<com.capstone.ledger.frontend.model.Customer360View.CardSummaryView> getCardsByCustomerId(String customerId) {
+        if (customerId == null || customerId.equalsIgnoreCase("CUST-ADMIN") || customerId.equalsIgnoreCase("2d49c23b-5f65-48da-aa68-28b155dd4022")) {
+            return Collections.emptyList();
+        }
+        if (customerId.equalsIgnoreCase("CUST-1001") || customerId.equalsIgnoreCase("7bd20304-dd6a-4e45-850b-58df8b535be4")) {
+            return List.of(new com.capstone.ledger.frontend.model.Customer360View.CardSummaryView(
+                    "c4a1b2c3-d4e5-4f6a-8b9c-0d1e2f3a4b5c",
+                    "4532-XXXX-XXXX-8821",
+                    "VIRTUAL_VISA",
+                    "PHP",
+                    "ACTIVE",
+                    new BigDecimal("50000.00"),
+                    true
+            ));
+        }
+        if (customerId.equalsIgnoreCase("CUST-1002") || customerId.equalsIgnoreCase("66e07d02-05c9-4deb-87d5-10e23cf5968f")) {
+            return List.of(new com.capstone.ledger.frontend.model.Customer360View.CardSummaryView(
+                    "d5b2c3d4-e5f6-4a7b-9c0d-1e2f3a4b5c6d",
+                    "4532-XXXX-XXXX-9932",
+                    "VIRTUAL_VISA",
+                    "PHP",
+                    "ACTIVE",
+                    new BigDecimal("50000.00"),
+                    true
+            ));
+        }
+        return Collections.emptyList();
+    }
+
+    @Override
+    public List<com.capstone.ledger.frontend.model.Customer360View.StandingInstructionView> getStandingInstructionsByCustomerId(String customerId) {
+        return Collections.emptyList();
     }
 
     @Override

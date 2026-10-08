@@ -58,14 +58,14 @@ public class AdminPortalService {
                 "Baseline system parameters initialized"
         );
 
-        // Pre-seeded Held Transactions
+        // Pre-seeded Held Transactions aligned with canonical Oracle CBS records
         heldTransactions.add(new HeldTransactionView(
                 "TXN-HELD-9021",
                 "CORR-R71-001",
-                "CUST-1002",
+                "66e07d02-05c9-4deb-87d5-10e23cf5968f",
                 "Maria Santos",
-                "ACCT-5001-PHP",
-                "ACCT-9922-USD",
+                "f95e7e52-3259-4b4d-ac66-b186a893cf66",
+                "bank-fx-eur-01",
                 new BigDecimal("490000.00"),
                 "PHP",
                 82,
@@ -77,10 +77,10 @@ public class AdminPortalService {
         heldTransactions.add(new HeldTransactionView(
                 "TXN-HELD-9045",
                 "CORR-R71-002",
-                "CUST-1001",
+                "7bd20304-dd6a-4e45-850b-58df8b535be4",
                 "Juan Dela Cruz",
-                "ACCT-1001-PHP",
-                "ACCT-8811-PHP",
+                "3722f77f-3d1b-4d55-8f83-b71bac91d095",
+                "f95e7e52-3259-4b4d-ac66-b186a893cf66",
                 new BigDecimal("260000.00"),
                 "PHP",
                 74,
@@ -96,7 +96,7 @@ public class AdminPortalService {
                 0,
                 14205L,
                 "TXN-9081",
-                "{\"txnId\":\"TXN-9081\",\"source\":\"ACCT-1001-PHP\",\"target\":\"ACCT-2001-PHP\",\"amount\":1500.00}",
+                "{\"txnId\":\"TXN-9081\",\"source\":\"3722f77f-3d1b-4d55-8f83-b71bac91d095\",\"target\":\"f95e7e52-3259-4b4d-ac66-b186a893cf66\",\"amount\":1500.00}",
                 "OptimisticLockingFailureException: Balance row version conflict on Oracle master",
                 3,
                 "PENDING",
@@ -109,7 +109,7 @@ public class AdminPortalService {
                 1,
                 88301L,
                 "NOTIF-552",
-                "{\"customerId\":\"CUST-1002\",\"channel\":\"SMS\",\"template\":\"OTP_AUTH\"}",
+                "{\"customerId\":\"66e07d02-05c9-4deb-87d5-10e23cf5968f\",\"channel\":\"SMS\",\"template\":\"OTP_AUTH\"}",
                 "ProviderTimeoutException: Telco SMS gateway connection timed out after 3 retries",
                 3,
                 "PENDING",
@@ -135,10 +135,10 @@ public class AdminPortalService {
         m1.setCorrelationId("CORR-MON-8801");
         m1.setRawCustomerName("Juan Dela Cruz");
         m1.setMaskedCustomerName("J*** D***");
-        m1.setRawSourceAccount("ACCT-1001-PHP");
-        m1.setMaskedSourceAccount("ACCT-****-1001");
-        m1.setRawDestAccount("ACCT-2001-PHP");
-        m1.setMaskedDestAccount("ACCT-****-2001");
+        m1.setRawSourceAccount("3722f77f-3d1b-4d55-8f83-b71bac91d095");
+        m1.setMaskedSourceAccount("3722-****-d095");
+        m1.setRawDestAccount("f95e7e52-3259-4b4d-ac66-b186a893cf66");
+        m1.setMaskedDestAccount("f95e-****-cf66");
         m1.setAmount(new BigDecimal("12500.00"));
         m1.setCurrency("PHP");
         m1.setOverallStatus("SUCCESS");
@@ -157,11 +157,11 @@ public class AdminPortalService {
         m2.setCorrelationId("CORR-R71-001");
         m2.setRawCustomerName("Maria Santos");
         m2.setMaskedCustomerName("M*** S***");
-        m2.setRawSourceAccount("ACCT-5001-PHP");
-        m2.setMaskedSourceAccount("ACCT-****-5001");
-        m2.setRawDestAccount("ACCT-9922-USD");
-        m2.setMaskedDestAccount("ACCT-****-9922");
-        m2.setAmount(new BigDecimal("490000.00"));
+        m2.setRawSourceAccount("f95e7e52-3259-4b4d-ac66-b186a893cf66");
+        m2.setMaskedSourceAccount("f95e-****-cf66");
+        m2.setRawDestAccount("bank-cash-clearing-php-01");
+        m2.setMaskedDestAccount("bank-****-01");
+        m2.setAmount(new BigDecimal("2500.00"));
         m2.setCurrency("PHP");
         m2.setOverallStatus("HELD");
         m2.setCurrentStage(5);
@@ -181,11 +181,11 @@ public class AdminPortalService {
         m3.setCorrelationId("CORR-R71-002");
         m3.setRawCustomerName("Juan Dela Cruz");
         m3.setMaskedCustomerName("J*** D***");
-        m3.setRawSourceAccount("ACCT-1001-PHP");
-        m3.setMaskedSourceAccount("ACCT-****-1001");
-        m3.setRawDestAccount("ACCT-8811-PHP");
-        m3.setMaskedDestAccount("ACCT-****-8811");
-        m3.setAmount(new BigDecimal("260000.00"));
+        m3.setRawSourceAccount("3722f77f-3d1b-4d55-8f83-b71bac91d095");
+        m3.setMaskedSourceAccount("3722-****-d095");
+        m3.setRawDestAccount("f95e7e52-3259-4b4d-ac66-b186a893cf66");
+        m3.setMaskedDestAccount("f95e-****-cf66");
+        m3.setAmount(new BigDecimal("1500.00"));
         m3.setCurrency("PHP");
         m3.setOverallStatus("HELD");
         m3.setCurrentStage(5);
@@ -242,19 +242,11 @@ public class AdminPortalService {
                     .toList();
         }
 
-        // If still empty (e.g., test scenario), create standard default pockets
-        if (accounts.isEmpty()) {
-            accounts = List.of(
-                    new AccountView("ACCT-" + customerId + "-PHP", customerId, AccountType.SAVINGS, "PHP", AccountStatus.ACTIVE, new BigDecimal("150000.00"), LocalDateTime.now().minusMonths(3)),
-                    new AccountView("ACCT-" + customerId + "-USD", customerId, AccountType.CHECKING, "USD", AccountStatus.ACTIVE, new BigDecimal("2500.00"), LocalDateTime.now().minusMonths(2))
-            );
-        }
-
         for (AccountView acct : accounts) {
             BigDecimal ledger = acct.getBalance() != null ? acct.getBalance() : BigDecimal.ZERO;
-            BigDecimal held = BigDecimal.ZERO;
+            BigDecimal held = acct.getHeldAmount() != null ? acct.getHeldAmount() : BigDecimal.ZERO;
             // Check if any held transaction has this account as source
-            for (HeldTransactionView ht : heldTransactions) {
+            for (HeldTransactionView ht : getHeldTransactions()) {
                 if (ht.isPending() && acct.getAccountId().equalsIgnoreCase(ht.getFromAccount())) {
                     held = held.add(ht.getAmount());
                 }
@@ -275,28 +267,14 @@ public class AdminPortalService {
             ));
         }
 
-        // Virtual Cards
-        view.getCards().add(new Customer360View.CardSummaryView(
-                "CARD-VIRT-" + customerId + "-01",
-                "4111-XXXX-XXXX-9912",
-                "VIRTUAL_VISA",
-                "PHP",
-                "ACTIVE",
-                new BigDecimal("50000.00"),
-                true
-        ));
+        boolean isStaff = customer.getEmail() != null && (customer.getEmail().equalsIgnoreCase("admin@ledgerbank.com") || customer.getEmail().toLowerCase().contains("admin"))
+                || ("System".equalsIgnoreCase(customer.getFirstName()) && "Administrator".equalsIgnoreCase(customer.getLastName()));
 
-        // Standing Instructions
-        view.getStandingInstructions().add(new Customer360View.StandingInstructionView(
-                "SI-AUTO-101",
-                "Meralco Utilities",
-                "ACCT-BILLS-MERALCO",
-                new BigDecimal("4500.00"),
-                "PHP",
-                "MONTHLY",
-                LocalDate.now().plusDays(10),
-                "ACTIVE"
-        ));
+        // Virtual Cards & Standing Instructions: retrieved from Core CBS / Payment Hub
+        if (!isStaff) {
+            view.setCards(new ArrayList<>(bankingClient.getCardsByCustomerId(customerId)));
+            view.setStandingInstructions(new ArrayList<>(bankingClient.getStandingInstructionsByCustomerId(customerId)));
+        }
 
         // Aggregate last 20 transactions across customer accounts
         List<TransactionView> txns = new ArrayList<>();
@@ -305,7 +283,7 @@ public class AdminPortalService {
             acctIds.add(acct.getAccountId().toLowerCase());
             txns.addAll(bankingClient.getTransactionsByAccountId(acct.getAccountId()));
         }
-        if (txns.isEmpty()) {
+        if (txns.isEmpty() && !acctIds.isEmpty()) {
             txns = bankingClient.getAllTransactions().stream()
                     .filter(t -> t.getAccountId() != null && acctIds.contains(t.getAccountId().toLowerCase()))
                     .toList();
@@ -315,52 +293,80 @@ public class AdminPortalService {
                 .limit(20)
                 .toList());
 
-        // Spending pattern breakdown
-        Map<String, BigDecimal> spending = new LinkedHashMap<>();
-        spending.put("Bank Transfers", new BigDecimal("42.5"));
-        spending.put("Bills & Utilities", new BigDecimal("28.0"));
-        spending.put("E-Commerce & Retail", new BigDecimal("19.5"));
-        spending.put("ATM & Cash", new BigDecimal("10.0"));
-        view.setSpendingPattern(spending);
+        if (!isStaff) {
+            // Compute spending pattern breakdown dynamically from actual transaction history
+            Map<String, BigDecimal> spending = new LinkedHashMap<>();
+            if (!txns.isEmpty()) {
+                Map<String, BigDecimal> typeTotals = new LinkedHashMap<>();
+                BigDecimal totalSum = BigDecimal.ZERO;
+                for (TransactionView t : txns) {
+                    BigDecimal amt = t.getAmount() != null ? t.getAmount().abs() : BigDecimal.ZERO;
+                    if (amt.compareTo(BigDecimal.ZERO) > 0) {
+                        String label = switch (t.getTxnType()) {
+                            case TRANSFER -> "Account Transfers";
+                            case WITHDRAWAL -> "Cash Withdrawals";
+                            case DEPOSIT -> "Inbound Deposits";
+                            default -> t.getTxnType().name();
+                        };
+                        typeTotals.merge(label, amt, BigDecimal::add);
+                        totalSum = totalSum.add(amt);
+                    }
+                }
+                if (totalSum.compareTo(BigDecimal.ZERO) > 0) {
+                    for (Map.Entry<String, BigDecimal> entry : typeTotals.entrySet()) {
+                        BigDecimal pct = entry.getValue()
+                                .multiply(new BigDecimal("100"))
+                                .divide(totalSum, 1, java.math.RoundingMode.HALF_UP);
+                        spending.put(entry.getKey(), pct);
+                    }
+                }
+            }
+            view.setSpendingPattern(spending);
 
-        // Explainable risk score (0-100)
-        int score = 15;
-        if (lockedCustomerIds.contains(customerId)) {
-            score += 40;
-        }
-        boolean hasHeld = heldTransactions.stream().anyMatch(h -> h.isPending() && customerId.equalsIgnoreCase(h.getCustomerId()));
-        if (hasHeld) {
-            score += 35;
-        }
-        view.setRiskScore(score);
-        view.setRiskLevel(score > 70 ? "HIGH" : (score > 40 ? "MEDIUM" : "LOW"));
+            // Explainable risk score (0-100)
+            int score = 15;
+            if (lockedCustomerIds.contains(customerId)) {
+                score += 40;
+            }
+            boolean hasHeld = heldTransactions.stream().anyMatch(h -> h.isPending() && customerId.equalsIgnoreCase(h.getCustomerId()));
+            if (hasHeld) {
+                score += 35;
+            }
+            view.setRiskScore(score);
+            view.setRiskLevel(score > 70 ? "HIGH" : (score > 40 ? "MEDIUM" : "LOW"));
 
-        List<String> factors = new ArrayList<>();
-        factors.add("Identity documents fully verified against government registry");
-        factors.add("Transaction velocity pattern strictly matches historical baseline");
-        if (hasHeld) {
-            factors.add("Pending held transfer currently flagged for risk officer review (+35 pts)");
-        }
-        if (lockedCustomerIds.contains(customerId)) {
-            factors.add("Account administratively locked due to failed authentication (+40 pts)");
-        }
-        factors.add("Zero suspicious transaction reports (STR) filed with AMLC");
-        view.setRiskFactors(factors);
+            List<String> factors = new ArrayList<>();
+            factors.add("Identity documents fully verified against government registry");
+            factors.add("Transaction velocity pattern strictly matches historical baseline");
+            if (hasHeld) {
+                factors.add("Pending held transfer currently flagged for risk officer review (+35 pts)");
+            }
+            if (lockedCustomerIds.contains(customerId)) {
+                factors.add("Account administratively locked due to failed authentication (+40 pts)");
+            }
+            factors.add("Zero suspicious transaction reports (STR) filed with AMLC");
+            view.setRiskFactors(factors);
 
-        view.getScreeningHistory().add(new Customer360View.RiskScreeningRecord(
-                LocalDate.now().minusDays(1),
-                "Sanctions & PEP screening (UN/OFAC/AML-PH)",
-                0,
-                "CLEAN",
-                "No negative matches against global sanction lists"
-        ));
-        view.getScreeningHistory().add(new Customer360View.RiskScreeningRecord(
-                LocalDate.now().minusDays(5),
-                "Velocity Anomaly & Round-Trip Spikes",
-                score,
-                score > 70 ? "FLAGGED" : "PASSED",
-                "Velocity score evaluated within normal limits"
-        ));
+            view.getScreeningHistory().add(new Customer360View.RiskScreeningRecord(
+                    LocalDate.now().minusDays(1),
+                    "Sanctions & PEP screening (UN/OFAC/AML-PH)",
+                    0,
+                    "CLEAN",
+                    "No negative matches against global sanction lists"
+            ));
+            view.getScreeningHistory().add(new Customer360View.RiskScreeningRecord(
+                    LocalDate.now().minusDays(5),
+                    "Velocity Anomaly & Round-Trip Spikes",
+                    score,
+                    score > 70 ? "FLAGGED" : "PASSED",
+                    "Velocity score evaluated within normal limits"
+            ));
+        } else {
+            view.setSpendingPattern(Collections.emptyMap());
+            view.setRiskScore(0);
+            view.setRiskLevel("STAFF");
+            view.setRiskFactors(List.of("Internal Administrative Staff Profile — Exempt from retail customer AMLA scoring"));
+        }
 
         view.setLastAuditedAt(LocalDateTime.now());
         view.setLastAuditedBy(adminUser != null ? adminUser : "admin@ledgerbank.com");
@@ -431,7 +437,58 @@ public class AdminPortalService {
     // --- Held Transactions Review Queue (DIG-51, DIG-54) ---
 
     public List<HeldTransactionView> getHeldTransactions() {
+        alignHeldTransactionsWithEnvironment();
         return Collections.unmodifiableList(heldTransactions);
+    }
+
+    private void alignHeldTransactionsWithEnvironment() {
+        try {
+            Optional<CustomerView> mariaLive = bankingClient.getCustomerById("66e07d02-05c9-4deb-87d5-10e23cf5968f");
+            if (mariaLive.isPresent()) {
+                for (HeldTransactionView ht : heldTransactions) {
+                    if ("TXN-HELD-9021".equals(ht.getTxnId())) {
+                        ht.setCustomerId("66e07d02-05c9-4deb-87d5-10e23cf5968f");
+                        ht.setCustomerName("Maria Santos");
+                        ht.setFromAccount("f95e7e52-3259-4b4d-ac66-b186a893cf66");
+                        ht.setToAccount("bank-cash-clearing-php-01");
+                        ht.setAmount(new BigDecimal("2500.00"));
+                    }
+                }
+            } else {
+                for (HeldTransactionView ht : heldTransactions) {
+                    if ("TXN-HELD-9021".equals(ht.getTxnId())) {
+                        ht.setCustomerId("CUST-1002");
+                        ht.setCustomerName("Maria Santos");
+                        ht.setFromAccount("ACCT-2001-PHP");
+                        ht.setToAccount("ACCT-1001-PHP");
+                        ht.setAmount(new BigDecimal("2500.00"));
+                    }
+                }
+            }
+
+            Optional<CustomerView> juanLive = bankingClient.getCustomerById("7bd20304-dd6a-4e45-850b-58df8b535be4");
+            if (juanLive.isPresent()) {
+                for (HeldTransactionView ht : heldTransactions) {
+                    if ("TXN-HELD-9045".equals(ht.getTxnId())) {
+                        ht.setCustomerId("7bd20304-dd6a-4e45-850b-58df8b535be4");
+                        ht.setCustomerName("Juan Dela Cruz");
+                        ht.setFromAccount("3722f77f-3d1b-4d55-8f83-b71bac91d095");
+                        ht.setToAccount("f95e7e52-3259-4b4d-ac66-b186a893cf66");
+                        ht.setAmount(new BigDecimal("1500.00"));
+                    }
+                }
+            } else {
+                for (HeldTransactionView ht : heldTransactions) {
+                    if ("TXN-HELD-9045".equals(ht.getTxnId())) {
+                        ht.setCustomerId("CUST-1001");
+                        ht.setCustomerName("Juan Dela Cruz");
+                        ht.setFromAccount("ACCT-1001-PHP");
+                        ht.setToAccount("ACCT-2001-PHP");
+                        ht.setAmount(new BigDecimal("1500.00"));
+                    }
+                }
+            }
+        } catch (Exception ignored) {}
     }
 
     public Optional<HeldTransactionView> getHeldTransactionById(String txnId) {

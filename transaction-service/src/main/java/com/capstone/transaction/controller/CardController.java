@@ -42,6 +42,15 @@ public class CardController {
     }
 
     /**
+     * Get all virtual cards for a specific customer (staff / admin access)
+     */
+    @GetMapping("/customer/{customerId}")
+    public ResponseEntity<ApiResponse<List<CardResponse>>> getCardsByCustomer(@PathVariable String customerId) {
+        List<CardResponse> cards = cardService.getCards(customerId);
+        return ResponseEntity.ok(ApiResponse.ok("Cards retrieved successfully", cards));
+    }
+
+    /**
      * Get a specific card by ID
      */
     @GetMapping("/{cardId}")

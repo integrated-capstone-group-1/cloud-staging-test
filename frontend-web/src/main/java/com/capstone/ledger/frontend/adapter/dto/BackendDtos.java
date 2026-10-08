@@ -65,7 +65,19 @@ public class BackendDtos {
             String accountStatus,
             BigDecimal balanceAmount,
             String currencyCode,
-            LocalDateTime createdAt
+            LocalDateTime createdAt,
+            BigDecimal heldAmount,
+            String accountNumber
+    ) {}
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record CardRes(
+            String cardId,
+            String maskedPan,
+            String expiryDate,
+            String cardStatus,
+            Integer ecomEnabled,
+            BigDecimal dailyLimit
     ) {}
 
     @JsonIgnoreProperties(ignoreUnknown = true)
