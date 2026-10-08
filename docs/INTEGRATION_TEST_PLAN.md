@@ -1,37 +1,364 @@
-# Integration Test Plan (v1.0)
+# Integration Test Plan (v2.0)
+## Component Seams, Multi-Tier Subsystems & Service-to-Service Contracts
 
-## 1. Objective
-Verify the operational integrity of all system seams, ensuring that databases, message brokers, caching layers, and background workers communicate without data loss, deadlocks, or state corruption.
+---
 
-## 2. Scope & Sub-Suites
-This phase covers Tier 2 of the testing pyramid, specifically targeting real components rather than mocks.
-- **CBS & Persistence**: Oracle XE row-level locking, sequence atomicity, and constraint enforcement.
-- **Messaging & Audit**: Kafka outbox polling, event delivery, and PostgreSQL audit immutability.
-- **Caching**: Redis fallback mechanisms and data expiration.
+## 1. Objective & Scope of Integration Testing
 
-## 3. Test Cases & Expected Outcomes
+Integration testing verifies the **seams and interactions between subsystems** across the Capstone Banking System. While unit tests validate business logic in isolation using mocks, integration testing exercises actual network, persistence, caching, and message bus boundaries:
+* **Service-to-Database Seams:** Real Oracle XE 21c (schemas `CBS`, `PAYMENT`, `FX`) and PostgreSQL 15 (Channel DB & Audit DB).
+* **Service-to-Service Seams:** Feign HTTP clients, Resilience4j circuit breakers, timeouts, and fallback mechanisms.
+* **Transactional Outbox & Event Bus Seams:** Outbox table polling, Kafka broker topic partitioning, retry topics, and single-writer audit consumers.
+* **Edge Perimeter Seams:** Spring Cloud Gateway `:8080` route forwarding, JWT signature fast-path, Redis token-bucket rate limiting, and internal route cloaking.
+* **Client-to-Gateway Seams:** Flutter Dio HTTP client network interceptors, secure token storage, and administrative portal REST bridges.
 
-| ID | Case | Expected Result |
-|---|---|---|
-| INT-01 | **Settlement Atomicity** | `account_master`, `ledger_entry`, and `outbox_master` commit together. DB failure rolls back all. |
-| INT-02 | **Audit Immutability** | PostgreSQL triggers block `UPDATE`/`DELETE` on `ledger_mutation_audit`. |
-| INT-03 | **Kafka Outbox Relay** | `PENDING` outbox records are published and marked `PUBLISHED`. |
-| INT-04 | **Audit Parity** | `ReconciliationEngine` detects 0 drift between Oracle core and Postgres audit. |
+---
 
-## 4. Execution
-Integration tests are executed against active database and broker containers.
+## 2. 7-Member Parallel Workstream Allocation (Zero Overlap)
 
-**Execution Command:**
-```bash
-# Start backend infrastructure dependencies
-docker compose up -d oracle-db postgres-audit-db kafka redis
+To guarantee that all 7 engineers can execute integration testing simultaneously without blocking each other, the test seams are divided into 7 mutually exclusive workstreams:
 
-# Run integration slice tests
-./mvnw test -Dgroups="integration"
+```mermaid
+flowchart TD
+    subgraph ParallelIntegration["7 Non-Overlapping Integration Workstreams"]
+        W1["<b>Workstream 1: Yancey</b><br/>CBS Engine & Oracle XE Seams<br/>(Row Locks, Ledger Entries, Holds Engine)"]
+        W2["<b>Workstream 2: Rohan</b><br/>Channel Orchestrator & FX Seams<br/>(CoreBankingClient Feign, Quotes, CAS State Claim)"]
+        W3["<b>Workstream 3: PK</b><br/>Identity, Risk & Admin Portal Seams<br/>(Registration KYC, Risk SLA <=200ms, Admin REST)"]
+        W4["<b>Workstream 4: Russel</b><br/>API Gateway & Perimeter Seams<br/>(Fast-Path JWT, Rate Limiter, Port Cloaking)"]
+        W5["<b>Workstream 5: Gym</b><br/>Event Bus, Outbox & Audit Seams<br/>(Kafka Polling Relay, Audit Consumer, DLQ Routing)"]
+        W6["<b>Workstream 6: Lanz</b><br/>Mobile Core Client & Network Seams<br/>(Dio Client, KeyStore, Idempotency-Key Interceptor)"]
+        W7["<b>Workstream 7: Angge</b><br/>Mobile UI State & Widget Seams<br/>(Pockets Carousel, Shortfall Sheet, Card Controls)"]
+    end
 ```
 
-## 5. Acceptance Gate
-- 100% pass rate across the integration test suite.
-- Zero `ORA-00060` (deadlock) errors during concurrent DB operations.
-- Zero data loss verified by the reconciliation engine.
+| Workstream | Owner | Subsystems & Boundaries Tested | Primary Task Cards | Mapped Jira Issues |
+|:---|:---|:---|:---|:---|
+| **Workstream 1** | **Yancey** | `accounts-service` $\leftrightarrow$ Oracle XE `CBS` schema & `reconciliation-service` read replica. | `T-002`, `T-012` | `DIG-3`, `DIG-4`, `DIG-52`, `DIG-66`, `DIG-84`, `DIG-85`, `DIG-112` |
+| **Workstream 2** | **Rohan** | `transaction-service` $\leftrightarrow$ `accounts-service` (Feign) & `forex-service` (Quotes & CAS claims). | `T-001`, `T-007` | `DIG-14`, `DIG-15`, `DIG-73`, `DIG-74`, `DIG-75`, `DIG-80`, `DIG-83` |
+| **Workstream 3** | **PK** | `login-service` / `registration-service` $\leftrightarrow$ `accounts-service`, `risk-engine` & `frontend-web`. | `T-003`, `T-006`, `T-011` | `DIG-6`, `DIG-7`, `DIG-12`, `DIG-21`, `DIG-22`, `DIG-23`, `DIG-50`, `DIG-54`, `DIG-90` |
+| **Workstream 4** | **Russel** | `api-gateway` (:8080) $\leftrightarrow$ Downstream Microservices, Redis 7, and Zero-Trust Network. | `T-005`, `T-014` | `DIG-8`, `DIG-25`, `DIG-26`, `DIG-28`, `DIG-30`, `DIG-31` |
+| **Workstream 5** | **Gym** | Oracle `outbox_master` $\leftrightarrow$ Kafka Broker $\leftrightarrow$ `AuditLedgerConsumer` $\leftrightarrow$ PostgreSQL Audit DB. | `T-004`, `T-014` | `DIG-5`, `DIG-20`, `DIG-32`, `DIG-88`, `DIG-89` |
+| **Workstream 6** | **Lanz** | Flutter Dio HTTP Client $\leftrightarrow$ Android KeyStore $\leftrightarrow$ Gateway `:8080`. | `T-009`, `T-010` | `DIG-10`, `DIG-38`, `DIG-40`, `DIG-44`, `DIG-46`, `DIG-94`, `DIG-95` |
+| **Workstream 7** | **Angge** | Flutter UI Widgets $\leftrightarrow$ Mobile State BLoC $\leftrightarrow$ Endpoints (Pockets, Shortfall Sheet, Cards). | `T-008`, `T-010` | `DIG-11`, `DIG-13`, `DIG-39`, `DIG-41`, `DIG-42`, `DIG-47`, `DIG-49`, `DIG-98` |
 
+---
+
+## 3. Step-by-Step Integration Test Execution Runbooks
+
+### 3.1 Workstream 1: Yancey — CBS Engine & Oracle XE Seams
+
+#### Prerequisites:
+```bash
+docker compose up -d oracle-db
+# Wait for Oracle container healthcheck: healthy
+```
+
+#### Step-by-Step Execution:
+* **SEAM-YAN-01: Row-Level Locking & Deadlock Prevention Seam (`DIG-52`, `BR-01`)**
+  * *Step 1:* Run the integration test:
+    ```bash
+    ./mvnw test -pl accounts-service -Dtest=CoreSettlementServiceIntegrationTest#verifyAscendingRowLocking
+    ```
+  * *Step 2:* The test spawns 2 concurrent transfers: Pair 1 (`acct-A` $\to$ `acct-B`), Pair 2 (`acct-B` $\to$ `acct-A`).
+  * *Step 3:* Inspect SQL logs: Verify both threads acquire locks on `MIN(acct_id)` first, then `MAX(acct_id)`.
+  * *Step 4:* Assert 0 `ORA-00060` (deadlock detected) errors; both transactions commit sequentially.
+* **SEAM-YAN-02: Atomic Multi-Leg Settlement & Ledger Journal Seam (`DIG-66`, `PLAN.md` Delta §3.2)**
+  * *Step 1:* Issue multi-leg settlement request to CBS:
+    ```bash
+    curl -X POST http://localhost:8083/internal/core/settlement \
+      -H "Content-Type: application/json" \
+      -H "X-Internal-Role: ROLE_INTERNAL" \
+      -d '{
+        "transaction_id": "txn-int-001",
+        "posting_reference_id": "FT2627800099",
+        "legs": [
+          {"account_id": "acct-juan-php-01", "entry_type": "DEBIT", "amount": "1000.0000", "currency": "PHP"},
+          {"account_id": "acct-maria-php-01", "entry_type": "CREDIT", "amount": "1000.0000", "currency": "PHP"}
+        ]
+      }'
+    ```
+  * *Step 2:* Verify HTTP `200 OK` with `core_reference_id: "FT2627800099"`.
+  * *Step 3:* Query Oracle XE via SQL client:
+    ```sql
+    SELECT * FROM ledger_entry WHERE txn_id = 'txn-int-001';
+    SELECT status FROM outbox_master WHERE txn_id = 'txn-int-001';
+    ```
+  * *Step 4:* Assert exactly 2 `ledger_entry` records exist with correct `running_balance`, and 1 `outbox_master` row exists with `status = 'PENDING'`.
+* **SEAM-YAN-03: Hold Placement, Available Balance & Expiry Seam (`DIG-84`, `DIG-85`, `BR-33`)**
+  * *Step 1:* Place hold:
+    ```bash
+    curl -X POST http://localhost:8083/internal/accounts/acct-juan-php-01/holds \
+      -H "Content-Type: application/json" \
+      -H "X-Internal-Role: ROLE_INTERNAL" \
+      -d '{"amount": "2500.0000", "currency": "PHP", "reason_code": "FRAUD_REVIEW"}'
+    ```
+  * *Step 2:* Query account balance:
+    ```bash
+    curl -s http://localhost:8083/internal/accounts/acct-juan-php-01
+    ```
+  * *Step 3:* Assert: `balance_amount` remains `50000.0000`, `held_amount = 2500.0000`, and `available_balance = 47500.0000`.
+  * *Step 4:* Release hold via `DELETE /internal/accounts/acct-juan-php-01/holds/{holdId}`. Verify `available_balance` returns to `50000.0000`.
+* **SEAM-YAN-04: Dual-DataSource Reconciliation Read Seam (`DIG-112`)**
+  * *Step 1:* Run reconciliation read test:
+    ```bash
+    ./mvnw test -pl reconciliation-service -Dtest=ReconciliationEngineIntegrationTest#verifyOracleReadReplica
+    ```
+  * *Step 2:* Assert `ReconciliationEngine` successfully streams active account records from Oracle XE `account_master` without initiating write locks.
+
+---
+
+### 3.2 Workstream 2: Rohan — Channel Orchestrator, Feign Clients & FX Seams
+
+#### Prerequisites:
+```bash
+docker compose up -d oracle-db postgres-db redis forex-service accounts-service transaction-service
+```
+
+#### Step-by-Step Execution:
+* **SEAM-ROH-01: CoreBankingClient Feign Bridge Seam (`DIG-14`)**
+  * *Step 1:* Run Feign client contract test:
+    ```bash
+    ./mvnw test -pl transaction-service -Dtest=CoreBankingClientIntegrationTest
+    ```
+  * *Step 2:* Test issues settlement from `transaction-service` to `http://accounts-service:8083/internal/core/settlement`.
+  * *Step 3:* Assert: Feign client correctly serializes `CoreSettlementRequest`, handles `200 OK` response mapping, and translates `422 INSUFFICIENT_FUNDS` into domain `InsufficientFundsException`.
+* **SEAM-ROH-02: Forex Quote & 30s Locked Rate Seam (`DIG-74`, `DIG-75`, `BR-04`)**
+  * *Step 1:* Request conversion quote from `forex-service`:
+    ```bash
+    curl -s "http://localhost:8087/api/v1/fx/quote?from=PHP&to=EUR&amount=100.00"
+    ```
+  * *Step 2:* Verify JSON response includes `quote_id`, `rate_applied` (with 1.5% spread), `expires_at`, and `ttl_seconds: 30`.
+  * *Step 3:* Query Oracle XE: `SELECT * FROM fx_rate WHERE base_currency = 'EUR' AND quote_currency = 'PHP';`
+  * *Step 4:* Assert quote matches database rate without making live HTTP calls to external feeds.
+* **SEAM-ROH-03: Compare-and-Set (CAS) Lifecycle Transition Seam (`DIG-80`, `BR-30`)**
+  * *Step 1:* Run CAS transition test:
+    ```bash
+    ./mvnw test -pl transaction-service -Dtest=TransactionLifecycleIntegrationTest#verifyCasClaimTransition
+    ```
+  * *Step 2:* Initiate transaction `TXN-CAS-1` in status `AUTHORIZED`.
+  * *Step 3:* Two concurrent worker threads execute CAS claim to `PROCESSING`.
+  * *Step 4:* Assert: Exactly 1 thread receives 1 updated row and proceeds to settlement; the 2nd thread receives 0 updated rows and safely aborts.
+* **SEAM-ROH-04: Smart Shortfall Multi-Currency Orchestration Seam (`DIG-73`, `BR-28`)**
+  * *Step 1:* Post payment where Juan pays €50.00 to Maria, with €10.00 in primary pocket and shortfall funded from PHP:
+    ```bash
+    curl -X POST http://localhost:8084/api/v1/payments \
+      -H "Content-Type: application/json" \
+      -H "X-Cust-Id: cust-user-001" \
+      -H "X-Idempotency-Key: e8a91176-0000-4000-8000-000000000001" \
+      -d '{
+        "recipient_account_id": "acct-maria-eur-01",
+        "amount": "50.0000",
+        "currency": "EUR",
+        "funding_pocket_id": "acct-juan-php-01",
+        "quote_id": "q-valid-uuid"
+      }'
+    ```
+  * *Step 2:* Verify HTTP `200 OK` with status `POSTED`.
+  * *Step 3:* Check `funding_breakdown`: direct debited €10.00, converted shortfall €40.00, PHP debited ₱2,480.00.
+  * *Step 4:* Verify CBS settlement executed all 6 legs atomically.
+
+---
+
+### 3.3 Workstream 3: PK — Identity, Security, Risk Engine & Admin Portal Seams
+
+#### Prerequisites:
+```bash
+docker compose up -d oracle-db redis risk-engine registration-service login-service frontend-web
+```
+
+#### Step-by-Step Execution:
+* **SEAM-PK-01: Registration & CBS Auto-Provisioning Seam (`DIG-6`, `BR-16`)**
+  * *Step 1:* Register new user:
+    ```bash
+    curl -X POST http://localhost:8081/api/auth/register \
+      -H "Content-Type: application/json" \
+      -d '{
+        "email": "test.user@example.com",
+        "password": "Password123!",
+        "full_name": "Test Integration User"
+      }'
+    ```
+  * *Step 2:* Verify HTTP `201 Created` with generated `customer_id`.
+  * *Step 3:* Check Oracle XE: Verify `customer_master`, `app_user_master`, and initial PHP `account_master` row are created.
+  * *Step 4:* Simulate CBS failure during provisioning. Verify local credentials roll back cleanly with zero orphaned users.
+* **SEAM-PK-02: BCrypt Login & Redis Blacklist Seam (`DIG-7`, `DIG-8`, `BR-07`)**
+  * *Step 1:* Execute login:
+    ```bash
+    curl -X POST http://localhost:8082/api/auth/login \
+      -H "Content-Type: application/json" \
+      -d '{"email": "test.user@example.com", "password": "Password123!"}'
+    ```
+  * *Step 2:* Verify `200 OK` with signed JWT access token.
+  * *Step 3:* Logout user: `POST http://localhost:8082/api/auth/logout` with Bearer token.
+  * *Step 4:* Check Redis: Run `redis-cli KEYS "token:*"` and verify token hash is present with TTL matching remaining token lifespan.
+* **SEAM-PK-03: Synchronous Risk Screening HTTP Seam (`DIG-21`, `DIG-23`, `BR-08`)**
+  * *Step 1:* Post risk evaluation request:
+    ```bash
+    curl -X POST http://localhost:8088/internal/risk/evaluate \
+      -H "Content-Type: application/json" \
+      -d '{
+        "customer_id": "cust-user-001",
+        "amount": "250000.0000",
+        "currency": "PHP",
+        "source_ip": "192.168.1.1"
+      }'
+    ```
+  * *Step 2:* Verify HTTP `200 OK` returned in $< 50\text{ms}$ with `score > 0.85` and `decision: "HOLD"`.
+  * *Step 3:* Terminate container `docker stop risk-engine`. Send payment request to `transaction-service`.
+  * *Step 4:* Assert `PaymentOrchestrator` fails closed in $\le 200\text{ms}$ with `503 SECURITY_CHECK_UNAVAILABLE`.
+* **SEAM-PK-04: Admin Portal Held Transfers & DLQ REST Seam (`DIG-51`, `DIG-90`)**
+  * *Step 1:* Log into Admin Portal on `:8090` as `admin@ledgerbank.com`.
+  * *Step 2:* Navigate to `/admin/transfers/held`. Verify held transaction `TXN-HELD-01` renders with hold details.
+  * *Step 3:* Click "Approve Transfer". Verify `frontend-web` calls `POST /internal/admin/transfers/{id}/approve` on `transaction-service` and status updates to `AUTHORIZED`.
+
+---
+
+### 3.4 Workstream 4: Russel — API Gateway Perimeter Security & Isolation Seams
+
+#### Prerequisites:
+```bash
+docker compose up -d redis api-gateway login-service accounts-service transaction-service
+```
+
+#### Step-by-Step Execution:
+* **SEAM-RUS-01: Gateway JWT Fast-Path Validation & Header Injection Seam (`DIG-8`, `DIG-25`)**
+  * *Step 1:* Send authenticated request through Gateway:
+    ```bash
+    curl -s http://localhost:8080/api/v1/accounts/pockets \
+      -H "Authorization: Bearer <valid_customer_jwt>"
+    ```
+  * *Step 2:* Verify Gateway forwards request to `accounts-service:8083`.
+  * *Step 3:* Verify `accounts-service` receives forwarded request with verified header `X-Cust-Id: cust-user-001` injected by Gateway.
+* **SEAM-RUS-02: Token Blacklist Interception Filter Seam (`DIG-8`)**
+  * *Step 1:* Insert blacklisted token hash in Redis:
+    ```bash
+    redis-cli SET "token:<jwt_hash>" "revoked" EX 900
+    ```
+  * *Step 2:* Send request to `http://localhost:8080/api/v1/accounts/pockets` using the revoked token.
+  * *Step 3:* Assert Gateway intercepts request before routing downstream and returns `401 Unauthorized` (`TOKEN_REVOKED`).
+* **SEAM-RUS-03: Redis Reactive Rate Limiter Seam (`DIG-26`)**
+  * *Step 1:* Send 35 rapid requests to `http://localhost:8080/api/v1/accounts/pockets` using Apache Bench or curl loop.
+  * *Step 2:* Verify requests 1–30 return `200 OK`.
+  * *Step 3:* Verify requests 31–35 return `429 Too Many Requests` with `Retry-After: 1` header.
+* **SEAM-RUS-04: Internal Route Cloaking Filter Seam (`CONTRACTS.md` §1.1)**
+  * *Step 1:* Attempt direct external access to internal CBS routes:
+    ```bash
+    curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/internal/core/settlement
+    curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/api/accounts/acct-01/credit
+    ```
+  * *Step 2:* Assert Gateway returns `403 Forbidden` across all internal paths.
+
+---
+
+### 3.5 Workstream 5: Gym — Async Messaging, Outbox Relay & Audit Seams
+
+#### Prerequisites:
+```bash
+docker compose up -d oracle-db postgres-db kafka accounts-service
+```
+
+#### Step-by-Step Execution:
+* **SEAM-GYM-01: Outbox Polling Relay to Kafka Seam (`DIG-20`, `DIG-32`, `BR-02`)**
+  * *Step 1:* Insert a mock outbox record into Oracle XE `outbox_master` with `status = 'PENDING'`:
+    ```sql
+    INSERT INTO outbox_master (outbox_id, txn_id, event_type, payload, status, created_at)
+    VALUES ('ob-int-01', 'txn-int-01', 'LEDGER_SETTLED', '{"txn_id":"txn-int-01","legs":[]}', 'PENDING', CURRENT_TIMESTAMP);
+    COMMIT;
+    ```
+  * *Step 2:* Observe `OutboxMasterRelay` scheduled execution log.
+  * *Step 3:* Query Oracle XE: Assert `status` updates to `'PUBLISHED'`.
+  * *Step 4:* Consume Kafka topic:
+    ```bash
+    kafka-console-consumer --bootstrap-server localhost:9092 --topic transaction.events --from-beginning --max-messages 1
+    ```
+  * *Step 5:* Assert the exact JSON payload is emitted with `event_key = 'txn-int-01'`.
+* **SEAM-GYM-02: Audit Consumer to PostgreSQL Seam (`DIG-88`, `BR-02`)**
+  * *Step 1:* Publish synthetic settlement event to Kafka topic `transaction.events`.
+  * *Step 2:* Observe `AuditLedgerConsumer` log.
+  * *Step 3:* Query PostgreSQL `ledger_mutation_audit`:
+    ```sql
+    SELECT * FROM ledger_mutation_audit WHERE txn_id = 'txn-int-01';
+    ```
+  * *Step 4:* Assert rows exist with deterministic UUIDv5 `audit_id` matching leg details.
+* **SEAM-GYM-03: Transient Retry & Poison Message Dead-Letter Queue Seam (`DIG-89`, `BR-34`)**
+  * *Step 1:* Publish malformed JSON to Kafka topic `transaction.events`.
+  * *Step 2:* Verify consumer pauses and retries with backoff (1s, 2s, 4s).
+  * *Step 3:* Consume topic `transaction.events.dlq`. Assert message is routed to DLQ with error headers attached.
+  * *Step 4:* Assert consumer partition remains unblocked and immediately processes subsequent valid messages.
+
+---
+
+### 3.6 Workstream 6: Lanz — Mobile Core Client & Network Seams
+
+#### Prerequisites:
+```bash
+# Launch Flutter integration test harness pointing to Gateway :8080
+flutter pub get
+```
+
+#### Step-by-Step Execution:
+* **SEAM-LAN-01: Dio HTTP Client & Gateway Communication Seam (`DIG-94`)**
+  * *Step 1:* Run Flutter network integration test:
+    ```bash
+    flutter test test/integration/dio_gateway_integration_test.dart
+    ```
+  * *Step 2:* Test issues `GET /api/v1/accounts/pockets` via Dio client pointing to `http://localhost:8080`.
+  * *Step 3:* Assert Dio client receives valid JSON response and maps response status `200 OK`.
+* **SEAM-LAN-02: KeyStore Storage & Automatic Bearer Token Injection (`DIG-40`, `DIG-94`)**
+  * *Step 1:* Authenticate user in test; store token in mock KeyStore.
+  * *Step 2:* Send subsequent transfer request.
+  * *Step 3:* Inspect outgoing request: Assert `AuthInterceptor` automatically injects `Authorization: Bearer <token>`.
+* **SEAM-LAN-03: Automatic UUID `X-Idempotency-Key` Header Seam (`DIG-94`, `BR-05`)**
+  * *Step 1:* Issue `POST /api/v1/payments` via Dio client.
+  * *Step 2:* Assert `IdempotencyInterceptor` generates and attaches a unique UUIDv4 string.
+  * *Step 3:* Verify replay test: Resending with identical key passes without generating a new UUID.
+* **SEAM-LAN-04: Client Circuit Breaker & Retry Seam (`DIG-44`)**
+  * *Step 1:* Mock Gateway returning `503 SERVICE_DEGRADED` 3 times.
+  * *Step 2:* Assert Dio client breaker trips to `OPEN` and throws `ClientCircuitBreakerOpenException` without hitting network.
+
+---
+
+### 3.7 Workstream 7: Angge — Mobile UI State & Screen Flow Seams
+
+#### Prerequisites:
+```bash
+# Mobile emulator or device connected
+cd mobile
+```
+
+#### Step-by-Step Execution:
+* **SEAM-ANG-01: PIN Keypad Authentication & Lockout Screen Flow (`DIG-11`, `DIG-39`)**
+  * *Step 1:* Run widget integration test:
+    ```bash
+    flutter test test/integration/pin_auth_flow_test.dart
+    ```
+  * *Step 2:* Enter 6-digit PIN on custom numeric keypad. Assert digits appear masked.
+  * *Step 3:* Simulate 3 failed attempts from backend response. Assert screen transitions to `DeviceLockedScreen` showing countdown timer.
+* **SEAM-ANG-02: Pockets Carousel & Multi-Currency Balances Seam (`DIG-41`)**
+  * *Step 1:* Run carousel integration test:
+    ```bash
+    flutter test test/integration/pockets_carousel_test.dart
+    ```
+  * *Step 2:* Verify horizontal swipe moves between PHP, USD, and EUR pockets.
+  * *Step 3:* Assert Ledger Balance and Available Balance are rendered with correct currency symbol and 4 decimal places.
+* **SEAM-ANG-03: Shortfall Funding Bottom Sheet & Live 30s Quote Seam (`DIG-42`, `DIG-98`)**
+  * *Step 1:* Trigger shortfall send money flow for €50.00.
+  * *Step 2:* Assert `ShortfallFundingSheet` slides up displaying converted PHP amount and fee breakdown.
+  * *Step 3:* Assert circular timer ticks down from 30s. At 0s, button changes to "Quote Expired - Tap to Refresh".
+* **SEAM-ANG-04: Virtual Card Controls & E-Commerce Toggle Seam (`DIG-49`, `BR-25`)**
+  * *Step 1:* Open Virtual Card Hub screen.
+  * *Step 2:* Toggle "E-Commerce Transactions" switch to OFF.
+  * *Step 3:* Verify API `PUT /api/v1/cards/{id}/controls` is called and toggle state updates with confirmation toast.
+
+---
+
+## 4. Acceptance Gates for Integration Phase
+
+The integration phase is complete and certified for Full-System Testing only when:
+1. **Workstream 1 (Yancey):** 100% pass on CBS row-locking and atomic 6-leg settlement tests with zero deadlocks.
+2. **Workstream 2 (Rohan):** Feign client, 30s FX quote expiry, and CAS state claim transitions verified with zero race anomalies.
+3. **Workstream 3 (PK):** Registration rollback, JWT blacklist in Redis, and $\le 200\text{ms}$ risk fail-closed verified.
+4. **Workstream 4 (Russel):** Gateway route isolation blocks `/internal/**` with `403` and rate limiter enforces 15 req/s quota.
+5. **Workstream 5 (Gym):** Outbox relay publishes to Kafka and PostgreSQL audit consumer records all legs with 100% parity.
+6. **Workstream 6 (Lanz):** Mobile Dio client attaches JWT and UUID `X-Idempotency-Key` headers on all mutating calls.
+7. **Workstream 7 (Angge):** Mobile UI widgets accurately display multi-currency balances, 30s countdowns, and card toggle states.

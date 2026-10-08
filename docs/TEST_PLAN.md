@@ -438,42 +438,100 @@ Login with RBAC (customer rejected), freeze/unfreeze, parameter editor, held-tra
 
 - Write the known-gaps list (deferred items in Section 10) so the defense does not overclaim.
 
-## 10. Deferred until the cloud team is available
+## 10. Graded Chaos Engineering Defense Suite (ADR-003 & T-014)
 
-| **Item** | **Why deferred** | **Note** |
-|----|----|----|
-| CH-03 perimeter port scan; internal-port cloaking | Needs the cloaked compose network and gateway (DIG-30) | Graded; schedule a final run |
-| Gateway enforcement: JWT/blacklist at the edge, header stripping, CORS, rate limit 429, TLS/WAF, request size | Gateway unfinished (DIG-25, 8, 26, 31 open) | Mark pending gateway in J-01 and 6.3 |
-| Full 800 TPS soak on target hardware; Grafana and Prometheus evidence | Needs target environment and observability (DIG-34, 61, 119) | Reuse the JMX files |
-| CI/CD, container scanning, secrets scan of images, encryption at rest, cloud deployment | DIG-110, 28, 33, 111 are cloud-team work | Not tested here |
-| Deferred backlog items | Marked post-capstone | DIG-72, 93, 97, 104, 106, 107, 109 |
+With Russel and Gym leading the Cloud DevSecOps track (`T-005`, `T-014`), the 4 Graded Chaos Scenarios from [`docs/ACCEPTANCE.md`](ACCEPTANCE.md) and task card `T-014` are incorporated directly into the master defense readiness verification:
 
-## 11. Schedule and cut order
+```mermaid
+flowchart TD
+    subgraph CH01["CH-01: Oracle Netem Latency (800ms)"]
+        C1_Inj["Inject netem 800ms delay"] --> C1_Trip["Resilience4j breaker trips to OPEN (180ms threshold)"]
+        C1_Trip --> C1_Read["Balance reads served from Redis cache with timestamp"]
+        C1_Trip --> C1_Mut["Mutations fail-safe with 503 SERVICE_DEGRADED"]
+    end
 
-| **Day** | **Backend team (Rohan, Yancey, PK)** | **Frontend (Lanz, Angge)** | **Milestone** |
-|----|----|----|----|
-| Wed 7 Oct (rest of day) | P0 decisions D-1 to D-12; Rohan starts the regression gate; Yancey starts DB and stack | Run flutter test; prepare emulator and build config | Stack plan agreed |
-| Thu 8 Oct | Finish gate; stack up; Phase 2 workstreams A to E in parallel | Prepare smoke checklist from UI-01 to UI-12 | **Gate complete; stack up** |
-| Fri 9 Oct | Finish Phase 2; build the pytest harness; J-01 to J-04 | Finish QR scan and history screens; fix client defects | **Phase 2 P0 green** |
-| Mon 12 Oct | J-05, J-06 and probes; JM-01 to JM-05; RS-01, RS-02 | Contract smoke against the live backend | Backend P0 journeys green |
-| Tue 13 Oct | Remaining P1 journeys; JM-06 to JM-08; SEC checks; fix defects | UI journeys UI-01 to UI-12 and X-01 to X-05 with the backend team | **Phase 3 and 4 P0 green**; code freeze |
-| Wed 14 Oct (Day 8) | Phase 5 rerun and rehearsal; evidence archive | Rehearsal; APK and demo device setup | **Frozen, evidenced build** |
-| Thu 15 Oct (Day 9) | Viva defense | Viva defense | \- |
+    subgraph CH02["CH-02: Risk Engine Kill"]
+        C2_Inj["docker stop risk-engine"] --> C2_SLA["TimeLimiter SLA triggers in <= 200ms"]
+        C2_SLA --> C2_Fail["Payment fails closed with 503 SECURITY_CHECK_UNAVAILABLE"]
+        C2_Fail --> C2_State["Zero partial debits written in Oracle"]
+    end
 
-**If time slips, cut in this order:** JM-08 soak, RS-05 to RS-07, SEC-04/05, P1 journeys J-09 to J-13 (keep a smoke pass of each), JM-07, P1 UI journeys. **Never cut:** the regression gate, A3/A4, B2/B3, J-01 to J-06, JM-01/02/04/05, RS-01/02, Phase 4 P0, and the Phase 5 rerun.
+    subgraph CH03["CH-03: Perimeter Port Cloaking"]
+        C3_Scan["Scan ports 8081-8088, 1521, 5432"] --> C3_Refuse["All internal ports return Connection Refused"]
+        C3_Refuse --> C3_Allow["Only :8080 (Gateway) and :8090 (Admin) accessible"]
+    end
 
-The calendar is tight (about five working days). The two largest schedule risks are the local stack (nothing in Phases 2 to 4 starts without it) and the unfinished entry point; treat both as day-one tasks.
+    subgraph CH04["CH-04: Postgres Audit Outage"]
+        C4_Inj["docker stop postgres-audit-db"] --> C4_Cont["Oracle payments & Forex continue normally"]
+        C4_Cont --> C4_Pause["Kafka Audit Consumer pauses and retries with backoff"]
+        C4_Pause --> C4_Rec["docker start postgres-audit-db -> 100% audit parity restored"]
+    end
+```
 
-## 12. Roles
+| **ID** | **Scenario** | **Chaos Injection** | **Expected Defense Behaviour** | **Graded** | **Owner** |
+|:---:|:---|:---|:---|:---:|:---:|
+| **`CH-01`** | **Oracle Database Latency Degradation** | `docker exec -u 0 oracle-db tc qdisc add dev eth0 root netem delay 800ms` | Latency exceeds 180ms $\implies$ Resilience4j breaker trips to `OPEN`. Reads served from Redis cache (`balance_cache:*`) with timestamp; mutations fail safe with `503 SERVICE_DEGRADED`. | **Yes** | Russel |
+| **`CH-02`** | **Risk Engine Timeout / Outage** | `docker stop risk-engine` | TimeLimiter SLA triggers $\le 200\text{ms}$. Payment fails closed with `503 SECURITY_CHECK_UNAVAILABLE`. Zero balance changes. | **Yes** | Russel & PK |
+| **`CH-03`** | **Perimeter Port Scan & Zero-Trust Cloaking** | Scan `:8081-8088`, `:1521`, `:5432` from external host | All internal ports refuse connection (`TcpTestSucceeded : False`). Strictly only `:8080` (Gateway) and `:8090` (Admin Portal) exposed. | **Yes** | Russel & Gym |
+| **`CH-04`** | **PostgreSQL Audit DB Outage & Recovery** | `docker stop postgres-audit-db`; post payment; restart | Oracle balance mutations and Forex quotes succeed. Audit consumer pauses/retries with backoff without dropping to DLQ. Parity reaches 100% upon restart. | **Yes** | Russel & Gym |
+| **`CH-05`** | Kafka Broker Outage | `docker stop kafka`; post payment; restart | Outbox rows accumulate as `PENDING` in Oracle `outbox_master`; drains cleanly upon Kafka recovery. | No | Gym |
+| **`CH-06`** | FX Provider Feed Outage | Disconnect `api.frankfurter.dev`; age cache past 24h | Cached rates served. After 24h stale guard trips, cross-currency payments reject with `422 FX_RATE_STALE`; same-currency transfers continue. | No | Rohan |
+| **`CH-07`** | Poison Message in Kafka Partition | Publish malformed JSON to `transaction.events` | Retries via exponential backoff (1s, 2s, 4s) then parks in `<topic>.dlq` without stalling consumer partition. | No | Gym |
+| **`CH-08`** | Process Killed Mid-Transaction | Kill `transaction-service` during `PROCESSING` state | `StuckTransactionSweeper` queries CBS settlement state, resolving transaction cleanly to `POSTED` or `FAILED`. Zero double postings. | No | Rohan |
+| **`CH-09`** | Admin Monitoring Feed Loss | Terminate SSE event stream connection | Admin portal UI displays stale-feed warning banner and gracefully falls back to polling without crashing. | No | PK |
 
-| **Person** | **Primary responsibility in this plan** |
-|----|----|
-| Rohan | Plan owner; Phase 1 gate; workstreams B and C; harness; JMeter scripts JM-01 to JM-08; defect triage lead |
-| Yancey | Stack and DB init; workstream A; invariant SQL; reconciliation and seed fixtures; JM invariant checks |
-| PK | Workstreams D and E; auth/Redis config; admin portal verification; SEC checks; risk parameter test data |
-| Lanz | Contract smoke; UI journeys on send money, status, errors, QR; build configuration for the local base URL |
-| Angge | UI journeys on home, cards, convert, history, alerts; visual checks; cross-channel journeys with PK |
-| Gym, Russel | Unavailable. Pending: gateway (DIG-25/8), compose hardening, observability, chaos CH-03, cloud JMeter run |
+---
+
+## 11. Schedule and Team Ownership
+
+| **Day** | **Backend (Rohan, Yancey, PK)** | **Cloud & DevSecOps (Russel, Gym)** | **Frontend (Lanz, Angge)** | **Milestone** |
+|:---|:---|:---|:---|:---|
+| **Wed 7 Oct** | P0 decisions D-1 to D-12; Rohan executes unit regression; Yancey initializes Oracle schemas | Russel configures Gateway routes `:8080`; Gym provisions Kafka topics & Redis | Lanz sets up Dio environment; Angge reviews screen contracts | **Stack & Baseline Ready** |
+| **Thu 8 Oct** | Backend Integration Workstreams (A to E in parallel) | Russel implements port cloaking (`CH-03`); Gym builds JMeter race scripts (`TS-01`) | Contract smoke walkthrough against live endpoints | **Seams Verified; Ports Cloaked** |
+| **Fri 9 Oct** | Black-box API functional journeys J-01 to J-04 | Gym runs JMeter concurrency correctness races (`JM-01` to `JM-05`) | Finish QR scan, Virtual Card hub, history screens | **Core Journeys & Races Green** |
+| **Mon 12 Oct** | Advanced journeys (J-05, J-06, Reversals, Invariants) | Russel automates Graded Chaos scripts (`CH-01` to `CH-04`); Gym runs soak | Mobile UI journeys UI-01 to UI-07 via Gateway `:8080` | **Backend & Mobile Flows Integrated** |
+| **Tue 13 Oct** | Standing instructions, Recon runs, DLQ replay | Russel & Gym execute full Chaos suite; compile Grafana dashboards | Cross-channel journeys X-01 to X-05 with Admin Portal | **All P0 Flows Green; Code Freeze** |
+| **Wed 14 Oct** | End-to-end rehearsal; punch-list bug remediation | Performance evidence pack compilation (`DIG-119`); cloud dry run | Signed release APK build (`DIG-116`); demo rehearsal | **Evidenced Frozen Build** |
+| **Thu 15 Oct** | Capstone Viva Oral Defense | Capstone Viva Oral Defense | Capstone Viva Oral Defense | **Final Viva Presentation** |
+
+### 7-Member Responsibility Matrix
+* **Rohan:** Transaction Lifecycle, Payment Orchestrator, CAS transitions, Smart FX shortfall, Sweeper, JMeter test scenarios.
+* **Yancey:** CBS balances, row-level pessimistic locks, atomic 6-leg settlement, hold engine, dual-datasource reconciliation.
+* **PK:** Identity, BCrypt/JWT, Redis token blacklist, Risk engine fail-closed SLA, Admin Web Portal (:8090).
+* **Russel:** Spring Cloud Gateway (:8080), perimeter route isolation, port cloaking (`CH-03`), and graded chaos test harness.
+* **Gym:** Kafka cluster & DLQ strategy, PostgreSQL single-writer audit consumer, Redis infrastructure, JMeter load suite ($\ge 800\text{ TPS}$).
+* **Lanz:** Flutter Dio HTTP client, Android KeyStore token security, UUID idempotency injection, error catalog mapping, release APK build.
+* **Angge:** Flutter UI screens (Home Pockets, Shortfall sheet, Card controls, QR scanner), UX transitions, receipt generation.
+
+---
+
+## 12. Master Backlog Traceability (109 Issues from Backlog v2.4)
+
+Every ticket in `GROUP-1 Jira_Backlog_Core_Retail_Ledger_v2.4.xlsx` is tracked to its test verification mechanism:
+
+| Category / Disposition | Issue Count | Jira Issue Keys | Delivery & Test Verification Mechanism |
+|:---|:---:|:---|:---|
+| **Core Coding Tasks (`T-001`–`T-014`)** | **88** | `DIG-3` through `DIG-112`, `DIG-122` | Verified via Unit test suites, Backend Integration Workstreams A–E, Black-Box API Journeys J-01–J-13, and Concurrency Tests JM-01–JM-05. |
+| **Sprint 0 Foundation / Bootstrap** | **4** | `DIG-62`, `DIG-63`, `DIG-64`, `DIG-65` | Verified via initial DDL executions, OpenAPI contracts freeze, and monorepo compilation. |
+| **Sprint 4 & 5 Defense Readiness** | **8** | `DIG-113`–`DIG-120` | Capstone defense deliverables (signed APK, slide deck, JMeter evidence pack, live dry run rehearsal). |
+| **Post-Capstone Deferred Scope** | **9** | `DIG-72`, `DIG-93`, `DIG-97`, `DIG-100`, `DIG-103`, `DIG-104`, `DIG-106`, `DIG-107`, `DIG-109` | Formally deferred per ADR-004 & BRD; linked to roadmap and excluded from Capstone sign-off gate. |
+| **TOTAL BACKLOG** | **109** | `DIG-3` to `DIG-122` | **100% Backlog Verification Traceability Guaranteed** |
+
+---
+
+## 13. Capstone Defense Go/No-Go Decision Gate
+
+The platform is officially signed off for Viva Oral Defense (`DIG-120`) only when all seven gates are green:
+
+| Gate | Verification Area | Acceptance Threshold | Sign-Off Lead |
+|:---:|:---|:---|:---:|
+| **Gate 1** | **Monorepo Compilation** | `./mvnw clean test` passes with zero failures across all 11 modules. | Yancey / PK |
+| **Gate 2** | **Zero-Trust Network Perimeter** | External scan against `:8081-8088`, `:1521`, `:5432` returns Connection Refused (`CH-03`). Only `:8080` and `:8090` reachable. | Russel |
+| **Gate 3** | **Core API Journeys** | Journeys J-01 to J-06 pass with 100% success rate through Gateway `:8080`. | Rohan / Lanz |
+| **Gate 4** | **Financial Invariants & Zero Overdraft** | JMeter 100-thread race (`JM-01`) proves zero negative balances; invariants I-1 to I-9 hold clean. | Gym / Yancey |
+| **Gate 5** | **Graded Chaos Scenarios** | Automated chaos scripts execute `CH-01`, `CH-02`, and `CH-04` with green status and zero data loss. | Russel |
+| **Gate 6** | **Dual-DataSource Audit Parity** | `ReconciliationEngine` reports 0 balance drift between Oracle CBS and PostgreSQL audit. | Yancey |
+| **Gate 7** | **Signed Client Build** | Signed Android release APK (`DIG-116`) communicates seamlessly with Gateway `:8080`. | Lanz / Angge |
 
 ## Appendix A: requirement traceability (in-scope business requirements)
 
