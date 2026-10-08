@@ -147,21 +147,22 @@ flowchart TD
 #### Regression Test Procedures:
 * **REG-RUS-01: Inbound Header Sanitization (`T-005`, `BR-03`)**
   * *Objective:* Prevent spoofing by stripping incoming `X-Cust-Id` and `X-Cust-Role` headers.
-  * *Step 1:* Run `./mvnw test -pl api-gateway -Dtest=SecurityHeadersFilterTest#shouldStripUntrustedCustomerHeaders`.
+  * *Step 1:* Run `./mvnw test -pl api-gateway "-Dtest=SecurityHeadersFilterTest#shouldStripUntrustedCustomerHeaders"`.
   * *Step 2:* Send request with spoofed `X-Cust-Id: cust-admin-001`. Verify downstream service receives only the ID extracted from the verified JWT.
 * **REG-RUS-02: Internal Route Cloaking (`T-005`, `CONTRACTS.md` §1.1)**
   * *Objective:* Block direct caller access to internal mutation and CBS routes at the edge.
-  * *Step 1:* Run `./mvnw test -pl api-gateway -Dtest=GatewayRouteIsolationTest#shouldBlockInternalRoutes`.
+  * *Step 1:* Run `./mvnw test -pl api-gateway "-Dtest=GatewayRouteIsolationTest#shouldBlockInternalRoutes"`.
   * *Step 2:* Assert requests to `/internal/**`, `/api/accounts/*/credit`, `/api/accounts/*/debit` return `403 Forbidden`.
 * **REG-RUS-03: Token Blacklist Filter Fail-Closed (`DIG-8`, `T-005`)**
   * *Objective:* Ensure revoked tokens in Redis are blocked and Redis outage fails closed.
-  * *Step 1:* Run `./mvnw test -pl api-gateway -Dtest=JwtAuthenticationFilterTest#shouldRejectBlacklistedToken`.
-  * *Step 2:* Query Redis key `token:<jwt_hash>`. If present, gateway returns `401 Unauthorized` (`TOKEN_REVOKED`).
+  * *Step 1:* Run `./mvnw test -pl api-gateway "-Dtest=JwtAuthenticationGatewayFilterFactoryTest#shouldRejectBlacklistedToken"`.
+  * *Step 2:* Run `./mvnw test -pl api-gateway "-Dtest=JwtAuthenticationGatewayFilterFactoryTest#shouldFailClosedWhenRedisUnavailable"`.
+  * *Step 3:* Query Redis key `token:<jwt>`. If present, gateway returns `401 Unauthorized` (`TOKEN_REVOKED`). If Redis is down/times out, gateway fails closed returning `401 Unauthorized` (`TOKEN_BLACKLIST_UNAVAILABLE`).
 * **REG-RUS-04: Zero-Trust Host Port Cloaking (`CH-03`, `DIG-30`)**
   * *Objective:* Verify internal microservices and database ports are not published to host.
   * *Step 1:* Execute PowerShell port probe against Docker Compose:
     ```powershell
-    @(8081, 8082, 8083, 8084, 8085, 8086, 8087, 8088, 1521, 5432) | ForEach-Object {
+    @(8081, 8082, 8083, 8084, 8085, 8086, 8087, 8088, 8089, 1521, 5432) | ForEach-Object {
         $res = Test-NetConnection -ComputerName localhost -Port $_ -WarningAction SilentlyContinue
         if ($res.TcpTestSucceeded) { throw "Port $_ is LEAKED on host!" }
     }
@@ -176,23 +177,27 @@ flowchart TD
 #### Regression Test Procedures:
 * **REG-GYM-01: Outbox Polling Relay Deduplication (`T-004`, `BR-02`)**
   * *Objective:* Verify outbox rows in Oracle are published exactly once to Kafka topic `transaction.events`.
-  * *Step 1:* Run `./mvnw test -pl transaction-service -Dtest=OutboxRelayTest#shouldPollPendingAndMarkPublished`.
-  * *Step 2:* Verify: Events in `outbox_master` transition from `PENDING` to `PUBLISHED`.
+  * *Step 1:* Run `./mvnw test -pl transaction-service "-Dtest=OutboxRelayTest#shouldPollPendingAndMarkPublished"` (or `./mvnw test -pl accounts-service "-Dtest=OutboxMasterRelayServiceTest#shouldPollPendingAndMarkPublished"`).
+  * *Step 2:* Verify: Events in `outbox_master` transition from `PENDING` to `PUBLISHED` with zero duplicates.
 * **REG-GYM-02: Poison Message Dead-Letter Queue Isolation (`DIG-89`, `BR-34`)**
   * *Objective:* Verify malformed messages do not block the Kafka partition.
-  * *Step 1:* Run `./mvnw test -pl transaction-service -Dtest=AuditConsumerDlqTest#shouldRouteMalformedMessageToDlq`.
-  * *Step 2:* Assert: Malformed JSON retries with backoff (1s, 2s, 4s) and parks in `transaction.events.dlq`. Consumer continues processing subsequent valid messages.
+  * *Step 1:* Run `./mvnw test -pl transaction-service "-Dtest=AuditConsumerDlqTest#shouldRouteMalformedMessageToDlq"`.
+  * *Step 2:* Assert: Malformed JSON routes directly to Dead-Letter Queue `transaction.events.dlq`. Consumer continues processing subsequent valid messages without partition stall.
 * **REG-GYM-03: Redis Token-Bucket Rate Limiter Quota Replenishment (`DIG-26`)**
   * *Objective:* Verify 15 req/s rate limit rejects floods with 429 and replenishes tokens over time.
-  * *Step 1:* Run `./mvnw test -pl api-gateway -Dtest=RateLimiterFilterTest#shouldRejectExcessRequestsAndReplenish`.
-  * *Step 2:* Burst 35 requests within 1 second. Verify requests 1–30 succeed; requests 31–35 return `429 Too Many Requests` with `Retry-After` header. After 1 second pause, subsequent request succeeds.
+  * *Step 1:* Run `./mvnw test -pl api-gateway "-Dtest=RateLimiterFilterTest#shouldRejectExcessRequestsAndReplenish"`.
+  * *Step 2:* Burst 35 requests within 1 second. Verify requests 1–30 succeed; requests 31–35 return `429 Too Many Requests` with `Retry-After: 1` header. After 1 second pause, subsequent request succeeds.
 * **REG-GYM-04: Concurrency Load Race Sampler (`TS-01`, `BR-01`)**
   * *Objective:* Verify zero overdraft under multi-threaded parallel withdrawals.
-  * *Step 1:* Execute JMeter headless test:
+  * *Step 1:* Execute automated Maven concurrency lock verification:
+    ```powershell
+    ./mvnw test -pl transaction-service "-Dtest=ParallelWithdrawalConcurrencyTest#shouldPreventOverdraftUnderConcurrentWithdrawals_inMemory"
+    ```
+  * *Step 2:* For live stack benchmark, execute JMeter headless test:
     ```powershell
     jmeter -n -t tests/jmeter/debit-concurrency-baseline.jmx -l tests/jmeter/results.jtl
     ```
-  * *Step 2:* Assert: 50 concurrent requests against a ₱50,000 pocket withdraw ₱1,500 each. Exactly 33 succeed, 17 return `422 INSUFFICIENT_FUNDS`. Pocket balance remains ₱500.00. Zero overdraft.
+  * *Step 3:* Assert: 50 concurrent requests against a ₱50,000 pocket withdraw ₱1,500 each. Exactly 33 succeed, 17 return `422 INSUFFICIENT_FUNDS`. Pocket balance remains ₱500.00. Zero overdraft.
 
 ---
 

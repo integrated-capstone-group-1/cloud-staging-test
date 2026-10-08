@@ -350,6 +350,8 @@ services:
       context: .
       dockerfile: risk-engine/Dockerfile
     container_name: risk-engine
+    expose:
+      - "8088"
     environment:
       SPRING_PROFILES_ACTIVE: docker
     labels:
