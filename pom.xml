@@ -26,6 +26,7 @@
         <module>frontend-web</module>
         <module>reconciliation-service</module>
         <module>risk-engine</module>
+        <module>orchestrator-service</module>
     </modules>
 
     <properties>

@@ -5,6 +5,7 @@ import com.capstone.common.dto.CoreSettlementResponse;
 import com.capstone.common.dto.CreateHoldRequest;
 import com.capstone.common.dto.HoldResponse;
 import com.capstone.common.dto.SettlementLegDto;
+import com.capstone.common.exception.IdempotencyConflictException;
 import com.capstone.common.security.SecurityUtils;
 import com.capstone.transaction.client.CoreBankingClient;
 import com.capstone.transaction.client.RiskScreeningClient;
@@ -67,6 +68,18 @@ public class PaymentOrchestrator {
             Optional<TransactionMaster> existing = txnMasterRepository.findByCustomerIdAndIdempotencyKey(customerId, idempotencyKey);
             if (existing.isPresent()) {
                 TransactionMaster txn = existing.get();
+                boolean amountMatches = txn.getMutationAmount() != null
+                        && txn.getMutationAmount().compareTo(request.getAmount()) == 0;
+                boolean currencyMatches = txn.getCurrencyCode() != null
+                        && txn.getCurrencyCode().equalsIgnoreCase(request.getCurrency());
+                boolean recipientMatches = txn.getCreditAccountId() != null
+                        && txn.getCreditAccountId().equals(request.getRecipientAccountId());
+
+                if (!amountMatches || !currencyMatches || !recipientMatches) {
+                    throw new IdempotencyConflictException(
+                            "PAYLOAD_MISMATCH: Idempotency key '" + idempotencyKey + "' was previously used with a different request payload");
+                }
+
                 log.info("Replaying idempotent payment for key {}: status={}", idempotencyKey, txn.getTxnStatus());
                 return mapToResponse(txn);
             }

@@ -138,6 +138,8 @@ services:
         condition: service_started
       forex-service:
         condition: service_started
+      orchestrator-service:
+        condition: service_started
       reconciliation-service:
         condition: service_started
     environment:
@@ -297,6 +299,29 @@ services:
     networks:
       - banking-net
 
+  orchestrator-service:
+    build:
+      context: .
+      dockerfile: orchestrator-service/Dockerfile
+    container_name: orchestrator-service
+    expose:
+      - "8089"
+    depends_on:
+      accounts-service:
+        condition: service_started
+      transaction-service:
+        condition: service_started
+    environment:
+      ACCOUNTS_SERVICE_URL: http://accounts-service:8083
+      TRANSACTION_SERVICE_URL: http://transaction-service:8084
+      NOTIFICATION_SERVICE_URL: http://notification-service:8085
+      JWT_SECRET: ${JWT_SECRET:-CapstoneBankingSuperSecretSigningKeyMustBe256BitsLong!}
+      SPRING_PROFILES_ACTIVE: docker
+    labels:
+      banking.service: "true"
+    networks:
+      - banking-net
+
   forex-service:
     build:
       context: .
@@ -328,6 +353,8 @@ services:
       context: .
       dockerfile: risk-engine/Dockerfile
     container_name: risk-engine
+    expose:
+      - "8088"
     depends_on:
       redis:
         condition: service_healthy
