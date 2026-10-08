@@ -1,56 +1,221 @@
-global:
-  scrape_interval: 10s
-  evaluation_interval: 10s
+# ============================================================================
+# Prometheus Configuration for Banking Backend Monorepo
+# ============================================================================
+# This configuration provides comprehensive monitoring for all microservices,
+# infrastructure components, and business-critical metrics.
+# ============================================================================
 
+global:
+  scrape_interval: 15s          # Default scrape interval
+  scrape_timeout: 10s            # Timeout for scrape requests
+  evaluation_interval: 15s       # Alert rule evaluation interval
+  
+  # External labels for federation and remote write scenarios
+  external_labels:
+    environment: 'development'
+    cluster: 'banking-monorepo'
+    region: 'local'
+
+# ============================================================================
+# ALERTING CONFIGURATION
+# ============================================================================
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+          # Configure AlertManager if deployed: ['alertmanager:9093']
+
+# ============================================================================
+# RULE FILES
+# ============================================================================
 rule_files:
   - "/etc/prometheus/alert_rules.yml"
+  - "/etc/prometheus/recording_rules.yml"
 
+# ============================================================================
+# SCRAPE CONFIGURATIONS
+# ============================================================================
 scrape_configs:
+  # --------------------------------------------------------------------------
+  # Prometheus Self-Monitoring
+  # --------------------------------------------------------------------------
   - job_name: "prometheus"
+    scrape_interval: 15s
     static_configs:
       - targets: ["localhost:9090"]
+        labels:
+          service_type: "monitoring"
+          tier: "infrastructure"
 
+  # --------------------------------------------------------------------------
+  # API Gateway - Entry Point for All Client Requests
+  # --------------------------------------------------------------------------
   - job_name: "api-gateway"
+    scrape_interval: 10s           # Higher frequency for critical service
     metrics_path: "/actuator/prometheus"
     static_configs:
       - targets: ["api-gateway:8080"]
+        labels:
+          service_type: "gateway"
+          tier: "edge"
+          criticality: "critical"
+    metric_relabel_configs:
+      # Drop high-cardinality metrics to reduce storage
+      - source_labels: [__name__]
+        regex: 'jvm_gc_pause_seconds_bucket|jvm_gc_pause_seconds_sum'
+        action: drop
 
+  # --------------------------------------------------------------------------
+  # Authentication Services - Critical Path
+  # --------------------------------------------------------------------------
   - job_name: "registration-service"
+    scrape_interval: 15s
     metrics_path: "/actuator/prometheus"
     static_configs:
       - targets: ["registration-service:8081"]
+        labels:
+          service_type: "authentication"
+          tier: "core"
+          criticality: "high"
 
   - job_name: "login-service"
+    scrape_interval: 10s           # Higher frequency for login service
     metrics_path: "/actuator/prometheus"
     static_configs:
       - targets: ["login-service:8082"]
+        labels:
+          service_type: "authentication"
+          tier: "core"
+          criticality: "critical"
 
+  # --------------------------------------------------------------------------
+  # Core Banking Services - Transaction Processing
+  # --------------------------------------------------------------------------
   - job_name: "accounts-service"
+    scrape_interval: 10s
     metrics_path: "/actuator/prometheus"
     static_configs:
       - targets: ["accounts-service:8083"]
+        labels:
+          service_type: "banking"
+          tier: "core"
+          criticality: "critical"
+          domain: "accounts"
 
   - job_name: "transaction-service"
+    scrape_interval: 10s           # Most critical service
     metrics_path: "/actuator/prometheus"
     static_configs:
       - targets: ["transaction-service:8084"]
-
-  - job_name: "notification-service"
-    metrics_path: "/actuator/prometheus"
-    static_configs:
-      - targets: ["notification-service:8085"]
-
-  - job_name: "reconciliation-service"
-    metrics_path: "/actuator/prometheus"
-    static_configs:
-      - targets: ["reconciliation-service:8086"]
+        labels:
+          service_type: "banking"
+          tier: "core"
+          criticality: "critical"
+          domain: "transactions"
 
   - job_name: "forex-service"
+    scrape_interval: 15s
     metrics_path: "/actuator/prometheus"
     static_configs:
       - targets: ["forex-service:8087"]
+        labels:
+          service_type: "banking"
+          tier: "core"
+          criticality: "high"
+          domain: "forex"
 
-  - job_name: "frontend-web"
+  # --------------------------------------------------------------------------
+  # Supporting Services
+  # --------------------------------------------------------------------------
+  - job_name: "notification-service"
+    scrape_interval: 20s           # Lower frequency for non-critical service
     metrics_path: "/actuator/prometheus"
     static_configs:
-      - targets: ["host.docker.internal:8090", "frontend-web:8090"]
+      - targets: ["notification-service:8085"]
+        labels:
+          service_type: "support"
+          tier: "auxiliary"
+          criticality: "medium"
+
+  - job_name: "reconciliation-service"
+    scrape_interval: 30s           # Batch processing, lower frequency
+    metrics_path: "/actuator/prometheus"
+    static_configs:
+      - targets: ["reconciliation-service:8086"]
+        labels:
+          service_type: "operations"
+          tier: "batch"
+          criticality: "high"
+          domain: "reconciliation"
+
+  # --------------------------------------------------------------------------
+  # Risk Engine - Fraud Detection and Risk Assessment
+  # --------------------------------------------------------------------------
+  - job_name: "risk-engine"
+    scrape_interval: 15s
+    metrics_path: "/actuator/prometheus"
+    static_configs:
+      - targets: ["risk-engine:8088"]
+        labels:
+          service_type: "security"
+          tier: "core"
+          criticality: "high"
+          domain: "risk"
+
+  # --------------------------------------------------------------------------
+  # Frontend Web Application
+  # --------------------------------------------------------------------------
+  - job_name: "frontend-web"
+    scrape_interval: 20s
+    metrics_path: "/actuator/prometheus"
+    static_configs:
+      - targets: ["frontend-web:8090"]
+        labels:
+          service_type: "frontend"
+          tier: "presentation"
+          criticality: "medium"
+
+  # --------------------------------------------------------------------------
+  # Infrastructure Components (if exposed)
+  # --------------------------------------------------------------------------
+  - job_name: "postgres-exporter"
+    scrape_interval: 30s
+    static_configs:
+      - targets: []
+        # Configure if postgres_exporter is deployed: ['postgres-exporter:9187']
+        labels:
+          service_type: "database"
+          tier: "infrastructure"
+          criticality: "critical"
+
+  - job_name: "redis-exporter"
+    scrape_interval: 30s
+    static_configs:
+      - targets: []
+        # Configure if redis_exporter is deployed: ['redis-exporter:9121']
+        labels:
+          service_type: "cache"
+          tier: "infrastructure"
+          criticality: "high"
+
+  - job_name: "kafka-exporter"
+    scrape_interval: 30s
+    static_configs:
+      - targets: []
+        # Configure if kafka_exporter is deployed: ['kafka-exporter:9308']
+        labels:
+          service_type: "messaging"
+          tier: "infrastructure"
+          criticality: "high"
+
+# ============================================================================
+# REMOTE WRITE CONFIGURATION (Optional - for long-term storage)
+# ============================================================================
+# remote_write:
+#   - url: "http://cortex:9009/api/v1/push"
+#     queue_config:
+#       capacity: 10000
+#       max_shards: 50
+#       min_shards: 1
+#       max_samples_per_send: 5000
+#       batch_send_deadline: 5s

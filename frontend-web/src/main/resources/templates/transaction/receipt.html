@@ -15,7 +15,7 @@
                    th:classappend="${txn.auditState != null and (txn.auditState.name() == 'FAILED' or txn.auditState.name() == 'ROLLED_BACK')} ? 'bi-x-circle-fill' : (${txn.auditState != null and txn.auditState.name() == 'PENDING'} ? 'bi-hourglass-split' : 'bi-patch-check-fill')"></i>
             </div>
             <h4 class="fw-bold mb-1">Transaction Voucher</h4>
-            <div class="text-muted small">Core Retail Ledger &amp; Balance Mutation Engine</div>
+            <div class="text-muted small">North South Bank · Core Balance &amp; Ledger Engine</div>
             <div class="badge mt-2 fs-6 px-3"
                  th:classappend="${txn.auditState != null and (txn.auditState.name() == 'FAILED' or txn.auditState.name() == 'ROLLED_BACK')} ? 'bg-danger-subtle text-danger border border-danger-subtle' : (${txn.auditState != null and txn.auditState.name() == 'PENDING'} ? 'bg-warning-subtle text-warning border border-warning-subtle' : 'bg-success-subtle text-success border border-success-subtle')">
                 <i class="bi"

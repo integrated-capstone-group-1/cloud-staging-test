@@ -52,10 +52,17 @@
 
 
 /* =========================================================
-   2. BODY
+   2. BODY & STICKY FOOTER LAYOUT
    ========================================================= */
 
+html {
+    height: 100%;
+}
+
 body {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
     background: var(--brand-bg);
     color: var(--brand-text-primary);
     font-family:
@@ -69,6 +76,10 @@ body {
     transition:
         background-color 0.25s ease,
         color 0.25s ease;
+}
+
+main {
+    flex: 1 0 auto;
 }
 
 
@@ -1326,11 +1337,17 @@ body.dark-mode a:hover {
    ========================================================= */
 
 footer {
+    flex-shrink: 0;
+    margin-top: auto;
     color: var(--brand-text-muted);
+    border-top: 1px solid var(--brand-border);
+    background: var(--brand-card-soft);
 }
 
 body.dark-mode footer {
     color: var(--brand-text-muted);
+    border-top: 1px solid var(--brand-border);
+    background: var(--brand-card-soft);
 }
 
 

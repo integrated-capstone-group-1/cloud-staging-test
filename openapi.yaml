@@ -3163,3 +3163,762 @@ components:
           type: string
           format: date-time
           example: "2026-09-28T15:35:00+08:00"
+
+  # ==========================================================================
+  # RISK ENGINE ENDPOINTS
+  # ==========================================================================
+
+  /api/risk/evaluate:
+    post:
+      tags:
+        - Risk Assessment
+      
+      summary: Evaluate transaction risk
+      
+      description: |
+        Evaluates a transaction for fraud and risk indicators before processing.
+        
+        Risk scoring considers:
+        - Transaction amount relative to account history
+        - Transaction frequency and velocity
+        - Geographic and device fingerprinting
+        - Account age and behavior patterns
+        - Known fraud patterns
+        
+        Returns a risk score (0-100) and recommendation (APPROVE, REVIEW, DECLINE).
+        
+        Example:
+        
+          POST /api/risk/evaluate
+          
+          {
+            "customerId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+            "accountId": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
+            "transactionType": "TRANSFER",
+            "amount": 50000.00,
+            "currency": "PHP",
+            "ipAddress": "203.0.113.42",
+            "deviceFingerprint": "d8f3a4b5c6d7e8f9"
+          }
+      
+      operationId: evaluateRisk
+      
+      security:
+        - BearerAuth: []
+      
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RiskEvaluationRequest"
+            example:
+              customerId: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+              accountId: "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d"
+              transactionType: "TRANSFER"
+              amount: 50000.00
+              currency: "PHP"
+              ipAddress: "203.0.113.42"
+              deviceFingerprint: "d8f3a4b5c6d7e8f9"
+      
+      responses:
+        "200":
+          description: Risk evaluation completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RiskEvaluationResponse"
+              example:
+                riskScore: 35
+                riskLevel: "MEDIUM"
+                recommendation: "REVIEW"
+                factors:
+                  - "Unusually large transaction amount"
+                  - "New device detected"
+                requiresManualReview: true
+                approvalRequired: true
+        
+        "400":
+          description: Invalid request
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        
+        "401":
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+  /api/risk/history/{customerId}:
+    get:
+      tags:
+        - Risk Assessment
+      
+      summary: Get customer risk history
+      
+      description: |
+        Retrieves risk assessment history for a customer.
+        
+        Useful for reviewing past risk decisions and patterns.
+      
+      operationId: getRiskHistory
+      
+      security:
+        - BearerAuth: []
+      
+      parameters:
+        - $ref: "#/components/parameters/CustomerId"
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+          description: Maximum number of records to return
+      
+      responses:
+        "200":
+          description: Risk history retrieved
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RiskAssessment"
+        
+        "401":
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        
+        "404":
+          description: Customer not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+  # ==========================================================================
+  # NOTIFICATION SERVICE ENDPOINTS
+  # ==========================================================================
+
+  /api/notifications/send:
+    post:
+      tags:
+        - Notifications
+      
+      summary: Send a notification
+      
+      description: |
+        Sends a notification to a customer via specified channel (EMAIL, SMS, PUSH).
+        
+        Supported notification types:
+        - TRANSACTION_COMPLETED
+        - TRANSACTION_FAILED
+        - ACCOUNT_CREATED
+        - ACCOUNT_FROZEN
+        - PASSWORD_RESET
+        - SECURITY_ALERT
+        
+        Example:
+        
+          POST /api/notifications/send
+          
+          {
+            "customerId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+            "notificationType": "TRANSACTION_COMPLETED",
+            "channel": "EMAIL",
+            "subject": "Transaction Completed",
+            "message": "Your transfer of PHP 5,000 was successful",
+            "metadata": {
+              "transactionId": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+              "amount": "5000.00",
+              "currency": "PHP"
+            }
+          }
+      
+      operationId: sendNotification
+      
+      security:
+        - BearerAuth: []
+      
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NotificationRequest"
+            example:
+              customerId: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+              notificationType: "TRANSACTION_COMPLETED"
+              channel: "EMAIL"
+              subject: "Transaction Completed"
+              message: "Your transfer of PHP 5,000 was successful"
+              metadata:
+                transactionId: "7c9e6679-7425-40de-944b-e07fc1f90ae7"
+                amount: "5000.00"
+                currency: "PHP"
+      
+      responses:
+        "202":
+          description: Notification queued for delivery
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationResponse"
+              example:
+                notificationId: "n1a2b3c4-d5e6-7f8g-9h0i-1j2k3l4m5n6o"
+                status: "QUEUED"
+                message: "Notification queued for delivery"
+        
+        "400":
+          description: Invalid request
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        
+        "401":
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+  /api/notifications/{notificationId}/status:
+    get:
+      tags:
+        - Notifications
+      
+      summary: Get notification delivery status
+      
+      description: |
+        Retrieves the delivery status of a notification.
+        
+        Possible statuses:
+        - QUEUED: Notification is queued for delivery
+        - SENT: Notification was sent to provider
+        - DELIVERED: Confirmation of delivery received
+        - FAILED: Delivery failed
+        - BOUNCED: Email bounced or SMS rejected
+      
+      operationId: getNotificationStatus
+      
+      security:
+        - BearerAuth: []
+      
+      parameters:
+        - name: notificationId
+          in: path
+          required: true
+          description: UUID of the notification
+          schema:
+            type: string
+            format: uuid
+            example: "n1a2b3c4-d5e6-7f8g-9h0i-1j2k3l4m5n6o"
+      
+      responses:
+        "200":
+          description: Notification status retrieved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationStatusResponse"
+              example:
+                notificationId: "n1a2b3c4-d5e6-7f8g-9h0i-1j2k3l4m5n6o"
+                status: "DELIVERED"
+                channel: "EMAIL"
+                sentAt: "2026-09-28T15:30:00+08:00"
+                deliveredAt: "2026-09-28T15:30:05+08:00"
+        
+        "401":
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        
+        "404":
+          description: Notification not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+  /api/notifications/customer/{customerId}:
+    get:
+      tags:
+        - Notifications
+      
+      summary: Get customer notification history
+      
+      description: |
+        Retrieves notification history for a customer.
+      
+      operationId: getCustomerNotifications
+      
+      security:
+        - BearerAuth: []
+      
+      parameters:
+        - $ref: "#/components/parameters/CustomerId"
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 50
+            maximum: 200
+          description: Maximum number of notifications to return
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [QUEUED, SENT, DELIVERED, FAILED, BOUNCED]
+          description: Filter by notification status
+      
+      responses:
+        "200":
+          description: Notification history retrieved
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/NotificationRecord"
+        
+        "401":
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        
+        "404":
+          description: Customer not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+  # ==========================================================================
+  # ACCOUNT HOLDS ENDPOINTS
+  # ==========================================================================
+
+  /api/accounts/{accountId}/holds:
+    get:
+      tags:
+        - Accounts
+      
+      summary: Get active holds on an account
+      
+      description: |
+        Retrieves all active holds (fund reservations) on an account.
+        
+        Holds temporarily reduce available balance without debiting the account.
+        Common use cases include pending card authorizations and compliance reviews.
+      
+      operationId: getAccountHolds
+      
+      security:
+        - BearerAuth: []
+      
+      parameters:
+        - $ref: "#/components/parameters/AccountId"
+      
+      responses:
+        "200":
+          description: Account holds retrieved
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AccountHold"
+        
+        "401":
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        
+        "404":
+          description: Account not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+    post:
+      tags:
+        - Accounts
+      
+      summary: Place a hold on an account
+      
+      description: |
+        Places a temporary hold (fund reservation) on an account.
+        
+        The hold amount is deducted from available balance but not from actual balance.
+      
+      operationId: createAccountHold
+      
+      security:
+        - BearerAuth: []
+      
+      parameters:
+        - $ref: "#/components/parameters/AccountId"
+      
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateHoldRequest"
+            example:
+              amount: 1000.00
+              reason: "PENDING_AUTHORIZATION"
+              expiresAt: "2026-09-29T15:00:00+08:00"
+      
+      responses:
+        "201":
+          description: Hold created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountHold"
+        
+        "400":
+          description: Invalid request
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        
+        "401":
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        
+        "422":
+          description: Insufficient available balance
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+  /api/accounts/{accountId}/holds/{holdId}:
+    delete:
+      tags:
+        - Accounts
+      
+      summary: Release a hold
+      
+      description: |
+        Releases a hold, making the funds available again.
+      
+      operationId: releaseAccountHold
+      
+      security:
+        - BearerAuth: []
+      
+      parameters:
+        - $ref: "#/components/parameters/AccountId"
+        - name: holdId
+          in: path
+          required: true
+          description: UUID of the hold
+          schema:
+            type: string
+            format: uuid
+      
+      responses:
+        "204":
+          description: Hold released successfully
+        
+        "401":
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        
+        "404":
+          description: Hold not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+  # ==========================================================================
+  # ADDITIONAL SCHEMA DEFINITIONS
+  # ==========================================================================
+
+components:
+  schemas:
+    # Risk Engine Schemas
+    RiskEvaluationRequest:
+      type: object
+      required:
+        - customerId
+        - accountId
+        - transactionType
+        - amount
+        - currency
+      properties:
+        customerId:
+          type: string
+          format: uuid
+        accountId:
+          type: string
+          format: uuid
+        transactionType:
+          type: string
+          enum: [DEPOSIT, WITHDRAWAL, TRANSFER]
+        amount:
+          type: number
+          format: double
+          minimum: 0.01
+        currency:
+          type: string
+          pattern: "^[A-Z]{3}$"
+        counterpartyAccountId:
+          type: string
+          format: uuid
+          nullable: true
+        ipAddress:
+          type: string
+          nullable: true
+        deviceFingerprint:
+          type: string
+          nullable: true
+        geolocation:
+          type: object
+          nullable: true
+          properties:
+            latitude:
+              type: number
+            longitude:
+              type: number
+
+    RiskEvaluationResponse:
+      type: object
+      properties:
+        riskScore:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: Risk score from 0 (lowest risk) to 100 (highest risk)
+        riskLevel:
+          type: string
+          enum: [LOW, MEDIUM, HIGH, CRITICAL]
+        recommendation:
+          type: string
+          enum: [APPROVE, REVIEW, DECLINE]
+        factors:
+          type: array
+          items:
+            type: string
+          description: Risk factors that contributed to the score
+        requiresManualReview:
+          type: boolean
+        approvalRequired:
+          type: boolean
+        evaluatedAt:
+          type: string
+          format: date-time
+
+    RiskAssessment:
+      type: object
+      properties:
+        assessmentId:
+          type: string
+          format: uuid
+        customerId:
+          type: string
+          format: uuid
+        transactionId:
+          type: string
+          format: uuid
+          nullable: true
+        riskScore:
+          type: integer
+        riskLevel:
+          type: string
+          enum: [LOW, MEDIUM, HIGH, CRITICAL]
+        recommendation:
+          type: string
+          enum: [APPROVE, REVIEW, DECLINE]
+        finalDecision:
+          type: string
+          enum: [APPROVED, REJECTED, PENDING]
+          nullable: true
+        evaluatedAt:
+          type: string
+          format: date-time
+
+    # Notification Service Schemas
+    NotificationRequest:
+      type: object
+      required:
+        - customerId
+        - notificationType
+        - channel
+        - message
+      properties:
+        customerId:
+          type: string
+          format: uuid
+        notificationType:
+          type: string
+          enum:
+            - TRANSACTION_COMPLETED
+            - TRANSACTION_FAILED
+            - ACCOUNT_CREATED
+            - ACCOUNT_FROZEN
+            - PASSWORD_RESET
+            - SECURITY_ALERT
+            - BALANCE_LOW
+            - STATEMENT_READY
+        channel:
+          type: string
+          enum: [EMAIL, SMS, PUSH]
+        subject:
+          type: string
+          nullable: true
+          description: Required for EMAIL channel
+        message:
+          type: string
+          maxLength: 1000
+        metadata:
+          type: object
+          additionalProperties: true
+          nullable: true
+          description: Additional context data for template rendering
+
+    NotificationResponse:
+      type: object
+      properties:
+        notificationId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [QUEUED, SENT, DELIVERED, FAILED, BOUNCED]
+        message:
+          type: string
+
+    NotificationStatusResponse:
+      type: object
+      properties:
+        notificationId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [QUEUED, SENT, DELIVERED, FAILED, BOUNCED]
+        channel:
+          type: string
+          enum: [EMAIL, SMS, PUSH]
+        queuedAt:
+          type: string
+          format: date-time
+        sentAt:
+          type: string
+          format: date-time
+          nullable: true
+        deliveredAt:
+          type: string
+          format: date-time
+          nullable: true
+        failureReason:
+          type: string
+          nullable: true
+
+    NotificationRecord:
+      type: object
+      properties:
+        notificationId:
+          type: string
+          format: uuid
+        customerId:
+          type: string
+          format: uuid
+        notificationType:
+          type: string
+        channel:
+          type: string
+          enum: [EMAIL, SMS, PUSH]
+        status:
+          type: string
+          enum: [QUEUED, SENT, DELIVERED, FAILED, BOUNCED]
+        subject:
+          type: string
+          nullable: true
+        message:
+          type: string
+        queuedAt:
+          type: string
+          format: date-time
+        deliveredAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    # Account Hold Schemas
+    AccountHold:
+      type: object
+      properties:
+        holdId:
+          type: string
+          format: uuid
+        accountId:
+          type: string
+          format: uuid
+        amount:
+          type: number
+          format: double
+        reason:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+        releasedAt:
+          type: string
+          format: date-time
+          nullable: true
+        status:
+          type: string
+          enum: [ACTIVE, RELEASED, EXPIRED]
+
+    CreateHoldRequest:
+      type: object
+      required:
+        - amount
+        - reason
+      properties:
+        amount:
+          type: number
+          format: double
+          minimum: 0.01
+        reason:
+          type: string
+          maxLength: 255
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Optional expiration time for the hold

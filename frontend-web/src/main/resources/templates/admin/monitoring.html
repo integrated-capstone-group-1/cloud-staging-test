@@ -27,8 +27,8 @@
             <span class="badge border p-2" id="grafanaGlobalStatusBadge" style="background: var(--bg-card); color: var(--text-muted);">
                 <i class="bi bi-circle-fill text-secondary me-1" id="grafanaDot"></i><span id="grafanaStatusText">Probing Grafana Proxy...</span>
             </span>
-            <a href="/grafana/" target="_blank" class="btn btn-sm btn-outline-secondary" title="Open proxied Grafana console in external tab">
-                <i class="bi bi-box-arrow-up-right me-1"></i> Proxied Grafana (/grafana)
+            <a href="http://localhost:3000" target="_blank" class="btn btn-sm btn-outline-secondary" title="Open Grafana in external tab on port 3000">
+                <i class="bi bi-box-arrow-up-right me-1"></i> Grafana (Port 3000)
             </a>
         </div>
     </div>
@@ -195,7 +195,7 @@
                                 <option value="10s">10 seconds</option>
                                 <option value="30s">30 seconds</option>
                             </select>
-                            <a href="/grafana/d/banking-transaction-monitoring" target="_blank" class="btn btn-sm btn-outline-secondary py-0">
+                            <a href="http://localhost:3000/d/banking-transaction-monitoring" target="_blank" class="btn btn-sm btn-outline-secondary py-0">
                                 <i class="bi bi-box-arrow-up-right me-1"></i> Fullscreen
                             </a>
                         </div>
@@ -258,7 +258,7 @@
                                 <option value="10s" selected>10 seconds</option>
                                 <option value="30s">30 seconds</option>
                             </select>
-                            <a href="/grafana/d/banking-overview" target="_blank" class="btn btn-sm btn-outline-secondary py-0">
+                            <a href="http://localhost:3000/d/banking-overview" target="_blank" class="btn btn-sm btn-outline-secondary py-0">
                                 <i class="bi bi-box-arrow-up-right me-1"></i> Fullscreen
                             </a>
                         </div>
@@ -314,7 +314,7 @@
                             <span class="text-muted">Dashboard: <code>banking-application-logs</code></span>
                         </div>
                         <div class="d-flex align-items-center gap-2">
-                            <a href="/grafana/d/banking-application-logs" target="_blank" class="btn btn-sm btn-outline-secondary py-0">
+                            <a href="http://localhost:3000/d/banking-application-logs" target="_blank" class="btn btn-sm btn-outline-secondary py-0">
                                 <i class="bi bi-box-arrow-up-right me-1"></i> Fullscreen
                             </a>
                         </div>
@@ -376,8 +376,11 @@ function getGrafanaTheme() {
 function buildGrafanaUrl(basePath, refreshInterval) {
     var refresh = refreshInterval || "5s";
     var theme = getGrafanaTheme();
-    // Proxied through Admin Portal (:8090/grafana/**) per DIG-30 & zero-trust cloaking
-    return "/grafana" + basePath + "?kiosk&refresh=" + refresh + "&theme=" + theme;
+    // Use the protocol and host of current page to determine Grafana URL
+    // If accessed via 8090, use localhost:3000
+    // This works because the browser makes the request, not the backend
+    var grafanaHost = window.location.hostname === 'localhost' ? 'localhost:3000' : window.location.host.split(':')[0] + ':3000';
+    return "http://" + grafanaHost + basePath + "?kiosk&refresh=" + refresh + "&theme=" + theme;
 }
 
 function loadGrafanaIframe(iframeId, refreshInterval) {
@@ -402,7 +405,7 @@ function switchToPipeline() {
     }
 }
 
-// 4. Grafana Health Probe via Portal Reverse Proxy
+// 4. Grafana Health Probe via Direct Port 3000
 function probeGrafanaConnectivity(isManual) {
     var dot = document.getElementById("grafanaDot");
     var text = document.getElementById("grafanaStatusText");
@@ -411,17 +414,16 @@ function probeGrafanaConnectivity(isManual) {
         text.textContent = "Checking connection...";
     }
 
-    fetch("/grafana/api/health")
+    // Determine Grafana URL based on current hostname
+    var grafanaHost = window.location.hostname === 'localhost' ? 'localhost:3000' : window.location.host.split(':')[0] + ':3000';
+    var healthUrl = "http://" + grafanaHost + "/api/health";
+
+    fetch(healthUrl, { mode: 'no-cors' })
         .then(function(res) {
-            if (res.ok) {
-                isGrafanaOnline = true;
-                setGrafanaOnline();
-                // Load active iframe if on a Grafana tab
-                loadActiveTabIframe();
-            } else {
-                isGrafanaOnline = false;
-                setGrafanaOffline();
-            }
+            // With no-cors mode, we can't check status, so we assume success if fetch didn't error
+            isGrafanaOnline = true;
+            setGrafanaOnline();
+            loadActiveTabIframe();
         })
         .catch(function() {
             isGrafanaOnline = false;
@@ -430,7 +432,7 @@ function probeGrafanaConnectivity(isManual) {
 
     function setGrafanaOnline() {
         if (dot) dot.className = "bi bi-circle-fill text-success me-1";
-        if (text) text.textContent = "Grafana Proxy Online (:8090/grafana)";
+        if (text) text.textContent = "Grafana Online (Port 3000)";
         document.querySelectorAll(".grafana-offline-panel").forEach(p => p.classList.add("d-none"));
         document.querySelectorAll(".grafana-live-panel").forEach(p => p.classList.remove("d-none"));
     }

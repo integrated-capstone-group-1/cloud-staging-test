@@ -49,7 +49,8 @@ public class GrafanaProxyController {
             }
 
             String queryString = request.getQueryString();
-            String targetUrl = grafanaInternalUrl + "/grafana" + subPath + (queryString != null ? "?" + queryString : "");
+            // Fixed: Don't append "/grafana" again - subPath already contains the path
+            String targetUrl = grafanaInternalUrl + subPath + (queryString != null ? "?" + queryString : "");
 
             HttpRequest.Builder reqBuilder = HttpRequest.newBuilder()
                     .uri(URI.create(targetUrl))
