@@ -49,7 +49,7 @@ public class LedgerMutationAudit {
     @Column(name = "mutation_amount", precision = 18, scale = 4, nullable = false)
     private BigDecimal mutationAmount;
 
-    @Column(name = "currency_code", nullable = false, length = 3)
+    @Column(name = "currency_code", nullable = false, columnDefinition = "CHAR(3)")
     private String currencyCode;
 
     @Column(name = "mutation_type", nullable = false, length = 10)
