@@ -13,6 +13,8 @@ import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,11 +34,9 @@ import com.capstone.common.exception.InsufficientBalanceException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class CoreSettlementService {
 
@@ -47,6 +47,24 @@ public class CoreSettlementService {
     private final LedgerEntryRepository ledgerEntryRepository;
     private final BalanceCacheService balanceCacheService;
     private final ObjectMapper objectMapper;
+
+    @Autowired
+    public CoreSettlementService(
+            @Qualifier("accountRepository") AccountRepository accountRepository,
+            AccountHoldRepository accountHoldRepository,
+            PostingReferenceRepository postingReferenceRepository,
+            OutboxMasterRepository outboxMasterRepository,
+            LedgerEntryRepository ledgerEntryRepository,
+            BalanceCacheService balanceCacheService,
+            ObjectMapper objectMapper) {
+        this.accountRepository = accountRepository;
+        this.accountHoldRepository = accountHoldRepository;
+        this.postingReferenceRepository = postingReferenceRepository;
+        this.outboxMasterRepository = outboxMasterRepository;
+        this.ledgerEntryRepository = ledgerEntryRepository;
+        this.balanceCacheService = balanceCacheService;
+        this.objectMapper = objectMapper;
+    }
 
     @Transactional
     public CoreSettlementResponse settle(CoreSettlementRequest request) {
