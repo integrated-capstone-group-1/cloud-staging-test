@@ -5,6 +5,8 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,13 +24,22 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class AccountHoldService {
 
     private final AccountRepository accountRepository;
     private final AccountHoldRepository accountHoldRepository;
     private final BalanceCacheService balanceCacheService;
+
+    @Autowired
+    public AccountHoldService(
+            @Qualifier("accountRepository") AccountRepository accountRepository,
+            AccountHoldRepository accountHoldRepository,
+            BalanceCacheService balanceCacheService) {
+        this.accountRepository = accountRepository;
+        this.accountHoldRepository = accountHoldRepository;
+        this.balanceCacheService = balanceCacheService;
+    }
 
     @Transactional
     public HoldResponse createHold(String accountId, CreateHoldRequest request) {

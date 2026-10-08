@@ -1,26 +1,36 @@
 package com.capstone.accounts.service;
 
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
 import com.capstone.accounts.entity.AccountHold;
 import com.capstone.accounts.entity.AccountMaster;
 import com.capstone.accounts.repository.AccountHoldRepository;
 import com.capstone.accounts.repository.AccountRepository;
-import lombok.RequiredArgsConstructor;
+
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.scheduling.annotation.Scheduled;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class HoldExpiryJob {
 
     private final AccountHoldRepository accountHoldRepository;
     private final AccountRepository accountRepository;
+
+    @Autowired
+    public HoldExpiryJob(
+            AccountHoldRepository accountHoldRepository,
+            @Qualifier("accountRepository") AccountRepository accountRepository) {
+        this.accountHoldRepository = accountHoldRepository;
+        this.accountRepository = accountRepository;
+    }
 
     @Scheduled(fixedDelayString = "${accounts.hold-expiry-poll-ms:5000}")
     @Transactional
