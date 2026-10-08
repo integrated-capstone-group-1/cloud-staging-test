@@ -7,6 +7,9 @@ import com.bank.reconciliation.entity.postgres.ReconResultAudit;
 import com.bank.reconciliation.entity.postgres.ReconRunAudit;
 import com.bank.reconciliation.event.ReconciliationDiscrepancyEvent;
 import com.bank.reconciliation.event.ReconciliationRunCompletedEvent;
+import com.bank.reconciliation.entity.oracle.AccountMaster;
+import com.bank.reconciliation.repository.oracle.AccountMasterRepository;
+import com.bank.reconciliation.repository.postgres.LedgerMutationAuditRepository;
 import com.bank.reconciliation.repository.postgres.ReconResultAuditRepository;
 import com.bank.reconciliation.repository.postgres.ReconRunAuditRepository;
 import org.slf4j.Logger;
@@ -14,7 +17,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.List;
 
 /**
  * "The internal auditor" — one call to run() is one full recon batch:
@@ -45,29 +50,32 @@ public class ReconciliationEngine {
     private final ReconResultAuditRepository reconResultAuditRepository;
     private final OutboxWriter outboxWriter;
     private final ReconProperties props;
+    private final AccountMasterRepository accountMasterRepository;
+    private final LedgerMutationAuditRepository ledgerMutationAuditRepository;
 
     public ReconciliationEngine(MatchingService matchingService,
                                  ExceptionClassifier exceptionClassifier,
                                  ReconRunAuditRepository reconRunAuditRepository,
                                  ReconResultAuditRepository reconResultAuditRepository,
                                  OutboxWriter outboxWriter,
-                                 ReconProperties props) {
+                                 ReconProperties props,
+                                 AccountMasterRepository accountMasterRepository,
+                                 LedgerMutationAuditRepository ledgerMutationAuditRepository) {
         this.matchingService = matchingService;
         this.exceptionClassifier = exceptionClassifier;
         this.reconRunAuditRepository = reconRunAuditRepository;
         this.reconResultAuditRepository = reconResultAuditRepository;
         this.outboxWriter = outboxWriter;
         this.props = props;
+        this.accountMasterRepository = accountMasterRepository;
+        this.ledgerMutationAuditRepository = ledgerMutationAuditRepository;
     }
 
     public ReconRunAudit run(OffsetDateTime windowStart, OffsetDateTime windowEnd) {
         log.info("Starting reconciliation run for window [{}, {})", windowStart, windowEnd);
 
-        // Reads span two datasources with no shared transaction (Oracle is
-        // read-only anyway) - done outside the write transaction below.
-        MatchingService.WindowData windowData = matchingService.buildCandidates(windowStart, windowEnd);
-
         try {
+            MatchingService.WindowData windowData = matchingService.buildCandidates(windowStart, windowEnd);
             return persistRun(windowStart, windowEnd, windowData);
         } catch (Exception e) {
             log.error("Reconciliation run failed for window [{}, {})", windowStart, windowEnd, e);
@@ -143,6 +151,83 @@ public class ReconciliationEngine {
         reconRunAuditRepository.save(run);
         outboxWriter.enqueue(RUN_AGGREGATE_TYPE, run.getRunId().toString(),
                 props.getTopics().getRunCompleted(), ReconciliationRunCompletedEvent.from(run));
+        return run;
+    }
+
+    public ReconRunAudit reconcileAccountBalances() {
+        OffsetDateTime now = OffsetDateTime.now();
+        log.info("Starting account balance reconciliation run at {}", now);
+        List<AccountMaster> activeAccounts = accountMasterRepository.findByAccountStatus("ACTIVE");
+        if (activeAccounts == null || activeAccounts.isEmpty()) {
+            activeAccounts = accountMasterRepository.findAll();
+        }
+
+        try {
+            return persistBalanceRun(now, activeAccounts);
+        } catch (Exception e) {
+            log.error("Account balance reconciliation run failed", e);
+            return persistFailedRun(now.minusDays(1), now);
+        }
+    }
+
+    @Transactional("postgresTransactionManager")
+    protected ReconRunAudit persistBalanceRun(OffsetDateTime timestamp, List<AccountMaster> accounts) {
+        ReconRunAudit run = ReconRunAudit.start(timestamp.minusDays(1), timestamp);
+        reconRunAuditRepository.save(run);
+
+        int matched = 0;
+        int exceptions = 0;
+
+        for (AccountMaster account : accounts) {
+            BigDecimal actualBalance = account.getBalanceAmount();
+            BigDecimal expectedBalance = ledgerMutationAuditRepository.calculateExpectedBalanceForAccount(account.getAccountId());
+            if (expectedBalance == null) {
+                expectedBalance = BigDecimal.ZERO;
+            }
+
+            BigDecimal delta = actualBalance.subtract(expectedBalance).abs();
+            ReconResultAudit result = new ReconResultAudit();
+            result.setRunId(run.getRunId());
+            result.setTxnId("BAL-" + account.getAccountId());
+            result.setAccountId(account.getAccountId());
+            result.setExpectedCurrencyCode(account.getCurrencyCode());
+            result.setActualCurrencyCode(account.getCurrencyCode());
+            result.setExpectedAmount(expectedBalance);
+            result.setActualAmount(actualBalance);
+            result.setTxnStatus(account.getAccountStatus());
+
+            if (delta.compareTo(props.getMatching().getAmountTolerance()) <= 0) {
+                result.setReconStatus(ReconResultAudit.ReconStatus.MATCHED);
+                result.setExceptionType(null);
+                matched++;
+            } else {
+                result.setReconStatus(ReconResultAudit.ReconStatus.EXCEPTION);
+                result.setExceptionType(ReconResultAudit.ExceptionType.BALANCE_DRIFT);
+                result.setSeverity(ReconResultAudit.Severity.HIGH);
+                exceptions++;
+                publishDiscrepancy(result);
+                org.slf4j.MDC.put("component", "reconciliation");
+                org.slf4j.MDC.put("event_type", "BALANCE_DRIFT");
+                org.slf4j.MDC.put("accountId", account.getAccountId());
+                log.error("BALANCE_DRIFT detected for account {}. Live Oracle balance: {}, Expected Postgres sum: {}",
+                        account.getAccountId(), actualBalance, expectedBalance);
+                org.slf4j.MDC.clear();
+            }
+            reconResultAuditRepository.save(result);
+        }
+
+        run.setTotalTxnChecked(accounts.size());
+        run.setTotalMatched(matched);
+        run.setTotalExceptions(exceptions);
+        run.setRunStatus(ReconRunAudit.Status.COMPLETED);
+        run.setRunCompletedAt(OffsetDateTime.now());
+        reconRunAuditRepository.save(run);
+
+        outboxWriter.enqueue(RUN_AGGREGATE_TYPE, run.getRunId().toString(),
+                props.getTopics().getRunCompleted(), ReconciliationRunCompletedEvent.from(run));
+
+        log.info("Completed balance recon run {}: accountsChecked={} matched={} exceptions={}",
+                run.getRunId(), accounts.size(), matched, exceptions);
         return run;
     }
 

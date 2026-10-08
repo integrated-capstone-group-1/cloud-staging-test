@@ -14,4 +14,6 @@ import java.util.List;
 public interface AccountMasterRepository extends JpaRepository<AccountMaster, String> {
 
     List<AccountMaster> findAllByAccountIdIn(List<String> accountIds);
+
+    List<AccountMaster> findByAccountStatus(String accountStatus);
 }

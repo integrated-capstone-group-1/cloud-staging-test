@@ -23,7 +23,7 @@ public class ReconResultAudit {
     public enum ExceptionType {
         MISSING_LEDGER_ENTRY, ORPHAN_LEDGER_ENTRY, AMOUNT_MISMATCH,
         ACCOUNT_MISMATCH, STATUS_MISMATCH, DUPLICATE_ENTRY, LATE_POSTING,
-        CURRENCY_MISMATCH
+        CURRENCY_MISMATCH, BALANCE_DRIFT
     }
 
     public enum Severity { LOW, MEDIUM, HIGH, CRITICAL }
