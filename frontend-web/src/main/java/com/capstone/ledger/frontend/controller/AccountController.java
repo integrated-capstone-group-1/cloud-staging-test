@@ -35,7 +35,7 @@ public class AccountController {
     }
 
     @GetMapping("/accounts/{acctId}")
-    public String accountDetail(@PathVariable String acctId, HttpSession session, Model model) {
+    public String accountDetail(@PathVariable("acctId") String acctId, HttpSession session, Model model) {
         UserSession user = (UserSession) session.getAttribute(SessionAuthInterceptor.SESSION_USER);
         if (user == null) {
             return "redirect:/login";

@@ -46,7 +46,7 @@
                                     th:value="${a.accountId}"
                                     th:data-currency="${a.currencyCode}"
                                     th:data-balance="${a.balance}"
-                                    th:text="${a.accountId + ' · ' + a.currencyCode + ' ' + a.accountType.displayName + ' (Available: ' + a.formattedBalance + ')'}"></option>
+                                    th:text="${a.formattedAccountNumber + ' (' + a.pocketName + ') · Available: ' + a.formattedBalance}"></option>
                         </select>
                         <div class="text-danger small mt-1" th:if="${#fields.hasErrors('fromAcctNo')}" th:errors="*{fromAcctNo}"></div>
                     </div>
@@ -56,17 +56,17 @@
                         <div class="mb-3">
                             <label class="form-label fw-semibold">Destination Account Number <span class="text-muted">(Transfer Only)</span></label>
                             <input type="text" class="form-control" th:field="*{toAcctNo}" id="destAcctInput"
-                                   placeholder="Enter destination account (e.g. acct-maria-eur-01 or account UUID)"
+                                   placeholder="Enter destination account (e.g. 1000-0000-0002 or account ID)"
                                    list="knownAccountsList" oninput="updateFxPreview()"/>
                             <datalist id="knownAccountsList">
                                 <option th:each="a : ${allAccounts}"
                                         th:value="${a.accountId}"
                                         th:data-currency="${a.currencyCode}"
-                                        th:label="${a.accountId + ' · ' + a.currencyCode + ' (' + a.customerId + ')'}"></option>
+                                        th:label="${a.formattedAccountNumber + ' (' + a.pocketName + ')'}"></option>
                                 <option th:each="a : ${userAccounts}"
                                         th:value="${a.accountId}"
                                         th:data-currency="${a.currencyCode}"
-                                        th:label="${'My ' + a.currencyCode + ' ' + a.accountType.displayName + ' (' + a.accountId + ')'}"></option>
+                                        th:label="${'My ' + a.pocketName + ' (' + a.formattedAccountNumber + ')'}"></option>
                             </datalist>
                             <div class="text-danger small mt-1" th:if="${#fields.hasErrors('toAcctNo')}" th:errors="*{toAcctNo}"></div>
                             <div class="form-text small text-muted">You can type any destination account ID or choose from suggested accounts.</div>

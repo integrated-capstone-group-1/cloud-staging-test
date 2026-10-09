@@ -302,4 +302,88 @@ public class AdminPortalControllerTest {
                 .andExpect(view().name("admin/audit"))
                 .andExpect(model().attributeExists("auditLogs"));
     }
+
+    // =========================================================================
+    // DIG-101 & DIG-102: Real-time Telemetry & SSE Stream Endpoints
+    // =========================================================================
+
+    @Test
+    @DisplayName("DIG-102: Telemetry API returns live KPI metrics and charts for admin")
+    void testDashboardTelemetryEndpoint_adminSuccess() throws Exception {
+        mockMvc.perform(get("/admin/api/telemetry").session(adminSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalBalance").exists())
+                .andExpect(jsonPath("$.activeAccounts").exists())
+                .andExpect(jsonPath("$.heldCount").exists())
+                .andExpect(jsonPath("$.pipelineLatencyData").isArray())
+                .andExpect(jsonPath("$.txHourlyData").isArray());
+    }
+
+    @Test
+    @DisplayName("DIG-102: Telemetry API blocks non-admin customers with 403 Forbidden")
+    void testDashboardTelemetryEndpoint_customerForbidden() throws Exception {
+        mockMvc.perform(get("/admin/api/telemetry").session(customerSession))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("DIG-101: Monitoring SSE stream connects successfully for admin")
+    void testMonitoringStreamEndpoint_adminSuccess() throws Exception {
+        mockMvc.perform(get("/admin/api/monitoring/stream").session(adminSession))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("DIG-101: Monitoring SSE stream blocks customer session with 403 Forbidden")
+    void testMonitoringStreamEndpoint_customerForbidden() throws Exception {
+        mockMvc.perform(get("/admin/api/monitoring/stream").session(customerSession))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("DIG-102: Monitoring JSON feed returns transaction list for admin")
+    void testMonitoringFeedJsonEndpoint_adminSuccess() throws Exception {
+        mockMvc.perform(get("/admin/api/monitoring/feed").session(adminSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray());
+    }
+
+    @Test
+    @DisplayName("DIG-102: Monitoring JSON feed blocks customer session with 403 Forbidden")
+    void testMonitoringFeedJsonEndpoint_customerForbidden() throws Exception {
+        mockMvc.perform(get("/admin/api/monitoring/feed").session(customerSession))
+                .andExpect(status().isForbidden());
+    }
+
+    // =========================================================================
+    // Separation of Duties (SoD): Admin Retail Transaction Restrictions
+    // =========================================================================
+
+    @Test
+    @DisplayName("SoD Guard: Admin session navigating to /transactions/new is redirected to /admin/accounts")
+    void testAdminCannotAccessNewRetailTransactionForm() throws Exception {
+        mockMvc.perform(get("/transactions/new").session(adminSession))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/admin/accounts"));
+    }
+
+    @Test
+    @DisplayName("SoD Guard: Admin session POST to /transactions/new is blocked with 403 Forbidden")
+    void testAdminCannotSubmitRetailTransaction() throws Exception {
+        mockMvc.perform(post("/transactions/new")
+                        .session(adminSession)
+                        .param("fromAcctNo", "ACCT-1001-PHP")
+                        .param("txnType", "DEPOSIT")
+                        .param("amount", "100.00"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("SoD Guard: Admin accessing /accounts/{id} can view ledger with governance controls")
+    void testAdminCanViewLedgerWithGovernanceControls() throws Exception {
+        mockMvc.perform(get("/accounts/ACCT-1001-PHP").session(adminSession))
+                .andExpect(status().isOk())
+                .andExpect(view().name("account/detail"))
+                .andExpect(model().attributeExists("account", "transactions", "user"));
+    }
 }

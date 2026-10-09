@@ -13,16 +13,30 @@
             <div>
                 <div class="d-flex align-items-center gap-2 mb-1">
                     <span class="currency-badge fs-6" th:text="${account.currencyCode}">PHP</span>
+                    <span class="badge bg-primary-subtle text-primary border" th:text="${account.pocketName}">PHP Pocket</span>
                     <span class="badge" th:classappend="${account.accountStatus.name() == 'ACTIVE'} ? 'bg-success' : 'bg-warning'"
                           th:text="${account.accountStatus.displayName}">ACTIVE</span>
-                    <span class="text-muted small">· Created <span th:text="${#temporals.format(account.createdAt, 'dd MMM yyyy')}"></span></span>
+                    <span class="text-muted small">· <span th:text="${account.accountType.displayName}">Regular Savings</span></span>
                 </div>
-                <h4 class="fw-bold mb-1" th:text="${account.accountType.displayName}">Regular Savings</h4>
-                <div class="font-monospace text-muted small">Account ID: <strong th:text="${account.accountId}">ACCT-1001-PHP</strong></div>
+                <div class="d-flex align-items-baseline gap-2 mt-2">
+                    <span class="text-muted small fw-semibold">Account No:</span>
+                    <h3 class="fw-bold mb-0 font-monospace text-dark" th:text="${account.formattedAccountNumber}">1000-0000-0001</h3>
+                </div>
+                <div class="d-flex align-items-center gap-2 text-muted small mt-2">
+                    <span>System UUID:</span>
+                    <code class="font-monospace text-secondary" th:text="${account.accountId}">3722f77f-3d1b-4d55-8f83-b71bac91d095</code>
+                    <button type="button" class="btn btn-sm btn-link p-0 text-muted copy-btn"
+                            th:data-copy="${account.accountId}" title="Copy UUID">
+                        <i class="bi bi-clipboard"></i>
+                    </button>
+                    <span th:if="${account.customerId != null}" class="text-muted">· CIF: <strong class="text-dark font-monospace" th:text="${account.cifNumber}">CIF-8000-0001</strong></span>
+                    <span class="text-muted">· Provisioned <span th:text="${#temporals.format(account.createdAt, 'dd MMM yyyy')}"></span></span>
+                </div>
                 <div class="balance-figure text-primary mt-2" th:text="${account.formattedBalance}">₱0.00</div>
             </div>
 
-            <div class="d-flex flex-wrap gap-2">
+            <!-- Customer Retail Transaction Buttons (Restricted to Customer Persona) -->
+            <div class="d-flex flex-wrap gap-2" th:if="${user != null && !user.admin}">
                 <a th:href="@{/transactions/new(fromAcctNo=${account.accountId},type='DEPOSIT')}" class="btn btn-outline-success btn-sm">
                     <i class="bi bi-box-arrow-in-down me-1"></i> Deposit
                 </a>
@@ -31,6 +45,30 @@
                 </a>
                 <a th:href="@{/transactions/new(fromAcctNo=${account.accountId},type='TRANSFER')}" class="btn btn-primary btn-sm">
                     <i class="bi bi-send me-1"></i> Transfer Funds
+                </a>
+            </div>
+
+            <!-- Administrator Governance Actions (Compliant with Banking Separation of Duties) -->
+            <div class="d-flex flex-wrap gap-2 align-items-center" th:if="${user != null && user.admin}">
+                <span class="badge bg-secondary-subtle text-secondary border px-2 py-1 small">
+                    <i class="bi bi-shield-lock me-1"></i>Admin Read-Only Ledger View
+                </span>
+                <a th:if="${account.customerId != null}" th:href="@{/admin/customers/{id}(id=${account.customerId})}" class="btn btn-outline-info btn-sm">
+                    <i class="bi bi-person-badge me-1"></i> Customer 360 (<span class="font-monospace" th:text="${account.cifNumber}"></span>)
+                </a>
+                <!-- Freeze / Unfreeze Action Button triggering Enterprise Modal -->
+                <button th:if="${account.accountStatus.name() == 'ACTIVE'}" type="button"
+                        class="btn btn-outline-warning btn-sm"
+                        data-bs-toggle="modal" data-bs-target="#freezeAccountModal">
+                    <i class="bi bi-snow me-1"></i> Freeze Account
+                </button>
+                <button th:if="${account.accountStatus.name() == 'FROZEN'}" type="button"
+                        class="btn btn-outline-success btn-sm"
+                        data-bs-toggle="modal" data-bs-target="#unfreezeAccountModal">
+                    <i class="bi bi-sun me-1"></i> Unfreeze Account
+                </button>
+                <a href="/admin/accounts" class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-arrow-left me-1"></i> Accounts Registry
                 </a>
             </div>
         </div>
@@ -50,7 +88,7 @@
             <table class="table table-sm table-hover">
                 <thead>
                     <tr>
-                        <th>Timestamp</th>
+                        <th>Timestamp (PHT)</th>
                         <th>Transaction ID</th>
                         <th>Mutation ID</th>
                         <th>Type</th>
@@ -176,6 +214,125 @@
 
 })();
 </script>
+
+<!-- Freeze Account Confirmation Modal -->
+<div class="modal fade" id="freezeAccountModal" tabindex="-1" aria-labelledby="freezeAccountModalLabel" aria-hidden="true" th:if="${user != null && user.admin}">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-warning shadow">
+            <form th:action="@{/admin/accounts/{id}/freeze(id=${account.accountId})}" method="post">
+                <input type="hidden" name="redirectAcctId" th:value="${account.accountId}"/>
+                <div class="modal-header bg-warning-subtle text-warning-emphasis">
+                    <h5 class="modal-title fw-bold" id="freezeAccountModalLabel">
+                        <i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>Confirm Account Freeze
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-warning d-flex align-items-start gap-2 mb-3">
+                        <i class="bi bi-shield-slash-fill fs-4 mt-1"></i>
+                        <div>
+                            <strong>Critical Governance Action:</strong> Freezing this account will immediately halt all outbound payments, debit mutations, transfers, and card authorizations for this account.
+                        </div>
+                    </div>
+                    <div class="bg-light p-3 rounded mb-3 border">
+                        <div class="d-flex justify-content-between mb-1 small">
+                            <span class="text-muted">Target Account:</span>
+                            <span class="font-monospace fw-bold" th:text="${account.formattedAccountNumber + ' (' + account.pocketName + ')'}"></span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-1 small align-items-center">
+                            <span class="text-muted">System UUID:</span>
+                            <div class="d-inline-flex align-items-center gap-1">
+                                <code class="font-monospace text-secondary small" th:text="${account.accountId}"></code>
+                                <button type="button" class="btn btn-sm btn-link p-0 text-muted copy-btn" th:data-copy="${account.accountId}" title="Copy UUID">
+                                    <i class="bi bi-clipboard"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="d-flex justify-content-between mb-1 small">
+                            <span class="text-muted">Account Type &amp; Currency:</span>
+                            <span class="fw-semibold" th:text="${account.accountType.displayName + ' · ' + account.currencyCode}"></span>
+                        </div>
+                        <div class="d-flex justify-content-between small">
+                            <span class="text-muted">Current Ledger Balance:</span>
+                            <span class="font-monospace fw-bold" th:text="${account.formattedBalance}"></span>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="freezeStandardReason" class="form-label small fw-semibold">Administrative Reason Category</label>
+                        <select class="form-select form-select-sm" id="freezeStandardReason" onchange="document.getElementById('freezeReasonInput').value = this.value">
+                            <option value="Suspected Fraud / AML Risk Hold" selected>Suspected Fraud / AML Risk Hold</option>
+                            <option value="AMLA Regulatory / Court Hold Order">AMLA Regulatory / Court Hold Order</option>
+                            <option value="Customer Security / Stolen Device Report">Customer Security / Stolen Device Report</option>
+                            <option value="Administrative Risk &amp; Reconciliation Review">Administrative Risk &amp; Reconciliation Review</option>
+                            <option value="Account Owner KYC Discrepancy">Account Owner KYC Discrepancy</option>
+                        </select>
+                    </div>
+                    <div class="mb-2">
+                        <label for="freezeReasonInput" class="form-label small fw-semibold">Audit Justification Notes</label>
+                        <textarea class="form-control form-control-sm" id="freezeReasonInput" name="reason" rows="2" required>Suspected Fraud / AML Risk Hold</textarea>
+                        <div class="form-text small">This reason will be permanently recorded in the immutable audit ledger.</div>
+                    </div>
+                </div>
+                <div class="modal-footer py-2 bg-light">
+                    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-sm btn-danger px-3">
+                        <i class="bi bi-snow me-1"></i> Confirm &amp; Freeze Account
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Unfreeze Account Confirmation Modal -->
+<div class="modal fade" id="unfreezeAccountModal" tabindex="-1" aria-labelledby="unfreezeAccountModalLabel" aria-hidden="true" th:if="${user != null && user.admin}">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-success shadow">
+            <form th:action="@{/admin/accounts/{id}/unfreeze(id=${account.accountId})}" method="post">
+                <input type="hidden" name="redirectAcctId" th:value="${account.accountId}"/>
+                <div class="modal-header bg-success-subtle text-success-emphasis">
+                    <h5 class="modal-title fw-bold" id="unfreezeAccountModalLabel">
+                        <i class="bi bi-check-circle-fill text-success me-2"></i>Confirm Account Unfreeze
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info d-flex align-items-start gap-2 mb-3">
+                        <i class="bi bi-info-circle-fill fs-4 mt-1"></i>
+                        <div>
+                            Unfreezing will restore full transactional capabilities. Outbound transfers, debit mutations, and card payments will be permitted immediately.
+                        </div>
+                    </div>
+                    <div class="bg-light p-3 rounded mb-2 border">
+                        <div class="d-flex justify-content-between mb-1 small">
+                            <span class="text-muted">Account to Restore:</span>
+                            <span class="font-monospace fw-bold" th:text="${account.formattedAccountNumber + ' (' + account.pocketName + ')'}"></span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-1 small align-items-center">
+                            <span class="text-muted">System UUID:</span>
+                            <div class="d-inline-flex align-items-center gap-1">
+                                <code class="font-monospace text-secondary small" th:text="${account.accountId}"></code>
+                                <button type="button" class="btn btn-sm btn-link p-0 text-muted copy-btn" th:data-copy="${account.accountId}" title="Copy UUID">
+                                    <i class="bi bi-clipboard"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="d-flex justify-content-between small">
+                            <span class="text-muted">Current Ledger Balance:</span>
+                            <span class="font-monospace fw-bold" th:text="${account.formattedBalance}"></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer py-2 bg-light">
+                    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-sm btn-success px-3">
+                        <i class="bi bi-sun me-1"></i> Confirm &amp; Restore to Active
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 
 <div th:replace="~{fragments/layout :: footer}"></div>
 

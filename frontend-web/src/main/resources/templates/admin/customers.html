@@ -22,7 +22,7 @@
             <table class="table table-sm table-hover align-middle" id="custTable">
                 <thead>
                     <tr>
-                        <th>Customer ID</th>
+                        <th>Customer / CIF</th>
                         <th>Name</th>
                         <th>Email &amp; Contact</th>
                         <th>Registration Date</th>
@@ -33,7 +33,18 @@
                 </thead>
                 <tbody>
                     <tr th:each="c : ${customers}">
-                        <td class="font-monospace fw-semibold" th:text="${c.customerId}">CUST-1001</td>
+                        <td>
+                            <div class="d-flex flex-column">
+                                <span class="font-monospace fw-bold text-dark" th:text="${c.cifNumber}">CIF-8000-0001</span>
+                                <div class="d-flex align-items-center gap-1 mt-1 text-muted" style="font-size: 0.75rem;">
+                                    <span class="text-secondary font-monospace" th:text="${c.shortCustomerId}" th:title="${c.customerId}">7bd20304...</span>
+                                    <button type="button" class="btn btn-sm btn-link p-0 text-muted copy-btn"
+                                            th:data-copy="${c.customerId}" title="Copy Customer UUID">
+                                        <i class="bi bi-clipboard" style="font-size: 0.72rem;"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </td>
                         <td>
                             <div class="fw-bold" th:text="${c.fullName}">Juan Dela Cruz</div>
                             <small class="text-muted" th:text="${c.address}">Metro Manila</small>

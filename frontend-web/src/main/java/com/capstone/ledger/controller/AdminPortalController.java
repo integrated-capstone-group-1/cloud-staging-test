@@ -6,11 +6,13 @@ import com.capstone.ledger.frontend.service.AdminPortalService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.math.BigDecimal;
@@ -81,11 +83,13 @@ public class AdminPortalController {
     @PostMapping({"/api/v1/admin/accounts/{id}/freeze", "/admin/accounts/{id}/freeze"})
     public Object freezeAccount(@PathVariable("id") String accountId,
                                 @RequestParam(value = "redirectCustId", required = false) String redirectCustId,
+                                @RequestParam(value = "redirectAcctId", required = false) String redirectAcctId,
+                                @RequestParam(value = "reason", required = false) String reason,
                                 HttpServletRequest request,
                                 HttpSession session,
                                 RedirectAttributes redirectAttributes) {
         UserSession user = requireAdmin(session);
-        adminPortalService.freezeAccount(accountId, user.getEmail());
+        adminPortalService.freezeAccount(accountId, user.getEmail(), reason);
 
         if (isJsonRequest(request)) {
             return ResponseEntity.ok(Map.of(
@@ -97,6 +101,9 @@ public class AdminPortalController {
 
         redirectAttributes.addFlashAttribute("successMessage",
                 "Account " + accountId + " has been FROZEN. All balance mutations are halted.");
+        if (redirectAcctId != null && !redirectAcctId.isBlank()) {
+            return "redirect:/accounts/" + redirectAcctId;
+        }
         if (redirectCustId != null && !redirectCustId.isBlank()) {
             return "redirect:/admin/customers/" + redirectCustId;
         }
@@ -106,6 +113,7 @@ public class AdminPortalController {
     @PostMapping({"/api/v1/admin/accounts/{id}/unfreeze", "/admin/accounts/{id}/unfreeze"})
     public Object unfreezeAccount(@PathVariable("id") String accountId,
                                   @RequestParam(value = "redirectCustId", required = false) String redirectCustId,
+                                  @RequestParam(value = "redirectAcctId", required = false) String redirectAcctId,
                                   HttpServletRequest request,
                                   HttpSession session,
                                   RedirectAttributes redirectAttributes) {
@@ -122,6 +130,9 @@ public class AdminPortalController {
 
         redirectAttributes.addFlashAttribute("successMessage",
                 "Account " + accountId + " has been UNFROZEN and restored to ACTIVE status.");
+        if (redirectAcctId != null && !redirectAcctId.isBlank()) {
+            return "redirect:/accounts/" + redirectAcctId;
+        }
         if (redirectCustId != null && !redirectCustId.isBlank()) {
             return "redirect:/admin/customers/" + redirectCustId;
         }
@@ -308,6 +319,20 @@ public class AdminPortalController {
         model.addAttribute("p95LatencyMs", "340 ms");
         model.addAttribute("activeTps", "18.4 tx/s");
         return "admin/monitoring";
+    }
+
+    @GetMapping(value = {"/admin/api/monitoring/stream", "/api/v1/monitoring/stream"}, produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @ResponseBody
+    public SseEmitter monitoringStream(HttpSession session) {
+        requireAdmin(session);
+        return adminPortalService.subscribeMonitoringStream();
+    }
+
+    @GetMapping(value = {"/admin/api/monitoring/feed", "/api/v1/monitoring/feed"}, produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public ResponseEntity<List<TransactionMonitoringView>> monitoringFeedRest(HttpSession session) {
+        requireAdmin(session);
+        return ResponseEntity.ok(adminPortalService.getMonitoringFeed());
     }
 
     // =========================================================================

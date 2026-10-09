@@ -27,7 +27,7 @@
                 <thead>
                     <tr class="small text-muted">
                         <th>Audit ID</th>
-                        <th>Timestamp</th>
+                        <th>Timestamp (PHT)</th>
                         <th>Action</th>
                         <th>Operator</th>
                         <th>Resource Target</th>
@@ -43,7 +43,15 @@
                         </td>
                         <td class="small fw-semibold" th:text="${log.performedBy}">admin@ledgerbank.com</td>
                         <td class="small font-monospace">
-                            <span class="badge bg-light text-dark border" th:text="${log.targetResource + ':' + log.targetId}">ACCOUNT:ACCT-1001-PHP</span>
+                            <div class="d-inline-flex align-items-center gap-1">
+                                <a th:if="${log.targetResource == 'ACCOUNT'}" th:href="@{/accounts/{id}(id=${log.targetId})}" class="badge bg-light text-primary border text-decoration-none" th:text="${log.targetResource + ':' + log.targetId}">ACCOUNT:ACCT-1001-PHP</a>
+                                <a th:if="${log.targetResource == 'CUSTOMER'}" th:href="@{/admin/customers/{id}(id=${log.targetId})}" class="badge bg-light text-primary border text-decoration-none" th:text="${log.targetResource + ':' + log.targetId}">CUSTOMER:CUST-1001</a>
+                                <a th:if="${log.targetResource == 'TRANSACTION'}" th:href="@{/transactions/receipt/{id}(id=${log.targetId})}" class="badge bg-light text-primary border text-decoration-none" th:text="${log.targetResource + ':' + log.targetId}">TRANSACTION:TXN-1001</a>
+                                <span th:if="${log.targetResource != 'ACCOUNT' and log.targetResource != 'CUSTOMER' and log.targetResource != 'TRANSACTION'}" class="badge bg-light text-dark border" th:text="${log.targetResource + ':' + log.targetId}">SYSTEM:PORTAL</span>
+                                <button type="button" class="btn btn-sm btn-link p-0 text-muted copy-btn" th:data-copy="${log.targetId}" title="Copy ID">
+                                    <i class="bi bi-clipboard" style="font-size: 0.72rem;"></i>
+                                </button>
+                            </div>
                         </td>
                         <td class="small text-muted" th:text="${log.details}">Admin enforced freeze</td>
                     </tr>

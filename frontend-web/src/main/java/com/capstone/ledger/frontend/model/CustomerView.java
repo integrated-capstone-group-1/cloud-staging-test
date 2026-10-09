@@ -82,6 +82,39 @@ public class CustomerView {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 
+    // --- Banking CIF & Dual Display Helpers ---
+    public static String deriveCifNumber(String customerId, String email) {
+        if (customerId == null && email == null) {
+            return "CIF-8000-0001";
+        }
+        if ("7bd20304-dd6a-4e45-850b-58df8b535be4".equalsIgnoreCase(customerId) ||
+                (email != null && email.toLowerCase().contains("juan"))) {
+            return "CIF-8000-0001";
+        }
+        if ("66e07d02-05c9-4deb-87d5-10e23cf5968f".equalsIgnoreCase(customerId) ||
+                (email != null && email.toLowerCase().contains("maria"))) {
+            return "CIF-8000-0002";
+        }
+        if ("2d49c23b-5f65-48da-aa68-28b155dd4022".equalsIgnoreCase(customerId) ||
+                (email != null && email.toLowerCase().contains("admin"))) {
+            return "CIF-8000-0000";
+        }
+        if (customerId != null) {
+            int hash = Math.abs(customerId.hashCode()) % 9000 + 1000;
+            return "CIF-8000-" + hash;
+        }
+        return "CIF-8000-9999";
+    }
+
+    public String getCifNumber() {
+        return deriveCifNumber(customerId, email);
+    }
+
+    public String getShortCustomerId() {
+        if (customerId == null) return "";
+        return customerId.length() > 8 ? customerId.substring(0, 8) + "..." : customerId;
+    }
+
     // --- Aliases for template backwards compatibility ---
     public String getCustId() { return customerId; }
     public void setCustId(String custId) { this.customerId = custId; }

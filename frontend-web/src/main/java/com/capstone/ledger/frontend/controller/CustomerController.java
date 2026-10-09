@@ -84,7 +84,7 @@ public class CustomerController {
     }
 
     @GetMapping("/customers/{custId}")
-    public String customerDetail(@PathVariable String custId, HttpSession session, Model model) {
+    public String customerDetail(@PathVariable("custId") String custId, HttpSession session, Model model) {
         UserSession user = (UserSession) session.getAttribute(SessionAuthInterceptor.SESSION_USER);
         if (user == null) {
             return "redirect:/login";

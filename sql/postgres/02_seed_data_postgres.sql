@@ -24,13 +24,13 @@ VALUES ('7b006281-4871-4dc6-b17f-04aafcd2810a', '05da5006-2cc5-4dd0-87ab-aeca1f0
         '3722f77f-3d1b-4d55-8f83-b71bac91d095', 'PHP', 2000.0000, 'CREDIT', 'DEPOSIT', 'POSTED',
         DATE '2026-09-27', TIMESTAMPTZ '2026-09-27 08:00:05+00');
 
--- T2: WITHDRAWAL from Juan Checking - 1 DEBIT leg
+-- T2: WITHDRAWAL from Juan Savings - 1 DEBIT leg
 INSERT INTO ledger_mutation_audit (mutation_uuid, txn_id, leg_no, account_id, currency_code, mutation_amount, mutation_type, txn_type, audit_state, business_date, created_at)
 VALUES ('ad4a2ffd-df4c-46a8-baee-84652f9c3672', 'b314f899-2fc0-4087-80e6-09e87ece0d49', 1,
         'a86c97cc-1ea5-4767-bd5b-148968354f9c', 'PHP', 500.0000, 'DEBIT', 'WITHDRAWAL', 'POSTED',
         DATE '2026-09-27', TIMESTAMPTZ '2026-09-27 09:15:04+00');
 
--- T3: TRANSFER Juan Checking -> Maria Checking - DEBIT + CREDIT legs
+-- T3: TRANSFER Juan Savings -> Maria Savings - DEBIT + CREDIT legs
 INSERT INTO ledger_mutation_audit (mutation_uuid, txn_id, leg_no, account_id, currency_code, mutation_amount, mutation_type, txn_type, audit_state, business_date, created_at)
 VALUES ('0c221483-efea-45be-adfc-4576500866d4', '8a2adc48-4cf1-4478-b317-57d60b9bf0ee', 1,
         'a86c97cc-1ea5-4767-bd5b-148968354f9c', 'PHP', 1000.0000, 'DEBIT', 'TRANSFER', 'POSTED',

@@ -113,7 +113,7 @@ public class MockBankingApiClient implements BankingApiClient {
                 AccountStatus.ACTIVE, new BigDecimal("45250.00"), LocalDateTime.now().minusMonths(8)
         );
         AccountView juanUsd = new AccountView(
-                "ACCT-1002-USD", juan.getCustomerId(), AccountType.CHECKING, "USD",
+                "ACCT-1002-USD", juan.getCustomerId(), AccountType.SAVINGS, "USD",
                 AccountStatus.ACTIVE, new BigDecimal("1500.00"), LocalDateTime.now().minusMonths(5)
         );
 

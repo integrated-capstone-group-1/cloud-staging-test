@@ -79,7 +79,7 @@
                             <i class="bi bi-info-circle me-1"></i> No reconciliation runs recorded yet. Choose a date range and run reconciliation.
                         </td>
                     </tr>
-                    <tr th:each="r : ${runs}">
+                    <tr th:each="r : ${runs}" th:classappend="${selectedRun != null and selectedRun.runId == r.runId} ? 'table-primary bg-primary-subtle' : ''">
                         <td class="font-monospace fw-bold" th:text="${r.runId}">RUN-01</td>
                         <td class="small" th:text="${#temporals.format(r.runStartedAt, 'dd MMM HH:mm:ss')}"></td>
                         <td class="small" th:text="${#temporals.format(r.runCompletedAt, 'dd MMM HH:mm:ss')}"></td>
@@ -92,7 +92,7 @@
                             <span class="badge" th:classappend="${r.statusBadgeClass}" th:text="${r.runStatus}">COMPLETED</span>
                         </td>
                         <td>
-                            <a th:href="@{/admin/reconciliation(runId=${r.runId})}"
+                            <a th:href="@{|/admin/reconciliation?runId=${r.runId}#reconResultsSection|}"
                                class="btn btn-sm btn-outline-primary py-0 px-2"
                                th:attr="aria-label=${'View results for run ' + r.runId}">
                                 <i class="bi bi-eye me-1"></i>View results
@@ -105,14 +105,16 @@
     </div>
 
     <!-- Discrepancy & Results Table -->
-    <div class="card p-3">
+    <div class="card p-3" id="reconResultsSection">
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h5 class="fw-bold mb-0">
                 <i class="bi bi-list-check text-primary me-2"></i>Reconciliation Audit Results &amp; Discrepancies (RECON_RESULT_AUDIT)
             </h5>
-            <span class="badge bg-secondary" th:if="${selectedRun != null}" th:text="${'Run ' + selectedRun.runId}"></span>
-            <span class="badge bg-danger" th:if="${selectedRun != null and totalExceptions > 0}" th:text="${totalExceptions + ' Exceptions Flagged'}"></span>
-            <span class="badge bg-success" th:if="${selectedRun != null and totalExceptions == 0}">100% Match Clean</span>
+            <div class="d-flex gap-2 align-items-center">
+                <span class="badge bg-secondary" th:if="${selectedRun != null}" th:text="${'Run ' + selectedRun.runId}"></span>
+                <span class="badge bg-danger" th:if="${selectedRun != null and totalExceptions > 0}" th:text="${totalExceptions + ' Exceptions Flagged'}"></span>
+                <span class="badge bg-success" th:if="${selectedRun != null and totalExceptions == 0}">100% Match Clean</span>
+            </div>
         </div>
 
         <div class="alert alert-success d-flex align-items-center py-2 mb-3" th:if="${selectedRun != null and totalExceptions == 0}">
@@ -129,7 +131,7 @@
             <table class="table table-sm table-hover align-middle">
                 <thead>
                     <tr>
-                        <th>Transaction Date &amp; Time</th>
+                        <th>Transaction Time (PHT)</th>
                         <th>Result ID</th>
                         <th>Txn ID</th>
                         <th>Account ID</th>
@@ -140,11 +142,12 @@
                         <th>Variance</th>
                         <th>Lag (sec)</th>
                         <th>Severity</th>
+                        <th>Action</th>
                     </tr>
                 </thead>
                 <tbody>
                     <tr th:if="${selectedRun == null or #lists.isEmpty(selectedRun.results)}">
-                        <td colspan="11" class="text-center text-muted py-3">
+                        <td colspan="12" class="text-center text-muted py-3">
                             <i class="bi bi-info-circle me-1"></i>
                             <span th:text="${selectedRun == null ? 'No reconciliation results recorded yet.' : 'This batch contains no transaction results for the selected date range.'}"></span>
                         </td>
@@ -153,8 +156,17 @@
                         <tr th:each="res : ${selectedRun.results}">
                             <td class="small text-nowrap" th:text="${res.transactionDateTime != null ? #temporals.format(res.transactionDateTime, 'dd MMM yyyy HH:mm:ss') : '—'}">29 Sep 2026 12:30:00</td>
                             <td class="font-monospace small" th:text="${res.resultId}">RES-01</td>
-                            <td class="font-monospace small fw-semibold" th:text="${res.txnId}">TXN-01</td>
-                            <td class="font-monospace small" th:text="${res.accountId}">ACCT-01</td>
+                            <td class="font-monospace small fw-semibold">
+                                <a th:href="@{/transactions/receipt/{id}(id=${res.txnId})}" class="text-decoration-none" th:text="${res.txnId}">TXN-01</a>
+                            </td>
+                            <td class="font-monospace small">
+                                <div class="d-flex align-items-center gap-1">
+                                    <a th:href="@{/accounts/{id}(id=${res.accountId})}" class="text-decoration-none" th:text="${res.accountId}">ACCT-01</a>
+                                    <button type="button" class="btn btn-sm btn-link p-0 text-muted copy-btn" th:data-copy="${res.accountId}" title="Copy UUID">
+                                        <i class="bi bi-clipboard" style="font-size: 0.72rem;"></i>
+                                    </button>
+                                </div>
+                            </td>
                             <td>
                                 <span class="badge" th:classappend="${'bg-' + res.statusBadgeClass}" th:text="${res.reconStatus}">MATCHED</span>
                             </td>
@@ -171,6 +183,25 @@
                             <td class="small text-muted" th:text="${res.postingLagSeconds + 's'}">1s</td>
                             <td>
                                 <span class="badge" th:classappend="${'bg-' + res.severityBadgeClass}" th:text="${res.severity}">LOW</span>
+                            </td>
+                            <td>
+                                <button type="button" class="btn btn-sm btn-outline-info py-0 px-2"
+                                        th:data-res-id="${res.resultId}"
+                                        th:data-run-id="${res.runId}"
+                                        th:data-txn-id="${res.txnId}"
+                                        th:data-acct-id="${res.accountId}"
+                                        th:data-status="${res.reconStatus}"
+                                        th:data-exc-type="${res.exceptionType != null ? res.exceptionType : 'None (100% Match)'}"
+                                        th:data-expected="${res.formattedExpectedAmount}"
+                                        th:data-actual="${res.formattedActualAmount}"
+                                        th:data-variance="${res.formattedVarianceAmount}"
+                                        th:data-lag="${res.postingLagSeconds + 's'}"
+                                        th:data-severity="${res.severity}"
+                                        th:data-time="${res.transactionDateTime != null ? #temporals.format(res.transactionDateTime, 'dd MMM yyyy HH:mm:ss') : '—'}"
+                                        onclick="openReconDetailModal(this.dataset)"
+                                        title="Inspect Break &amp; Discrepancy Details">
+                                    <i class="bi bi-search me-1"></i>Inspect
+                                </button>
                             </td>
                         </tr>
                     </th:block>
@@ -258,6 +289,144 @@
     });
 
 })();
+</script>
+
+<!-- Discrepancy & Break Inspection Modal -->
+<div class="modal fade" id="reconDiscrepancyModal" tabindex="-1" aria-labelledby="reconModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content shadow">
+            <div class="modal-header bg-primary-subtle text-primary-emphasis">
+                <h5 class="modal-title fw-bold" id="reconModalLabel">
+                    <i class="bi bi-shield-check text-primary me-2"></i>Reconciliation Break &amp; Discrepancy Inspection
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <!-- Status banner -->
+                <div class="d-flex justify-content-between align-items-center p-3 mb-3 bg-light rounded border">
+                    <div>
+                        <span class="small text-muted d-block">Result ID / Run ID:</span>
+                        <span class="font-monospace fw-bold fs-6" id="modalResRunId">RES-01 (RUN-01)</span>
+                    </div>
+                    <div>
+                        <span class="badge fs-6 px-3" id="modalStatusBadge">MATCHED</span>
+                    </div>
+                </div>
+
+                <div class="row g-3 mb-3">
+                    <div class="col-md-6">
+                        <div class="border rounded p-3 h-100">
+                            <h6 class="fw-bold text-muted small text-uppercase mb-2">Transaction Details</h6>
+                            <div class="mb-2">
+                                <span class="text-muted small d-block">Master Transaction Reference:</span>
+                                <a id="modalTxnLink" href="#" class="font-monospace fw-bold text-primary text-decoration-none">TXN-01</a>
+                            </div>
+                            <div class="mb-2">
+                                <span class="text-muted small d-block">Ledger Account:</span>
+                                <div class="d-flex align-items-center gap-1">
+                                    <a id="modalAcctLink" href="#" class="font-monospace fw-bold text-dark text-decoration-none">ACCT-01</a>
+                                    <button type="button" class="btn btn-sm btn-link p-0 text-muted copy-btn" id="modalAcctCopyBtn" data-copy="" title="Copy Account ID">
+                                        <i class="bi bi-clipboard" style="font-size: 0.72rem;"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="mb-0">
+                                <span class="text-muted small d-block">Transaction Time (Manila Time / PHT):</span>
+                                <span class="font-monospace small" id="modalTxnTime">2026-10-09 12:02:08</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="border rounded p-3 h-100">
+                            <h6 class="fw-bold text-muted small text-uppercase mb-2">Audit &amp; Break Telemetry</h6>
+                            <div class="mb-2">
+                                <span class="text-muted small d-block">Exception Classification:</span>
+                                <span class="fw-bold text-danger" id="modalExcType">None</span>
+                            </div>
+                            <div class="mb-2">
+                                <span class="text-muted small d-block">Reconciliation Severity Level:</span>
+                                <span class="badge bg-secondary" id="modalSeverity">LOW</span>
+                            </div>
+                            <div class="mb-0">
+                                <span class="text-muted small d-block">Core Ledger Posting Lag:</span>
+                                <span class="font-monospace fw-semibold" id="modalPostingLag">0s</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card p-3 border">
+                    <h6 class="fw-bold text-muted small text-uppercase mb-3">Expected vs Actual Dual-Ledger Comparison</h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered text-center mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Metric</th>
+                                    <th>Expected (Master)</th>
+                                    <th>Actual (Audit)</th>
+                                    <th>Calculated Variance</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="fw-semibold">Amount</td>
+                                    <td class="font-monospace text-primary fw-bold" id="modalExpectedAmt">₱0.00</td>
+                                    <td class="font-monospace text-success fw-bold" id="modalActualAmt">₱0.00</td>
+                                    <td class="font-monospace fw-bold" id="modalVarianceAmt">₱0.00</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer py-2 bg-light">
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Close</button>
+                <a id="modalReceiptBtn" href="#" class="btn btn-sm btn-outline-primary">
+                    <i class="bi bi-receipt me-1"></i> Open Digital Voucher
+                </a>
+                <a id="modalLedgerBtn" href="#" class="btn btn-sm btn-primary">
+                    <i class="bi bi-journal-text me-1"></i> Inspect Account Ledger
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function openReconDetailModal(data) {
+    document.getElementById("modalResRunId").textContent = data.resId + " (" + data.runId + ")";
+    
+    const badge = document.getElementById("modalStatusBadge");
+    badge.textContent = data.status;
+    badge.className = "badge fs-6 px-3 " + (data.status === "MATCHED" ? "bg-success" : "bg-danger");
+
+    const txnLink = document.getElementById("modalTxnLink");
+    txnLink.textContent = data.txnId;
+    txnLink.href = "/transactions/receipt/" + encodeURIComponent(data.txnId);
+
+    const acctLink = document.getElementById("modalAcctLink");
+    acctLink.textContent = data.acctId;
+    acctLink.href = "/accounts/" + encodeURIComponent(data.acctId);
+    const acctCopyBtn = document.getElementById("modalAcctCopyBtn");
+    if (acctCopyBtn) acctCopyBtn.setAttribute("data-copy", data.acctId);
+
+    document.getElementById("modalTxnTime").textContent = data.time;
+    document.getElementById("modalExcType").textContent = data.excType;
+    
+    const sevBadge = document.getElementById("modalSeverity");
+    sevBadge.textContent = data.severity;
+    sevBadge.className = "badge " + (data.severity === "HIGH" ? "bg-danger" : data.severity === "MEDIUM" ? "bg-warning text-dark" : "bg-secondary");
+
+    document.getElementById("modalPostingLag").textContent = data.lag;
+    document.getElementById("modalExpectedAmt").textContent = data.expected;
+    document.getElementById("modalActualAmt").textContent = data.actual;
+    document.getElementById("modalVarianceAmt").textContent = data.variance;
+
+    document.getElementById("modalReceiptBtn").href = "/transactions/receipt/" + encodeURIComponent(data.txnId);
+    document.getElementById("modalLedgerBtn").href = "/accounts/" + encodeURIComponent(data.acctId);
+
+    new bootstrap.Modal(document.getElementById("reconDiscrepancyModal")).show();
+}
 </script>
 
 <div th:replace="~{fragments/layout :: footer}"></div>

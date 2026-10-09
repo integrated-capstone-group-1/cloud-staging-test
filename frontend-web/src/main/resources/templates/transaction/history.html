@@ -14,7 +14,7 @@
         </div>
         <div class="d-flex gap-2">
             <input type="text" id="ledgerSearch" class="form-control form-control-sm" placeholder="Search account, Txn ID..." onkeyup="filterLedger()">
-            <a href="/transactions/new" class="btn btn-sm btn-primary text-nowrap">
+            <a href="/transactions/new" class="btn btn-sm btn-primary text-nowrap" th:if="${user != null && !user.admin}">
                 <i class="bi bi-plus-lg me-1"></i> New Mutation
             </a>
         </div>
@@ -25,7 +25,7 @@
             <table class="table table-sm table-hover" id="ledgerTable">
                 <thead>
                     <tr>
-                        <th>Timestamp</th>
+                        <th>Timestamp (PHT)</th>
                         <th>Transaction ID</th>
                         <th>Mutation ID</th>
                         <th>Account ID</th>
@@ -43,9 +43,25 @@
                         <td class="font-monospace small fw-semibold" th:text="${t.txnId}"></td>
                         <td class="font-monospace small text-muted" th:text="${t.mutationId}"></td>
                         <td>
-                            <a th:href="@{/accounts/{id}(id=${t.accountId})}" class="font-monospace small text-decoration-none" th:text="${t.accountId}"></a>
+                            <div class="d-flex align-items-center gap-1">
+                                <a th:href="@{/accounts/{id}(id=${t.accountId})}" class="font-monospace small fw-semibold text-decoration-none" th:text="${t.formattedAccountNumber}"></a>
+                                <button type="button" class="btn btn-sm btn-link p-0 text-muted copy-btn" th:data-copy="${t.accountId}" title="Copy UUID">
+                                    <i class="bi bi-clipboard" style="font-size: 0.72rem;"></i>
+                                </button>
+                            </div>
                         </td>
-                        <td class="font-monospace small text-muted" th:text="${t.counterpartyAccountId != null ? t.counterpartyAccountId : '—'}"></td>
+                        <td>
+                            <div th:if="${t.counterpartyAccountId != null and !t.counterpartyAccountId.isBlank()}" class="d-flex align-items-center gap-1">
+                                <a th:href="@{/accounts/{id}(id=${t.counterpartyAccountId})}"
+                                   class="font-monospace small text-decoration-none"
+                                   th:text="${t.formattedCounterpartyAccountNumber}"></a>
+                                <button type="button" class="btn btn-sm btn-link p-0 text-muted copy-btn" th:data-copy="${t.counterpartyAccountId}" title="Copy UUID">
+                                    <i class="bi bi-clipboard" style="font-size: 0.72rem;"></i>
+                                </button>
+                            </div>
+                            <span th:if="${t.counterpartyAccountId == null or t.counterpartyAccountId.isBlank()}"
+                                  class="font-monospace small text-muted">—</span>
+                        </td>
                         <td>
                             <span class="badge" th:classappend="${t.txnType.badgeClass}" th:text="${t.txnType.displayName}">TRANSFER</span>
                             <span th:if="${t.crossCurrency}" class="badge bg-warning-subtle text-warning border small" title="ForEx Cross Currency">FX</span>

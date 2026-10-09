@@ -6,6 +6,7 @@ import com.capstone.ledger.frontend.model.enums.AccountStatus;
 import com.capstone.ledger.frontend.model.enums.AccountType;
 import com.capstone.ledger.frontend.model.enums.KycStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -258,6 +259,7 @@ public class AdminPortalService {
 
             view.getPockets().add(new Customer360View.PocketBalanceView(
                     acct.getAccountId(),
+                    acct.getAccountNumber(),
                     acct.getCurrencyCode(),
                     acct.getAccountType(),
                     acct.getAccountStatus(),
@@ -378,9 +380,15 @@ public class AdminPortalService {
     // --- Account Lock & Freeze Governance (DIG-54, BR-09) ---
 
     public void freezeAccount(String accountId, String adminUser) {
+        freezeAccount(accountId, adminUser, null);
+    }
+
+    public void freezeAccount(String accountId, String adminUser, String reason) {
         bankingClient.updateAccountStatus(accountId, AccountStatus.FROZEN);
-        logAudit("ACCOUNT_FREEZE", adminUser, "ACCOUNT", accountId,
-                "Admin enforced account freeze (sets status = FROZEN, takes precedence over customer lock)");
+        String details = "Admin enforced account freeze" + (reason != null && !reason.isBlank()
+                ? " (Reason: " + reason.trim() + ")"
+                : " (sets status = FROZEN, takes precedence over customer lock)");
+        logAudit("ACCOUNT_FREEZE", adminUser, "ACCOUNT", accountId, details);
     }
 
     public void unfreezeAccount(String accountId, String adminUser) {
@@ -524,6 +532,7 @@ public class AdminPortalService {
 
                 logAudit("HELD_TXN_APPROVE", adminUser, "TRANSACTION", txnId,
                         "Held transfer approved and released for execution: " + ht.getDecisionNotes());
+                broadcastMonitoringUpdate();
                 return true;
             }
         }
@@ -556,6 +565,7 @@ public class AdminPortalService {
 
                 logAudit("HELD_TXN_REJECT", adminUser, "TRANSACTION", txnId,
                         "Held transfer declined and cancelled: " + ht.getDecisionNotes());
+                broadcastMonitoringUpdate();
                 return true;
             }
         }
@@ -608,6 +618,7 @@ public class AdminPortalService {
 
                 logAudit("DLQ_REPLAY", adminUser, "DLQ_MESSAGE", id,
                         String.format("Replayed message on topic '%s' with original key '%s'", msg.getTopic(), msg.getMessageKey()));
+                broadcastMonitoringUpdate();
                 return true;
             }
         }
@@ -633,10 +644,94 @@ public class AdminPortalService {
         return false;
     }
 
-    // --- Transaction Monitoring (DIG-102) ---
+    // --- Transaction Monitoring (DIG-102) & SSE Stream (DIG-101) ---
 
-    public List<TransactionMonitoringView> getMonitoringFeed() {
+    private final List<SseEmitter> sseEmitters = new CopyOnWriteArrayList<>();
+
+    public synchronized List<TransactionMonitoringView> getMonitoringFeed() {
+        try {
+            List<TransactionView> realTransactions = bankingClient.getAllTransactions();
+            Set<String> existingTxnIds = new HashSet<>();
+            for (TransactionMonitoringView m : monitoringFeed) {
+                if (m.getTxnId() != null) {
+                    existingTxnIds.add(m.getTxnId().toUpperCase());
+                }
+            }
+
+            for (TransactionView t : realTransactions) {
+                if (t.getTxnId() != null && !existingTxnIds.contains(t.getTxnId().toUpperCase())) {
+                    TransactionMonitoringView view = new TransactionMonitoringView();
+                    view.setTxnId(t.getTxnId());
+                    view.setCorrelationId("CORR-" + (t.getTxnId().length() >= 8 ? t.getTxnId().substring(0, 8) : t.getTxnId()));
+                    view.setRawSourceAccount(t.getAccountId() != null ? t.getAccountId() : "ACCT-1001-PHP");
+                    view.setMaskedSourceAccount(maskAccountNumber(view.getRawSourceAccount()));
+                    view.setRawDestAccount(t.getCounterpartyAccountId() != null ? t.getCounterpartyAccountId() : "bank-cash-clearing-php-01");
+                    view.setMaskedDestAccount(maskAccountNumber(view.getRawDestAccount()));
+                    view.setRawCustomerName("Account Holder");
+                    view.setMaskedCustomerName("A*** H*****");
+                    view.setAmount(t.getAmount() != null ? t.getAmount() : BigDecimal.ZERO);
+                    view.setCurrency(t.getCurrencyCode() != null ? t.getCurrencyCode() : "PHP");
+
+                    boolean isCommitted = t.getAuditState() == com.capstone.ledger.frontend.model.enums.AuditState.COMMITTED
+                            || "POSTED".equalsIgnoreCase(String.valueOf(t.getAuditState()));
+                    view.setOverallStatus(isCommitted ? "SUCCESS" : "PENDING");
+                    view.setCurrentStage(11);
+                    view.setTimestamp(t.getTimestamp() != null ? t.getTimestamp() : LocalDateTime.now());
+
+                    String[] stageNames = {
+                            "GATEWAY_INGEST", "AUTH_VALIDATION", "IDEMPOTENCY_LOCK", "RISK_EVALUATION",
+                            "AMLA_CTR_STR", "ORACLE_ROW_LOCK", "LEDGER_MUTATION", "KAFKA_DISPATCH",
+                            "NOTIFICATION_EVENT", "POSTGRES_AUDIT_SYNC", "RECON_REGISTER"
+                    };
+                    long totalMs = 0;
+                    for (int i = 0; i < stageNames.length; i++) {
+                        long stageMs = 15 + ((i * 11L) % 35);
+                        totalMs += stageMs;
+                        view.getStages().add(new TransactionMonitoringView.StageTracker(i + 1, stageNames[i], "GREEN", stageMs));
+                    }
+                    view.setTotalDurationMs(totalMs);
+
+                    monitoringFeed.add(0, view);
+                    existingTxnIds.add(t.getTxnId().toUpperCase());
+                }
+            }
+        } catch (Exception ignored) {}
+
+        monitoringFeed.sort((a, b) -> b.getTimestamp().compareTo(a.getTimestamp()));
         return Collections.unmodifiableList(monitoringFeed);
+    }
+
+    private String maskAccountNumber(String account) {
+        if (account == null || account.length() < 8) return account;
+        return account.substring(0, 4) + "-****-" + account.substring(account.length() - 4);
+    }
+
+    public SseEmitter subscribeMonitoringStream() {
+        SseEmitter emitter = new SseEmitter(180_000L);
+        sseEmitters.add(emitter);
+        emitter.onCompletion(() -> sseEmitters.remove(emitter));
+        emitter.onTimeout(() -> sseEmitters.remove(emitter));
+        emitter.onError(e -> sseEmitters.remove(emitter));
+        try {
+            emitter.send(SseEmitter.event().name("init").data(getMonitoringFeed()));
+        } catch (Exception e) {
+            sseEmitters.remove(emitter);
+        }
+        return emitter;
+    }
+
+    public void broadcastMonitoringUpdate() {
+        if (sseEmitters.isEmpty()) return;
+        List<TransactionMonitoringView> feed = getMonitoringFeed();
+        List<SseEmitter> deadEmitters = new ArrayList<>();
+        for (SseEmitter emitter : sseEmitters) {
+            try {
+                emitter.send(SseEmitter.event().name("feed").data(feed));
+            } catch (Exception e) {
+                deadEmitters.add(emitter);
+            }
+        }
+        sseEmitters.removeAll(deadEmitters);
     }
 
     // --- Audit Trail (DIG-53) ---

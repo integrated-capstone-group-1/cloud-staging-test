@@ -47,6 +47,10 @@ public class TransactionController {
             return "redirect:/login";
         }
 
+        if (user.isAdmin()) {
+            return "redirect:/admin/accounts";
+        }
+
         TransactionForm form = new TransactionForm();
         if (fromAcctNo != null) {
             form.setFromAcctNo(fromAcctNo);
@@ -57,11 +61,8 @@ public class TransactionController {
             } catch (Exception ignored) {}
         }
 
-        // Customer can only mutate their own accounts; Admin can mutate any
-        List<AccountView> userAccounts = user.isAdmin()
-                ? bankingClient.getAllAccounts()
-                : bankingClient.getAccountsByCustomerId(user.getCustomerId());
-
+        // Customer can only mutate their own accounts
+        List<AccountView> userAccounts = bankingClient.getAccountsByCustomerId(user.getCustomerId());
         List<AccountView> allAccounts = bankingClient.getAllAccounts();
 
         model.addAttribute("transactionForm", form);
@@ -80,6 +81,10 @@ public class TransactionController {
         UserSession user = (UserSession) session.getAttribute(SessionAuthInterceptor.SESSION_USER);
         if (user == null) {
             return "redirect:/login";
+        }
+        if (user.isAdmin()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Separation of Duties Policy: System Administrators cannot originate retail transactions on customer accounts.");
         }
 
         if (form.getTxnType() == TransactionType.TRANSFER) {
@@ -126,7 +131,7 @@ public class TransactionController {
     }
 
     @GetMapping("/transactions/receipt/{txnId}")
-    public String transactionReceipt(@PathVariable String txnId, HttpSession session, Model model) {
+    public String transactionReceipt(@PathVariable("txnId") String txnId, HttpSession session, Model model) {
         UserSession user = (UserSession) session.getAttribute(SessionAuthInterceptor.SESSION_USER);
         if (user == null) {
             return "redirect:/login";

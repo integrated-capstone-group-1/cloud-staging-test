@@ -20,7 +20,7 @@
                     <div class="mb-4">
                         <label class="form-label fw-semibold">Select Account Type</label>
                         <div class="row g-3">
-                            <div class="col-md-4">
+                            <div class="col-md-6">
                                 <div class="form-check card p-3 h-100 cursor-pointer">
                                     <input class="form-check-input" type="radio" th:field="*{accountType}" value="SAVINGS" id="typeSavings" checked>
                                     <label class="form-check-label fw-bold mt-1" for="typeSavings">
@@ -29,20 +29,11 @@
                                     </label>
                                 </div>
                             </div>
-                            <div class="col-md-4">
-                                <div class="form-check card p-3 h-100 cursor-pointer">
-                                    <input class="form-check-input" type="radio" th:field="*{accountType}" value="CHECKING" id="typeChecking">
-                                    <label class="form-check-label fw-bold mt-1" for="typeChecking">
-                                        Checking Account
-                                        <div class="text-muted small fw-normal">Day-to-day transactional account for high-frequency transfers.</div>
-                                    </label>
-                                </div>
-                            </div>
-                            <div class="col-md-4">
+                            <div class="col-md-6">
                                 <div class="form-check card p-3 h-100 cursor-pointer">
                                     <input class="form-check-input" type="radio" th:field="*{accountType}" value="WALLET" id="typeWallet">
                                     <label class="form-check-label fw-bold mt-1" for="typeWallet">
-                                        Digital Wallet
+                                        Digital Wallet / Currency Pocket
                                         <div class="text-muted small fw-normal">Instant digital payments and peer-to-peer balance mutations.</div>
                                     </label>
                                 </div>
