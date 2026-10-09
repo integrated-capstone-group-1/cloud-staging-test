@@ -1,5 +1,6 @@
 package com.capstone.orchestrator.controller;
 
+import com.capstone.common.security.SecurityUtils;
 import com.capstone.orchestrator.client.TransactionClient;
 import com.capstone.orchestrator.dto.CancelPaymentResponse;
 import com.capstone.orchestrator.dto.PaymentRequest;
@@ -49,9 +50,16 @@ public class PaymentForwardingController {
         log.info("BFF: Received payment request: recipient={}, amount={} {}",
                 request.getRecipientAccountId(), request.getAmount(), request.getCurrency());
 
-        // Step 1: Enforce customer ownership on debit source account
+        // Step 1: Enforce customer ownership or resolve default sender account
         if (request.getSenderAccountId() != null) {
             ownershipService.verifyAccountOwnership(request.getSenderAccountId(), "debit payment");
+        } else {
+            String customerId = SecurityUtils.getCurrentCustomerId().orElse(null);
+            String defaultAcct = ownershipService.resolveDefaultAccountId(customerId, request.getCurrency());
+            if (defaultAcct != null) {
+                request.setSenderAccountId(defaultAcct);
+                log.info("BFF: Resolved default debit account {} for customer {}", defaultAcct, customerId);
+            }
         }
 
         // Step 2: Forward to Tier 4 Payment Hub (:8084)
@@ -70,8 +78,9 @@ public class PaymentForwardingController {
             @PathVariable("id") String id,
             @RequestParam(value = "reason", required = false) String reason,
             @RequestHeader(value = "Authorization", required = false) String authHeader) {
-
+        log.info("BFF: Received cancel request for txn {}: reason={}", id, reason);
         CancelPaymentResponse response = transactionClient.cancelPayment(id, reason, authHeader);
+        log.info("BFF: Received cancel response for txn {}: status={}", id, response != null ? response.getStatus() : null);
         return ResponseEntity.ok(response);
     }
 

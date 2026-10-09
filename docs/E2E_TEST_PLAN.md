@@ -133,6 +133,11 @@ Automated Black-Box Execution Harness: [`scripts/test_api_functional_e2e.ps1`](f
 
 ### 3.2 Track 2: Rohan — Core Payments, FX & Lifecycle Sagas
 
+> **Automated Suite Execution:**
+> ```powershell
+> mvn test -pl transaction-service "-Dtest=RohanPaymentsE2ETest"
+> ```
+
 #### Journey E2E-02: Same-Currency Transfer & Idempotency Replay (`BR-01`, `BR-05`, `BR-10`)
 * **Step 1:** Generate unique idempotency key: `IDEMP_KEY="b5d19e68-0000-4000-8000-000000000001"`.
 * **Step 2:** Post payment transferring ₱5,000 from Juan to Maria:
@@ -148,8 +153,24 @@ Automated Black-Box Execution Harness: [`scripts/test_api_functional_e2e.ps1`](f
     }'
   ```
 * **Step 3:** Assert HTTP `200 OK`, `status: "POSTED"`, and `core_reference_id` starting with `FT`.
-* **Step 4:** Replay identical curl request with same `$IDEMP_KEY`.
-* **Step 5:** Assert response is identical to Step 3. Verify in Oracle that Juan was debited exactly once (balance ₱45,000.00).
+* **Step 4:** Replay identical curl request with same `$IDEMP_KEY`:
+  ```bash
+  curl -X POST http://localhost:8080/api/v1/payments \
+    -H "Authorization: Bearer <juan_jwt>" \
+    -H "X-Idempotency-Key: $IDEMP_KEY" \
+    -H "Content-Type: application/json" \
+    -d '{
+      "recipient_account_id": "acct-maria-php-01",
+      "amount": "5000.0000",
+      "currency": "PHP"
+    }'
+  ```
+* **Step 5:** Assert response is identical to Step 3. Verify in Oracle that Juan was debited exactly once (balance ₱45,000.00):
+  ```sql
+  SELECT balance FROM accounts WHERE account_id = 'acct-juan-php-01';
+  SELECT COUNT(*) FROM transaction_master WHERE idempotency_key = 'b5d19e68-0000-4000-8000-000000000001';
+  ```
+  *Automated test:* `RohanPaymentsE2ETest#e2e02_sameCurrencyTransferAndIdempotencyReplay`
 
 #### Journey E2E-03: Smart Shortfall Multi-Currency Transfer (`BR-04`, `BR-26`, `BR-28`)
 * **Step 1:** Juan wants to pay €50.00 to Maria (`acct-maria-eur-01`). Juan currently holds €0.00 in EUR pocket.
@@ -173,18 +194,41 @@ Automated Black-Box Execution Harness: [`scripts/test_api_functional_e2e.ps1`](f
     }'
   ```
 * **Step 4:** Assert HTTP `200 OK` with complete `funding_breakdown` (converted shortfall amount, applied FX rate, fee amount).
-* **Step 5:** Query Oracle `ledger_entry`: Assert all 6 double-entry settlement legs committed atomically.
+* **Step 5:** Query Oracle `ledger_entry`: Assert all 6 double-entry settlement legs committed atomically:
+  ```sql
+  SELECT leg_no, account_id, currency, direction, amount FROM ledger_entry WHERE txn_id = '<txn_id>' ORDER BY leg_no ASC;
+  ```
+  *Automated test:* `RohanPaymentsE2ETest#e2e03_smartShortfallMultiCurrencyTransfer`
 
 #### Journey E2E-04: 7-Status CAS Lifecycle & 5-Second Undo Cancellation (`BR-30`, `BR-31`)
-* **Step 1:** Initiate payment of ₱10,000.00.
+* **Step 1:** Initiate payment of ₱10,000.00:
+  ```bash
+  curl -X POST http://localhost:8080/api/v1/payments \
+    -H "Authorization: Bearer <juan_jwt>" \
+    -H "X-Idempotency-Key: $(uuidgen)" \
+    -H "Content-Type: application/json" \
+    -d '{
+      "recipient_account_id": "acct-maria-php-01",
+      "amount": "10000.0000",
+      "currency": "PHP"
+    }'
+  ```
 * **Step 2:** Immediately within 5 seconds, issue cancellation request:
   ```bash
   curl -X POST http://localhost:8080/api/v1/payments/<txn_id>/cancel \
     -H "Authorization: Bearer <juan_jwt>"
   ```
-* **Step 3:** Assert HTTP `200 OK` with `status: "CANCELLED"`. Verify zero balance deductions.
-* **Step 4:** Initiate second payment; wait 10 seconds for worker to transition to `PROCESSING`. Issue cancel.
-* **Step 5:** Assert HTTP `409 Conflict` (`TXN_NOT_CANCELLABLE`); payment posts successfully.
+* **Step 3:** Assert HTTP `200 OK` with `status: "CANCELLED"`. Verify zero balance deductions:
+  ```sql
+  SELECT txn_status, cancel_reason FROM transaction_master WHERE txn_id = '<txn_id>';
+  ```
+* **Step 4:** Attempt cancellation when transaction transitions to terminal or irrevocable state (`PROCESSING` / `POSTED`):
+  ```bash
+  curl -X POST http://localhost:8080/api/v1/payments/<posted_txn_id>/cancel \
+    -H "Authorization: Bearer <juan_jwt>"
+  ```
+* **Step 5:** Assert HTTP `409 Conflict` (`TXN_NOT_CANCELLABLE`); payment remains posted successfully.
+  *Automated test:* `RohanPaymentsE2ETest#e2e04_sevenStatusCasLifecycleAndUndoCancellation`
 
 ---
 

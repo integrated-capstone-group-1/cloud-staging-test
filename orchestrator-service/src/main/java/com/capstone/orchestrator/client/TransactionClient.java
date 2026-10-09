@@ -83,17 +83,16 @@ public class TransactionClient {
      * TRACE: Forwards customer payment cancellation request to Tier 4.
      */
     public CancelPaymentResponse cancelPayment(String paymentId, String reason, String bearerToken) {
-        var req = restClient.post()
-                .uri(uriBuilder -> uriBuilder
-                        .path("/api/v1/payments/{id}/cancel")
-                        .queryParam("reason", reason != null ? reason : "Customer cancelled payment")
-                        .build(paymentId));
-
+        String url = "/api/v1/payments/" + paymentId + "/cancel"
+                + (reason != null ? "?reason=" + java.net.URLEncoder.encode(reason, java.nio.charset.StandardCharsets.UTF_8) : "");
+        log.info("TransactionClient: Invoking cancellation at {}", url);
+        var requestSpec = restClient.post().uri(url);
         if (bearerToken != null && !bearerToken.isBlank()) {
-            req.header("Authorization", bearerToken);
+            requestSpec = requestSpec.header("Authorization", bearerToken);
         }
-
-        return req.retrieve().body(CancelPaymentResponse.class);
+        var response = requestSpec.retrieve().body(CancelPaymentResponse.class);
+        log.info("TransactionClient: Cancel response received: {}", response);
+        return response;
     }
 
     /**
