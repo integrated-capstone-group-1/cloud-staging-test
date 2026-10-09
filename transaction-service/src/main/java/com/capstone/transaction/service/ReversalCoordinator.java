@@ -85,7 +85,7 @@ public class ReversalCoordinator {
             }
         }
 
-        String reversalTxnId = "txn-rev-" + UUID.randomUUID().toString();
+        String reversalTxnId = UUID.randomUUID().toString();
 
         // Invert settlement legs: original credit account debited, original debit account credited
         List<SettlementLegDto> invertedLegs = List.of(

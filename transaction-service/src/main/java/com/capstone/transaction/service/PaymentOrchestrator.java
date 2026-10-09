@@ -85,7 +85,7 @@ public class PaymentOrchestrator {
             }
         }
 
-        String txnId = "txn-" + UUID.randomUUID().toString();
+        String txnId = UUID.randomUUID().toString();
         String senderAccount = request.getSenderAccountId() != null ? request.getSenderAccountId() : ("acct-" + customerId + "-" + request.getCurrency().toLowerCase() + "-01");
 
         // 1. Initial record: INITIATED
