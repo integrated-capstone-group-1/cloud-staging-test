@@ -441,25 +441,59 @@ docker compose up -d oracle-db postgres-db kafka accounts-service
 flutter pub get
 ```
 
+### 3.6 Workstream 6: Lanz — Mobile Core Client & Network Seams
+
+#### Prerequisites:
+```bash
+# Launch Flutter integration test harness pointing to Gateway :8080
+flutter pub get
+```
+
 #### Step-by-Step Execution:
-* **SEAM-LAN-01: Dio HTTP Client & Gateway Communication Seam (`DIG-94`)**
+* **SEAM-LAN-01: Dio HTTP Client & Gateway Communication Seam (`DIG-94`, `DIG-38`)**
+  * *Objective:* Verify `ApiClient` (Dio HTTP client) correctly interacts with API Gateway `:8080`, enforcing timeouts, standard JSON headers, successful response parsing, and error status handling.
   * *Step 1:* Run Flutter network integration test:
     ```bash
     flutter test test/integration/dio_gateway_integration_test.dart
     ```
-  * *Step 2:* Test issues `GET /api/v1/accounts/pockets` via Dio client pointing to `http://localhost:8080`.
-  * *Step 3:* Assert Dio client receives valid JSON response and maps response status `200 OK`.
-* **SEAM-LAN-02: KeyStore Storage & Automatic Bearer Token Injection (`DIG-40`, `DIG-94`)**
-  * *Step 1:* Authenticate user in test; store token in mock KeyStore.
-  * *Step 2:* Send subsequent transfer request.
-  * *Step 3:* Inspect outgoing request: Assert `AuthInterceptor` automatically injects `Authorization: Bearer <token>`.
+  * *Step 2:* Initialize `ApiClient` pointing to Gateway (`http://localhost:8080` / `http://10.0.2.2:8080`).
+  * *Step 3:* Issue `GET /api/v1/accounts/pockets`; assert Dio receives HTTP `200 OK` and serializes response payload into typed `PocketAccount` models.
+  * *Step 4:* Inspect outgoing request headers: assert `Content-Type: application/json` and `Accept: application/json` are automatically configured.
+  * *Step 5:* Simulate network connection/read timeouts; assert client raises `DioExceptionType.connectionTimeout` / `receiveTimeout` without unhandled exceptions.
+  * *Step 6:* Simulate gateway non-200 responses (e.g., `404 Not Found`, `500 Internal Error`); verify clean encapsulation in `DioException` response models.
+* **SEAM-LAN-02: KeyStore Storage & Automatic Bearer Token Injection (`DIG-40`, `DIG-94`, `T-009`)**
+  * *Objective:* Verify tokens securely stored in KeyStore / secure storage are automatically retrieved and attached as Authorization Bearer tokens across controller and repository boundaries.
+  * *Step 1:* Run KeyStore auth injection integration test:
+    ```bash
+    flutter test test/integration/keystore_bearer_token_test.dart
+    ```
+  * *Step 2:* Authenticate user through login flow; persist JWT access token and refresh token into `SecureStorageService` (`AES/GCM/NoPadding`).
+  * *Step 3:* Issue subsequent API calls (`GET /api/v1/accounts/pockets`, `POST /api/v1/payments`) via `BankingController` / `ApiClient`.
+  * *Step 4:* Inspect outgoing request options: assert `AuthInterceptor` automatically injects `Authorization: Bearer <token>`.
+  * *Step 5:* Execute user logout (`clearSession()`); verify access and refresh tokens are purged from storage while user PIN code is safely retained.
+  * *Step 6:* Attempt authenticated call with `requiresAuth: true` after logout; assert client rejects with `401 UNAUTHENTICATED` client-side before network dispatch.
 * **SEAM-LAN-03: Automatic UUID `X-Idempotency-Key` Header Seam (`DIG-94`, `BR-05`)**
-  * *Step 1:* Issue `POST /api/v1/payments` via Dio client.
-  * *Step 2:* Assert `IdempotencyInterceptor` generates and attaches a unique UUIDv4 string.
-  * *Step 3:* Verify replay test: Resending with identical key passes without generating a new UUID.
+  * *Objective:* Verify mutating payment operations always carry a canonical UUIDv4 `X-Idempotency-Key`, and retried payments reuse the identical key to guarantee exactly-once execution.
+  * *Step 1:* Run idempotency header integration test:
+    ```bash
+    flutter test test/integration/idempotency_header_seam_test.dart
+    ```
+  * *Step 2:* Issue mutating payment request `POST /api/v1/payments` via `BankingController` / `ApiClient`.
+  * *Step 3:* Assert `AuthInterceptor` generates and attaches a canonical 36-character UUIDv4 `X-Idempotency-Key` header matching RFC 4122.
+  * *Step 4:* Re-submit / retry transaction with pre-existing key (e.g. during shortfall funding confirmation); assert exact same idempotency key is preserved across all attempts.
+  * *Step 5:* Issue non-mutating `GET /api/v1/cards` and `GET /api/v1/accounts/pockets`; assert `X-Idempotency-Key` header is omitted.
+  * *Step 6:* Verify successive distinct payment calls receive distinct, unique UUIDs to prevent collision across independent transfers.
 * **SEAM-LAN-04: Client Circuit Breaker & Retry Seam (`DIG-44`)**
-  * *Step 1:* Mock Gateway returning `503 SERVICE_DEGRADED` 3 times.
-  * *Step 2:* Assert Dio client breaker trips to `OPEN` and throws `ClientCircuitBreakerOpenException` without hitting network.
+  * *Objective:* Verify fail-fast client resilience: when repeated gateway errors occur, the client circuit breaker trips to OPEN, suppresses outbound requests, notifies UI listeners, and safely probes via half-open recovery.
+  * *Step 1:* Run circuit breaker integration test:
+    ```bash
+    flutter test test/integration/circuit_breaker_retry_seam_test.dart
+    ```
+  * *Step 2:* Verify initial state is `CircuitBreakerState.closed`, allowing regular traffic through `ApiClient`.
+  * *Step 3:* Simulate 3 consecutive gateway failures (HTTP 503 `SERVICE_DEGRADED` or timeouts). Assert circuit breaker trips to `CircuitBreakerState.open`.
+  * *Step 4:* Attempt outbound requests while breaker is OPEN; assert `AuthInterceptor` immediately rejects with `ClientCircuitBreakerOpenException` / 503 `SERVICE_DEGRADED` without initiating any network traffic (0 network calls).
+  * *Step 5:* Verify `ChangeNotifier` triggers UI state update so `BankingController` / `ServiceUnavailableScreen` displays offline banner.
+  * *Step 6:* Fast-forward cooldown timer past reset timeout; assert transition to `halfOpen`. Issue successful probe request; assert breaker resets to `closed` with 0 failures.
 
 ---
 
