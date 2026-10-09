@@ -105,6 +105,7 @@ public class AuditLedgerConsumer {
                         .mutationType(leg.direction())
                         .txnType("TRANSFER")
                         .auditState("COMMITTED")
+                        .businessDate(java.time.LocalDate.now())
                         .createdAt(Instant.now())
                         .build();
                 audits.add(audit);

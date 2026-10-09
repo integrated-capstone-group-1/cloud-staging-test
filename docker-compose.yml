@@ -164,6 +164,8 @@ services:
         condition: service_healthy
       kafka:
         condition: service_started
+      accounts-service:
+        condition: service_started
     environment:
       CHANNEL_DB_URL: jdbc:postgresql://channel-db:5432/channel_db
       CHANNEL_DB_USERNAME: channel_user
@@ -171,6 +173,7 @@ services:
       ORACLE_URL: jdbc:oracle:thin:@oracle-db:1521/XEPDB1
       ORACLE_USERNAME: ledger_app
       ORACLE_PASSWORD: LedgerAppPass123
+      ACCOUNTS_SERVICE_URL: http://accounts-service:8083
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       JWT_SECRET: ${JWT_SECRET:-CapstoneBankingSuperSecretSigningKeyMustBe256BitsLong!}
       SPRING_PROFILES_ACTIVE: docker
@@ -352,7 +355,15 @@ services:
     container_name: risk-engine
     expose:
       - "8088"
+    depends_on:
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_started
     environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       SPRING_PROFILES_ACTIVE: docker
     labels:
       banking.service: "true"
