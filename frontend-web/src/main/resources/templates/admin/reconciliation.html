@@ -160,7 +160,12 @@
                                 <a th:href="@{/transactions/receipt/{id}(id=${res.txnId})}" class="text-decoration-none" th:text="${res.txnId}">TXN-01</a>
                             </td>
                             <td class="font-monospace small">
-                                <a th:href="@{/accounts/{id}(id=${res.accountId})}" class="text-decoration-none" th:text="${res.accountId}">ACCT-01</a>
+                                <div class="d-flex align-items-center gap-1">
+                                    <a th:href="@{/accounts/{id}(id=${res.accountId})}" class="text-decoration-none" th:text="${res.accountId}">ACCT-01</a>
+                                    <button type="button" class="btn btn-sm btn-link p-0 text-muted copy-btn" th:data-copy="${res.accountId}" title="Copy UUID">
+                                        <i class="bi bi-clipboard" style="font-size: 0.72rem;"></i>
+                                    </button>
+                                </div>
                             </td>
                             <td>
                                 <span class="badge" th:classappend="${'bg-' + res.statusBadgeClass}" th:text="${res.reconStatus}">MATCHED</span>
@@ -318,7 +323,12 @@
                             </div>
                             <div class="mb-2">
                                 <span class="text-muted small d-block">Ledger Account:</span>
-                                <a id="modalAcctLink" href="#" class="font-monospace fw-bold text-dark text-decoration-none">ACCT-01</a>
+                                <div class="d-flex align-items-center gap-1">
+                                    <a id="modalAcctLink" href="#" class="font-monospace fw-bold text-dark text-decoration-none">ACCT-01</a>
+                                    <button type="button" class="btn btn-sm btn-link p-0 text-muted copy-btn" id="modalAcctCopyBtn" data-copy="" title="Copy Account ID">
+                                        <i class="bi bi-clipboard" style="font-size: 0.72rem;"></i>
+                                    </button>
+                                </div>
                             </div>
                             <div class="mb-0">
                                 <span class="text-muted small d-block">Transaction Time (Manila Time / PHT):</span>
@@ -397,6 +407,8 @@ function openReconDetailModal(data) {
     const acctLink = document.getElementById("modalAcctLink");
     acctLink.textContent = data.acctId;
     acctLink.href = "/accounts/" + encodeURIComponent(data.acctId);
+    const acctCopyBtn = document.getElementById("modalAcctCopyBtn");
+    if (acctCopyBtn) acctCopyBtn.setAttribute("data-copy", data.acctId);
 
     document.getElementById("modalTxnTime").textContent = data.time;
     document.getElementById("modalExcType").textContent = data.excType;

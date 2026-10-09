@@ -55,12 +55,32 @@
 
             <div class="receipt-row">
                 <span class="text-muted">Debited / Source Account</span>
-                <a th:href="@{/accounts/{id}(id=${txn.accountId})}" class="font-monospace fw-semibold text-decoration-none" th:text="${txn.accountId}">ACCT-1001-PHP</a>
+                <div class="text-end">
+                    <a th:href="@{/accounts/{id}(id=${txn.accountId})}" class="font-monospace fw-semibold text-decoration-none d-block">
+                        <span th:text="${txn.formattedAccountNumber}">1000-0000-0001</span>
+                    </a>
+                    <div class="d-inline-flex align-items-center gap-1 text-muted" style="font-size: 0.75rem;">
+                        <span class="font-monospace text-secondary" th:text="${txn.shortAccountId}" th:title="${txn.accountId}">3722f77f...</span>
+                        <button type="button" class="btn btn-sm btn-link p-0 text-muted copy-btn" th:data-copy="${txn.accountId}" title="Copy UUID">
+                            <i class="bi bi-clipboard" style="font-size: 0.72rem;"></i>
+                        </button>
+                    </div>
+                </div>
             </div>
 
             <div class="receipt-row" th:if="${txn.counterpartyAccountId != null and !txn.counterpartyAccountId.isBlank()}">
                 <span class="text-muted">Credited / Target Account</span>
-                <a th:href="@{/accounts/{id}(id=${txn.counterpartyAccountId})}" class="font-monospace fw-semibold text-primary text-decoration-none" th:text="${txn.counterpartyAccountId}">ACCT-2002-USD</a>
+                <div class="text-end">
+                    <a th:href="@{/accounts/{id}(id=${txn.counterpartyAccountId})}" class="font-monospace fw-semibold text-primary text-decoration-none d-block">
+                        <span th:text="${txn.formattedCounterpartyAccountNumber}">1000-0000-0002</span>
+                    </a>
+                    <div class="d-inline-flex align-items-center gap-1 text-muted" style="font-size: 0.75rem;">
+                        <span class="font-monospace text-secondary" th:text="${txn.shortCounterpartyAccountId}" th:title="${txn.counterpartyAccountId}">f95e7e52...</span>
+                        <button type="button" class="btn btn-sm btn-link p-0 text-muted copy-btn" th:data-copy="${txn.counterpartyAccountId}" title="Copy UUID">
+                            <i class="bi bi-clipboard" style="font-size: 0.72rem;"></i>
+                        </button>
+                    </div>
+                </div>
             </div>
 
             <div class="receipt-row py-3 my-2 border-top border-bottom">

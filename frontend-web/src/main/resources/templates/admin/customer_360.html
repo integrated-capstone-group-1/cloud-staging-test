@@ -141,11 +141,22 @@
                         </thead>
                         <tbody>
                             <tr th:each="pocket : ${c360.pockets}">
-                                <td class="font-monospace small fw-bold">
-                                    <a th:href="@{/accounts/{id}(id=${pocket.accountId})}" class="text-decoration-none" th:text="${pocket.accountId}">ACCT-1001-PHP</a>
+                                <td>
+                                    <div class="d-flex flex-column">
+                                        <div class="d-flex align-items-center gap-1">
+                                            <a th:href="@{/accounts/{id}(id=${pocket.accountId})}" class="font-monospace fw-bold text-decoration-none" th:text="${pocket.formattedAccountNumber}">1000-0000-0001</a>
+                                            <span class="badge bg-primary-subtle text-primary border py-0 px-1" style="font-size: 0.72rem;" th:text="${pocket.pocketName}">PHP Pocket</span>
+                                        </div>
+                                        <div class="d-flex align-items-center gap-1 mt-1 text-muted" style="font-size: 0.75rem;">
+                                            <span class="text-secondary font-monospace" th:text="${pocket.shortAccountId}" th:title="${pocket.accountId}">3722f77f...</span>
+                                            <button type="button" class="btn btn-sm btn-link p-0 text-muted copy-btn" th:data-copy="${pocket.accountId}" title="Copy UUID">
+                                                <i class="bi bi-clipboard" style="font-size: 0.72rem;"></i>
+                                            </button>
+                                        </div>
+                                    </div>
                                 </td>
                                 <td>
-                                    <span class="badge bg-secondary" th:text="${pocket.currencyCode}">PHP</span>
+                                    <span class="currency-badge" th:text="${pocket.currencyCode}">PHP</span>
                                 </td>
                                 <td>
                                     <span th:class="${'badge ' + (pocket.accountStatus.name() == 'ACTIVE' ? 'bg-success' : 'bg-danger')}"
@@ -159,18 +170,22 @@
                                     <button th:if="${pocket.accountStatus.name() == 'ACTIVE'}" type="button"
                                             class="btn btn-sm btn-outline-danger py-0 px-2"
                                             th:data-account-id="${pocket.accountId}"
+                                            th:data-account-number="${pocket.formattedAccountNumber}"
+                                            th:data-pocket="${pocket.pocketName}"
                                             th:data-currency="${pocket.currencyCode}"
                                             th:data-balance="${pocket.formattedLedger}"
-                                            onclick="openPocketFreezeModal(this.getAttribute('data-account-id'), this.getAttribute('data-currency'), this.getAttribute('data-balance'))"
+                                            onclick="openPocketFreezeModal(this.getAttribute('data-account-id'), this.getAttribute('data-account-number'), this.getAttribute('data-pocket'), this.getAttribute('data-currency'), this.getAttribute('data-balance'))"
                                             title="Freeze account pocket">
                                         <i class="bi bi-pause-circle"></i> Freeze
                                     </button>
                                     <button th:if="${pocket.accountStatus.name() == 'FROZEN'}" type="button"
                                             class="btn btn-sm btn-outline-success py-0 px-2"
                                             th:data-account-id="${pocket.accountId}"
+                                            th:data-account-number="${pocket.formattedAccountNumber}"
+                                            th:data-pocket="${pocket.pocketName}"
                                             th:data-currency="${pocket.currencyCode}"
                                             th:data-balance="${pocket.formattedLedger}"
-                                            onclick="openPocketUnfreezeModal(this.getAttribute('data-account-id'), this.getAttribute('data-currency'), this.getAttribute('data-balance'))"
+                                            onclick="openPocketUnfreezeModal(this.getAttribute('data-account-id'), this.getAttribute('data-account-number'), this.getAttribute('data-pocket'), this.getAttribute('data-currency'), this.getAttribute('data-balance'))"
                                             title="Unfreeze account pocket">
                                         <i class="bi bi-play-circle"></i> Unfreeze
                                     </button>
@@ -324,7 +339,7 @@
                         </td>
                         <td class="small" th:text="${#temporals.format(txn.timestamp, 'yyyy-MM-dd HH:mm:ss')}">2026-10-06 14:00:00</td>
                         <td class="font-monospace small">
-                            <a th:href="@{/accounts/{id}(id=${txn.accountId})}" class="text-decoration-none" th:text="${txn.accountId}">ACCT-1001-PHP</a>
+                            <a th:href="@{/accounts/{id}(id=${txn.accountId})}" class="text-decoration-none fw-semibold" th:text="${txn.formattedAccountNumber != null ? txn.formattedAccountNumber : txn.accountId}">1000-0000-0001</a>
                         </td>
                         <td>
                             <span class="badge bg-secondary" th:text="${txn.txnType.displayName}">TRANSFER</span>
@@ -377,8 +392,17 @@
                     </div>
                     <div class="bg-light p-3 rounded mb-3 border">
                         <div class="d-flex justify-content-between mb-1 small">
-                            <span class="text-muted">Target Account Pocket:</span>
-                            <span class="font-monospace fw-bold" id="pocketFreezeModalAcctId"></span>
+                            <span class="text-muted">Target Account:</span>
+                            <span class="font-monospace fw-bold" id="pocketFreezeModalAcctDisplay"></span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-1 small align-items-center">
+                            <span class="text-muted">System UUID:</span>
+                            <div class="d-inline-flex align-items-center gap-1">
+                                <code class="font-monospace text-secondary small" id="pocketFreezeModalAcctId"></code>
+                                <button type="button" class="btn btn-sm btn-link p-0 text-muted copy-btn" id="pocketFreezeModalCopyBtn" data-copy="" title="Copy UUID">
+                                    <i class="bi bi-clipboard"></i>
+                                </button>
+                            </div>
                         </div>
                         <div class="d-flex justify-content-between mb-1 small">
                             <span class="text-muted">Pocket Currency:</span>
@@ -435,8 +459,17 @@
                     </div>
                     <div class="bg-light p-3 rounded mb-2 border">
                         <div class="d-flex justify-content-between mb-1 small">
-                            <span class="text-muted">Target Account Pocket:</span>
-                            <span class="font-monospace fw-bold" id="pocketUnfreezeModalAcctId"></span>
+                            <span class="text-muted">Target Account:</span>
+                            <span class="font-monospace fw-bold" id="pocketUnfreezeModalAcctDisplay"></span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-1 small align-items-center">
+                            <span class="text-muted">System UUID:</span>
+                            <div class="d-inline-flex align-items-center gap-1">
+                                <code class="font-monospace text-secondary small" id="pocketUnfreezeModalAcctId"></code>
+                                <button type="button" class="btn btn-sm btn-link p-0 text-muted copy-btn" id="pocketUnfreezeModalCopyBtn" data-copy="" title="Copy UUID">
+                                    <i class="bi bi-clipboard"></i>
+                                </button>
+                            </div>
                         </div>
                         <div class="d-flex justify-content-between small">
                             <span class="text-muted">Current Ledger Balance:</span>
@@ -525,17 +558,21 @@
 </div>
 
 <script>
-function openPocketFreezeModal(acctId, currency, balance) {
+function openPocketFreezeModal(acctId, acctNum, pocket, currency, balance) {
     document.getElementById("pocketFreezeForm").action = "/admin/accounts/" + encodeURIComponent(acctId) + "/freeze";
+    document.getElementById("pocketFreezeModalAcctDisplay").textContent = (acctNum || acctId) + (pocket ? " (" + pocket + ")" : "");
     document.getElementById("pocketFreezeModalAcctId").textContent = acctId;
+    document.getElementById("pocketFreezeModalCopyBtn").setAttribute("data-copy", acctId);
     document.getElementById("pocketFreezeModalCurrency").textContent = currency || "PHP";
     document.getElementById("pocketFreezeModalBalance").textContent = balance || "₱0.00";
     new bootstrap.Modal(document.getElementById("pocketFreezeModal")).show();
 }
 
-function openPocketUnfreezeModal(acctId, balance) {
+function openPocketUnfreezeModal(acctId, acctNum, pocket, currency, balance) {
     document.getElementById("pocketUnfreezeForm").action = "/admin/accounts/" + encodeURIComponent(acctId) + "/unfreeze";
+    document.getElementById("pocketUnfreezeModalAcctDisplay").textContent = (acctNum || acctId) + (pocket ? " (" + pocket + ")" : "");
     document.getElementById("pocketUnfreezeModalAcctId").textContent = acctId;
+    document.getElementById("pocketUnfreezeModalCopyBtn").setAttribute("data-copy", acctId);
     document.getElementById("pocketUnfreezeModalBalance").textContent = balance || "₱0.00";
     new bootstrap.Modal(document.getElementById("pocketUnfreezeModal")).show();
 }

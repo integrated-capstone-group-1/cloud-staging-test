@@ -95,6 +95,31 @@ public class AccountView {
     public String getAccountNumber() { return accountNumber; }
     public void setAccountNumber(String accountNumber) { this.accountNumber = accountNumber; }
 
+    public String getFormattedAccountNumber() {
+        if (accountNumber == null || accountNumber.isBlank()) {
+            return accountId;
+        }
+        if (accountNumber.length() == 12 && accountNumber.matches("\\d+")) {
+            return accountNumber.substring(0, 4) + "-" + accountNumber.substring(4, 8) + "-" + accountNumber.substring(8);
+        }
+        return accountNumber;
+    }
+
+    public String getPocketName() {
+        return (currencyCode != null ? currencyCode : "PHP") + " Pocket";
+    }
+
+    public String getDisplayIdentifier() {
+        return getFormattedAccountNumber() + " (" + getPocketName() + ")";
+    }
+
+    public String getShortAccountId() {
+        if (accountId != null && accountId.length() > 8) {
+            return accountId.substring(0, 8) + "...";
+        }
+        return accountId != null ? accountId : "";
+    }
+
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
 }

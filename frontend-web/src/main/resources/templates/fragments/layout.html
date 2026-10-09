@@ -225,6 +225,42 @@
                 toggleTheme();
             }
         });
+
+        // Universal 1-Click Clipboard Copy Handler
+        document.addEventListener('click', function (e) {
+            var copyBtn = e.target.closest('.copy-btn');
+            if (copyBtn) {
+                e.preventDefault();
+                var text = copyBtn.getAttribute('data-copy');
+                if (text) {
+                    var showFeedback = function() {
+                        var icon = copyBtn.querySelector('i');
+                        if (icon) {
+                            var prevCls = icon.className;
+                            icon.className = 'bi bi-check2 text-success fw-bold';
+                            setTimeout(function() { icon.className = prevCls; }, 1600);
+                        }
+                    };
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        navigator.clipboard.writeText(text).then(showFeedback).catch(function() {
+                            fallbackCopy(text, showFeedback);
+                        });
+                    } else {
+                        fallbackCopy(text, showFeedback);
+                    }
+                }
+            }
+        });
+
+        function fallbackCopy(text, cb) {
+            var temp = document.createElement('input');
+            temp.value = text;
+            document.body.appendChild(temp);
+            temp.select();
+            document.execCommand('copy');
+            document.body.removeChild(temp);
+            if (cb) cb();
+        }
     })();
     </script>
 </footer>

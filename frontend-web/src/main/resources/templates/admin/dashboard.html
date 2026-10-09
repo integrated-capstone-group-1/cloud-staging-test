@@ -329,7 +329,12 @@
                                     <a th:href="@{/transactions/receipt/{id}(id=${tx.txnId})}" class="text-decoration-none" th:text="${tx.txnId}">TXN-1001</a>
                                 </td>
                                 <td class="font-monospace small">
-                                    <a th:href="@{/accounts/{id}(id=${tx.accountId})}" class="text-decoration-none" th:text="${tx.accountId}">ACCT-1001</a>
+                                    <div class="d-flex align-items-center gap-1">
+                                        <a th:href="@{/accounts/{id}(id=${tx.accountId})}" class="text-decoration-none fw-semibold" th:text="${tx.formattedAccountNumber}">1000-0000-0001</a>
+                                        <button type="button" class="btn btn-sm btn-link p-0 text-muted copy-btn" th:data-copy="${tx.accountId}" title="Copy UUID">
+                                            <i class="bi bi-clipboard" style="font-size: 0.72rem;"></i>
+                                        </button>
+                                    </div>
                                 </td>
                                 <td>
                                     <span class="badge bg-light text-dark border py-0 px-1" style="font-size: 0.7rem;" th:text="${tx.txnType}">TRANSFER</span>

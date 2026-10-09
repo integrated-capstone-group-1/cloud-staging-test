@@ -259,6 +259,7 @@ public class AdminPortalService {
 
             view.getPockets().add(new Customer360View.PocketBalanceView(
                     acct.getAccountId(),
+                    acct.getAccountNumber(),
                     acct.getCurrencyCode(),
                     acct.getAccountType(),
                     acct.getAccountStatus(),

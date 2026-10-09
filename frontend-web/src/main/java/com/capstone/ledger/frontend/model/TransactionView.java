@@ -16,7 +16,9 @@ public class TransactionView {
     private String mutationId;
     private String txnId;
     private String accountId;
+    private String accountNumber;
     private String counterpartyAccountId;
+    private String counterpartyAccountNumber;
     private TransactionType txnType;
     private MutationDirection direction;
     private BigDecimal amount;
@@ -126,4 +128,44 @@ public class TransactionView {
 
     public LocalDateTime getTimestamp() { return timestamp; }
     public void setTimestamp(LocalDateTime timestamp) { this.timestamp = timestamp; }
+
+    public String getAccountNumber() { return accountNumber; }
+    public void setAccountNumber(String accountNumber) { this.accountNumber = accountNumber; }
+
+    public String getCounterpartyAccountNumber() { return counterpartyAccountNumber; }
+    public void setCounterpartyAccountNumber(String counterpartyAccountNumber) { this.counterpartyAccountNumber = counterpartyAccountNumber; }
+
+    public String getFormattedAccountNumber() {
+        if (accountNumber == null || accountNumber.isBlank()) {
+            return accountId;
+        }
+        if (accountNumber.length() == 12 && accountNumber.matches("\\d+")) {
+            return accountNumber.substring(0, 4) + "-" + accountNumber.substring(4, 8) + "-" + accountNumber.substring(8);
+        }
+        return accountNumber;
+    }
+
+    public String getFormattedCounterpartyAccountNumber() {
+        if (counterpartyAccountNumber == null || counterpartyAccountNumber.isBlank()) {
+            return counterpartyAccountId;
+        }
+        if (counterpartyAccountNumber.length() == 12 && counterpartyAccountNumber.matches("\\d+")) {
+            return counterpartyAccountNumber.substring(0, 4) + "-" + counterpartyAccountNumber.substring(4, 8) + "-" + counterpartyAccountNumber.substring(8);
+        }
+        return counterpartyAccountNumber;
+    }
+
+    public String getShortAccountId() {
+        if (accountId != null && accountId.length() > 8) {
+            return accountId.substring(0, 8) + "...";
+        }
+        return accountId != null ? accountId : "";
+    }
+
+    public String getShortCounterpartyAccountId() {
+        if (counterpartyAccountId != null && counterpartyAccountId.length() > 8) {
+            return counterpartyAccountId.substring(0, 8) + "...";
+        }
+        return counterpartyAccountId != null ? counterpartyAccountId : "";
+    }
 }

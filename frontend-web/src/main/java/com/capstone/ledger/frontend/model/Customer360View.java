@@ -88,18 +88,51 @@ public class Customer360View {
         private BigDecimal heldBalance;
         private BigDecimal availableBalance;
 
+        private String accountNumber;
+
         public PocketBalanceView() {}
 
         public PocketBalanceView(String accountId, String currencyCode, AccountType accountType,
                                  AccountStatus accountStatus, BigDecimal ledgerBalance,
                                  BigDecimal heldBalance, BigDecimal availableBalance) {
+            this(accountId, null, currencyCode, accountType, accountStatus, ledgerBalance, heldBalance, availableBalance);
+        }
+
+        public PocketBalanceView(String accountId, String accountNumber, String currencyCode, AccountType accountType,
+                                 AccountStatus accountStatus, BigDecimal ledgerBalance,
+                                 BigDecimal heldBalance, BigDecimal availableBalance) {
             this.accountId = accountId;
+            this.accountNumber = accountNumber;
             this.currencyCode = currencyCode;
             this.accountType = accountType;
             this.accountStatus = accountStatus;
             this.ledgerBalance = ledgerBalance;
             this.heldBalance = heldBalance;
             this.availableBalance = availableBalance;
+        }
+
+        public String getAccountNumber() { return accountNumber; }
+        public void setAccountNumber(String accountNumber) { this.accountNumber = accountNumber; }
+
+        public String getFormattedAccountNumber() {
+            if (accountNumber == null || accountNumber.isBlank()) {
+                return accountId;
+            }
+            if (accountNumber.length() == 12 && accountNumber.matches("\\d+")) {
+                return accountNumber.substring(0, 4) + "-" + accountNumber.substring(4, 8) + "-" + accountNumber.substring(8);
+            }
+            return accountNumber;
+        }
+
+        public String getPocketName() {
+            return (currencyCode != null ? currencyCode : "PHP") + " Pocket";
+        }
+
+        public String getShortAccountId() {
+            if (accountId != null && accountId.length() > 8) {
+                return accountId.substring(0, 8) + "...";
+            }
+            return accountId != null ? accountId : "";
         }
 
         public String getAccountId() { return accountId; }
