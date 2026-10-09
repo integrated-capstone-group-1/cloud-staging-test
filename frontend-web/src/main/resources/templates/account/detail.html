@@ -22,7 +22,8 @@
                 <div class="balance-figure text-primary mt-2" th:text="${account.formattedBalance}">₱0.00</div>
             </div>
 
-            <div class="d-flex flex-wrap gap-2">
+            <!-- Customer Retail Transaction Buttons (Restricted to Customer Persona) -->
+            <div class="d-flex flex-wrap gap-2" th:if="${user != null && !user.admin}">
                 <a th:href="@{/transactions/new(fromAcctNo=${account.accountId},type='DEPOSIT')}" class="btn btn-outline-success btn-sm">
                     <i class="bi bi-box-arrow-in-down me-1"></i> Deposit
                 </a>
@@ -31,6 +32,36 @@
                 </a>
                 <a th:href="@{/transactions/new(fromAcctNo=${account.accountId},type='TRANSFER')}" class="btn btn-primary btn-sm">
                     <i class="bi bi-send me-1"></i> Transfer Funds
+                </a>
+            </div>
+
+            <!-- Administrator Governance Actions (Compliant with Banking Separation of Duties) -->
+            <div class="d-flex flex-wrap gap-2 align-items-center" th:if="${user != null && user.admin}">
+                <span class="badge bg-secondary-subtle text-secondary border px-2 py-1 small">
+                    <i class="bi bi-shield-lock me-1"></i>Admin Read-Only Ledger View
+                </span>
+                <a th:href="@{/admin/customers/{id}(id=${account.customerId})}" class="btn btn-outline-info btn-sm">
+                    <i class="bi bi-person-badge me-1"></i> Customer 360
+                </a>
+                <!-- Freeze / Unfreeze Action Button -->
+                <form th:if="${account.accountStatus.name() == 'ACTIVE'}"
+                      th:action="@{/admin/accounts/{id}/freeze(id=${account.accountId})}" method="post" class="d-inline">
+                    <input type="hidden" name="redirectAcctId" th:value="${account.accountId}"/>
+                    <button type="submit" class="btn btn-outline-warning btn-sm"
+                            onclick="return confirm('Freeze this account? All balance mutations and outbound payments will be halted.');">
+                        <i class="bi bi-snow me-1"></i> Freeze Account
+                    </button>
+                </form>
+                <form th:if="${account.accountStatus.name() == 'FROZEN'}"
+                      th:action="@{/admin/accounts/{id}/unfreeze(id=${account.accountId})}" method="post" class="d-inline">
+                    <input type="hidden" name="redirectAcctId" th:value="${account.accountId}"/>
+                    <button type="submit" class="btn btn-outline-success btn-sm"
+                            onclick="return confirm('Unfreeze this account and restore to active status?');">
+                        <i class="bi bi-sun me-1"></i> Unfreeze Account
+                    </button>
+                </form>
+                <a href="/admin/accounts" class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-arrow-left me-1"></i> Accounts Registry
                 </a>
             </div>
         </div>

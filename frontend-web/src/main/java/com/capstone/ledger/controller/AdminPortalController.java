@@ -83,6 +83,7 @@ public class AdminPortalController {
     @PostMapping({"/api/v1/admin/accounts/{id}/freeze", "/admin/accounts/{id}/freeze"})
     public Object freezeAccount(@PathVariable("id") String accountId,
                                 @RequestParam(value = "redirectCustId", required = false) String redirectCustId,
+                                @RequestParam(value = "redirectAcctId", required = false) String redirectAcctId,
                                 HttpServletRequest request,
                                 HttpSession session,
                                 RedirectAttributes redirectAttributes) {
@@ -99,6 +100,9 @@ public class AdminPortalController {
 
         redirectAttributes.addFlashAttribute("successMessage",
                 "Account " + accountId + " has been FROZEN. All balance mutations are halted.");
+        if (redirectAcctId != null && !redirectAcctId.isBlank()) {
+            return "redirect:/accounts/" + redirectAcctId;
+        }
         if (redirectCustId != null && !redirectCustId.isBlank()) {
             return "redirect:/admin/customers/" + redirectCustId;
         }
@@ -108,6 +112,7 @@ public class AdminPortalController {
     @PostMapping({"/api/v1/admin/accounts/{id}/unfreeze", "/admin/accounts/{id}/unfreeze"})
     public Object unfreezeAccount(@PathVariable("id") String accountId,
                                   @RequestParam(value = "redirectCustId", required = false) String redirectCustId,
+                                  @RequestParam(value = "redirectAcctId", required = false) String redirectAcctId,
                                   HttpServletRequest request,
                                   HttpSession session,
                                   RedirectAttributes redirectAttributes) {
@@ -124,6 +129,9 @@ public class AdminPortalController {
 
         redirectAttributes.addFlashAttribute("successMessage",
                 "Account " + accountId + " has been UNFROZEN and restored to ACTIVE status.");
+        if (redirectAcctId != null && !redirectAcctId.isBlank()) {
+            return "redirect:/accounts/" + redirectAcctId;
+        }
         if (redirectCustId != null && !redirectCustId.isBlank()) {
             return "redirect:/admin/customers/" + redirectCustId;
         }

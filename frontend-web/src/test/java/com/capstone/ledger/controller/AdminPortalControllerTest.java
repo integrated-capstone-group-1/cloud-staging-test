@@ -354,4 +354,36 @@ public class AdminPortalControllerTest {
         mockMvc.perform(get("/admin/api/monitoring/feed").session(customerSession))
                 .andExpect(status().isForbidden());
     }
+
+    // =========================================================================
+    // Separation of Duties (SoD): Admin Retail Transaction Restrictions
+    // =========================================================================
+
+    @Test
+    @DisplayName("SoD Guard: Admin session navigating to /transactions/new is redirected to /admin/accounts")
+    void testAdminCannotAccessNewRetailTransactionForm() throws Exception {
+        mockMvc.perform(get("/transactions/new").session(adminSession))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/admin/accounts"));
+    }
+
+    @Test
+    @DisplayName("SoD Guard: Admin session POST to /transactions/new is blocked with 403 Forbidden")
+    void testAdminCannotSubmitRetailTransaction() throws Exception {
+        mockMvc.perform(post("/transactions/new")
+                        .session(adminSession)
+                        .param("fromAcctNo", "ACCT-1001-PHP")
+                        .param("txnType", "DEPOSIT")
+                        .param("amount", "100.00"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("SoD Guard: Admin accessing /accounts/{id} can view ledger with governance controls")
+    void testAdminCanViewLedgerWithGovernanceControls() throws Exception {
+        mockMvc.perform(get("/accounts/ACCT-1001-PHP").session(adminSession))
+                .andExpect(status().isOk())
+                .andExpect(view().name("account/detail"))
+                .andExpect(model().attributeExists("account", "transactions", "user"));
+    }
 }
