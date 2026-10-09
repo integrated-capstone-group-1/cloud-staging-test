@@ -40,15 +40,17 @@ public class RegistrationService {
     private final KafkaTemplate<String, Object> kafkaTemplate;
     private final AccountsServiceClient accountsServiceClient;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private org.springframework.transaction.PlatformTransactionManager transactionManager;
+
     /**
      * Atomically inserts into CUSTOMER_MASTER and APP_USER_MASTER,
      * and auto-provisions one primary PHP pocket in CBS.
      * 
-     * All writes participate in the @Transactional boundary — if CBS primary account
-     * provisioning fails, an IllegalStateException is thrown, rolling back customer
-     * and credential records cleanly (Delta 2: Transactional Rollback Guarantee).
+     * Customer record is committed before the inter-service call to accounts-service
+     * so that foreign-key validation succeeds in Oracle. If CBS provisioning fails,
+     * compensating rollback deletes the newly inserted records.
      */
-    @Transactional
     public RegisterResponse register(RegisterRequest request) {
         if (customerRepository.existsByEmail(request.email())) {
             throw new DuplicateResourceException(
@@ -85,12 +87,31 @@ public class RegistrationService {
                 .createdBy("SYSTEM")
                 .build();
 
-        customerRepository.save(customer);
-        appUserRepository.save(appUser);
+        if (transactionManager != null) {
+            new org.springframework.transaction.support.TransactionTemplate(transactionManager).execute(status -> {
+                customerRepository.saveAndFlush(customer);
+                appUserRepository.saveAndFlush(appUser);
+                return null;
+            });
+        } else {
+            customerRepository.save(customer);
+            appUserRepository.save(appUser);
+        }
 
         // BR-16 / Delta 2: Auto-provision primary PHP pocket in CBS.
-        // If CBS provisioning fails, exception rolls back customer and app_user records cleanly.
-        provisionPrimaryAccount(customerId);
+        // If CBS provisioning fails, compensation rolls back customer and app_user records cleanly.
+        try {
+            provisionPrimaryAccount(customerId);
+        } catch (Exception e) {
+            if (transactionManager != null) {
+                new org.springframework.transaction.support.TransactionTemplate(transactionManager).execute(status -> {
+                    appUserRepository.deleteById(userId);
+                    customerRepository.deleteById(customerId);
+                    return null;
+                });
+            }
+            throw e;
+        }
 
         RegisterResponse response = new RegisterResponse(
                 customerId, customer.getFirstName(), customer.getLastName(), customer.getEmail());

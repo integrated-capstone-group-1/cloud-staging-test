@@ -1,6 +1,7 @@
 package com.capstone.orchestrator.client;
 
 import com.capstone.common.dto.AccountDTO;
+import com.capstone.common.dto.ApiResponse;
 import com.capstone.common.exception.ResourceNotFoundException;
 import com.capstone.common.security.JwtTokenProvider;
 import lombok.extern.slf4j.Slf4j;
@@ -54,11 +55,16 @@ public class AccountsClient {
      */
     public AccountDTO getAccount(String accountId) {
         String token = resolveSystemToken();
-        return restClient.get()
-                .uri("/api/accounts/{id}", accountId)
-                .header("Authorization", token)
-                .retrieve()
-                .body(AccountDTO.class);
+        try {
+            ApiResponse<AccountDTO> response = restClient.get()
+                    .uri("/api/accounts/{id}", accountId)
+                    .header("Authorization", token)
+                    .retrieve()
+                    .body(new ParameterizedTypeReference<ApiResponse<AccountDTO>>() {});
+            return response != null ? response.data() : null;
+        } catch (ResourceNotFoundException ex) {
+            return null;
+        }
     }
 
     /**
@@ -67,11 +73,12 @@ public class AccountsClient {
     public List<AccountDTO> getCustomerPockets(String customerId) {
         String token = resolveSystemToken();
         try {
-            return restClient.get()
-                .uri("/api/accounts/customer/{customerId}", customerId)
-                .header("Authorization", token)
-                .retrieve()
-                .body(new ParameterizedTypeReference<List<AccountDTO>>() {});
+            ApiResponse<List<AccountDTO>> response = restClient.get()
+                    .uri("/api/accounts/customer/{customerId}", customerId)
+                    .header("Authorization", token)
+                    .retrieve()
+                    .body(new ParameterizedTypeReference<ApiResponse<List<AccountDTO>>>() {});
+            return (response != null && response.data() != null) ? response.data() : Collections.emptyList();
         } catch (ResourceNotFoundException ex) {
             return Collections.emptyList();
         }

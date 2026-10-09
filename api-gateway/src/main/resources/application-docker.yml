@@ -13,10 +13,31 @@ spring:
           predicates:
             - Path=/api/auth/**,/v1/auth/**,/api/v1/auth/**
 
+        - id: orchestrator-payments
+          uri: http://orchestrator-service:8089
+          predicates:
+            - Path=/api/v1/payments,/api/v1/payments/**
+          filters:
+            - JwtAuthentication
+
+        - id: orchestrator-dashboard
+          uri: http://orchestrator-service:8089
+          predicates:
+            - Path=/api/v1/dashboard/**
+          filters:
+            - JwtAuthentication
+
+        - id: orchestrator-pockets
+          uri: http://orchestrator-service:8089
+          predicates:
+            - Path=/api/v1/accounts/*/pockets,/api/v1/accounts/*/pockets/**
+          filters:
+            - JwtAuthentication
+
         - id: accounts-service
           uri: http://accounts-service:8083
           predicates:
-            - Path=/api/accounts/**
+            - Path=/api/accounts/**,/api/v1/accounts/**,/api/recipients/**,/api/v1/recipients/**
           filters:
             - JwtAuthentication
 
@@ -47,19 +68,26 @@ spring:
         - id: transaction-service
           uri: http://transaction-service:8084
           predicates:
-            - Path=/api/v1/ledger/**
+            - Path=/api/v1/ledger/**,/api/v1/payments/**,/api/v1/cards/**,/api/v1/transactions/**,/v1/transactions/**,/api/v1/statements/**,/v1/statements/**,/api/v1/admin/**
           filters:
             - JwtAuthentication
 
         - id: forex-service
           uri: http://forex-service:8087
           predicates:
-            - Path=/api/v1/fx-rate,/api/v1/fx-rate/**,/api/v1/forex/**
+            - Path=/api/v1/fx-rate,/api/v1/fx-rate/**,/api/v1/forex/**,/api/v1/fx/**
+
+        - id: notification-service
+          uri: http://notification-service:8085
+          predicates:
+            - Path=/api/notifications/**
+          filters:
+            - JwtAuthentication
 
         - id: reconciliation-service
           uri: http://reconciliation-service:8086
           predicates:
-            - Path=/api/recon/**
+            - Path=/api/recon/**,/api/v1/recon/**
           filters:
             - JwtAuthentication
 
