@@ -30,7 +30,7 @@ import java.util.regex.Pattern;
 @Slf4j
 public class GatewayRouteIsolationFilter implements GlobalFilter, Ordered {
 
-    private static final Pattern MUTATION_ROUTE_PATTERN = Pattern.compile("^/api/accounts/(?:[^/]+/)?(credit|debit)(?:/.*)?$");
+    private static final Pattern MUTATION_ROUTE_PATTERN = Pattern.compile("^/api(?:/v1)?/accounts/(?:[^/]+/)?(credit|debit)(?:/.*)?$");
 
     @Override
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
@@ -57,8 +57,13 @@ public class GatewayRouteIsolationFilter implements GlobalFilter, Ordered {
             return true;
         }
 
-        // 2. Cloak direct accounts balance mutation endpoints (/api/accounts/*/credit, /api/accounts/*/debit)
+        // 2. Cloak direct accounts balance mutation endpoints (/api/accounts/*/credit, /api/accounts/*/debit, /api/v1/accounts/*)
         if (MUTATION_ROUTE_PATTERN.matcher(path).matches()) {
+            return true;
+        }
+
+        // 3. Cloak legacy ledger adapter route (/api/v1/ledger/mutate)
+        if ("/api/v1/ledger/mutate".equals(path) || path.startsWith("/api/v1/ledger/mutate/")) {
             return true;
         }
 

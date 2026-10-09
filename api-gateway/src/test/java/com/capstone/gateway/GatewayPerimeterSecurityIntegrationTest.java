@@ -226,7 +226,10 @@ class GatewayPerimeterSecurityIntegrationTest {
                 "/api/accounts/acct-01/credit",
                 "/api/accounts/acct-01/debit",
                 "/api/accounts/credit",
-                "/api/accounts/debit"
+                "/api/accounts/debit",
+                "/api/v1/accounts/acct-01/credit",
+                "/api/v1/accounts/acct-01/debit",
+                "/api/v1/ledger/mutate"
         };
 
         for (String path : internalPaths) {

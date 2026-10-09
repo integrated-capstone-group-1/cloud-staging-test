@@ -109,6 +109,33 @@ public class GatewayRouteIsolationFilterTest {
     }
 
     @Test
+    @DisplayName("Regression F-001: Block /api/v1/ledger/mutate with 403 FORBIDDEN")
+    void shouldBlockLegacyLedgerMutateEndpoint() {
+        mockPath("/api/v1/ledger/mutate");
+        filter.filter(exchange, chain);
+        verify(exchange.getResponse()).setStatusCode(HttpStatus.FORBIDDEN);
+        verify(chain, never()).filter(any());
+    }
+
+    @Test
+    @DisplayName("Regression F-001: Block /api/v1/accounts/ACC-001/credit with 403 FORBIDDEN")
+    void shouldBlockV1DirectCreditEndpoint() {
+        mockPath("/api/v1/accounts/ACC-001/credit");
+        filter.filter(exchange, chain);
+        verify(exchange.getResponse()).setStatusCode(HttpStatus.FORBIDDEN);
+        verify(chain, never()).filter(any());
+    }
+
+    @Test
+    @DisplayName("Regression F-001: Block /api/v1/accounts/ACC-001/debit with 403 FORBIDDEN")
+    void shouldBlockV1DirectDebitEndpoint() {
+        mockPath("/api/v1/accounts/ACC-001/debit");
+        filter.filter(exchange, chain);
+        verify(exchange.getResponse()).setStatusCode(HttpStatus.FORBIDDEN);
+        verify(chain, never()).filter(any());
+    }
+
+    @Test
     @DisplayName("Scenario 1: Block /internal/recon/trigger")
     void shouldBlockInternalReconciliation() {
         mockPath("/internal/recon/trigger");
