@@ -21,7 +21,7 @@ public class CoreSettlementController {
     }
 
     @GetMapping("/{postingReferenceId}")
-    public ResponseEntity<CoreSettlementResponse> getStatus(@PathVariable String postingReferenceId) {
+    public ResponseEntity<CoreSettlementResponse> getStatus(@PathVariable("postingReferenceId") String postingReferenceId) {
         CoreSettlementResponse response = coreSettlementService.getSettlementStatus(postingReferenceId);
         return ResponseEntity.ok(response);
     }

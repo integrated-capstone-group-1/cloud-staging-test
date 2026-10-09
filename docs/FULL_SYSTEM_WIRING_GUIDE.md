@@ -269,9 +269,9 @@ The following seeded users and credentials from [`docs/SEED.md`](SEED.md) are pr
 
 | Persona | Role | Email / Username | Password | Default Accounts & Balances (Oracle XE) | Virtual Card |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Juan Dela Cruz** | Retail Customer (`cust-user-001`) | `juan.delacruz@example.com` | `password123` | • `acct-juan-php-01` (PHP Savings, Primary): **₱50,000.0000**<br/>• `acct-juan-usd-01` (USD Checking): **$1,500.0000** | `card-juan-01`<br/>`4532-XXXX-XXXX-8821`<br/>Ecom: `1` |
-| **Maria Santos** | Retail Customer (`cust-user-002`) | `maria.santos@example.com` | `password123` | • `acct-maria-php-01` (PHP Savings, Primary): **₱120,000.0000**<br/>• `acct-maria-eur-01` (EUR Wallet): **€800.0000** | `card-maria-01`<br/>`4532-XXXX-XXXX-1194`<br/>Ecom: `1` |
-| **System Admin** | Staff Operator (`cust-admin-001`) | `admin@ledgerbank.com` | `admin123` | Admin Portal access on `:8090` (Recon, Holds, DLQ, Freezes) | N/A |
+| **Juan Dela Cruz** | Retail Customer (`7bd20304-dd6a-4e45-850b-58df8b535be4` / `cust-user-001`) | `juan.delacruz@example.com` | `password123` | • `3722f77f-3d1b-4d55-8f83-b71bac91d095` (`acct-juan-php-01`, Primary): **₱17,300.0000**<br/>• `a86c97cc-1ea5-4767-bd5b-148968354f9c` (`acct-juan-php-02`): **₱3,500.0000**<br/>• `acct-juan-eur-01` (EUR Wallet): **€100.0000** | `c4a1b2c3-d4e5-4f6a-8b9c-0d1e2f3a4b5c`<br/>`4532-XXXX-XXXX-8821`<br/>Ecom: `1` |
+| **Maria Santos** | Retail Customer (`66e07d02-05c9-4deb-87d5-10e23cf5968f` / `cust-user-002`) | `maria.santos@example.com` | `password123` | • `f95e7e52-3259-4b4d-ac66-b186a893cf66` (`acct-maria-php-01`, Primary): **₱9,000.0000**<br/>• `86cabb96-61d5-462a-b33b-5a6435649eb4` (`acct-maria-php-02`): **₱2,950.0000**<br/>• `acct-maria-eur-01` (EUR Wallet): **€50.0000** | `d5b2c3d4-e5f6-4a7b-9c0d-1e2f3a4b5c6d`<br/>`4532-XXXX-XXXX-9932`<br/>Ecom: `1` |
+| **System Admin** | Staff Operator (`2d49c23b-5f65-48da-aa68-28b155dd4022` / `cust-admin-001`) | `admin@ledgerbank.com` | `admin123` | Admin Portal access on `:8090` (Recon, Holds, DLQ, Freezes) | N/A |
 
 ---
 
@@ -285,6 +285,6 @@ The following seeded users and credentials from [`docs/SEED.md`](SEED.md) are pr
 | **CORS Error in Chrome (`XMLHttpRequest blocked by CORS policy`)** | Browser security blocks requests to `:8080` from `localhost:<flutter_web_port>`. | Launch Chrome with web security disabled for local testing: `flutter run -d chrome --web-browser-flag "--disable-web-security"`. |
 | **`401 Unauthorized (TOKEN_REVOKED)`** | Token was invalidated via `/api/auth/logout` or present in Redis blacklist. | Re-authenticate via `/api/auth/login` to obtain fresh JWT. |
 | **`401 Unauthorized (INVALID_CREDENTIALS)` after 15 min** | Access tokens have a 15-minute validity window. | Call `POST /api/auth/refresh` with refresh token, or re-authenticate persona. |
-| **`409 Conflict (IDEMPOTENCY_IN_PROGRESS)`** | Duplicate `X-Idempotency-Key` sent while initial transaction is still processing. | Await original response or supply a distinct UUID (`Uuid().v4()`). |
+| **`409 Conflict (REQUEST_IN_PROGRESS)`** | Duplicate `X-Idempotency-Key` sent while initial transaction is still processing (`SETNX` returned 0). | Await original response or supply a distinct UUID (`Uuid().v4()`). |
 | **`403 Forbidden (ACCESS_DENIED)` on `/internal/**` or balance mutations** | B-06 Boundary rule blocks internal routes (`/internal/core/**`, `/api/accounts/*/credit`) at Gateway. | Route payments through `/api/v1/payments`. |
 | **`422 Unprocessable (FX_RATE_STALE)`** | Cached exchange rate in `fx_rate_cache` is older than 24 hours. | Run Forex rate refresh scheduler or trigger `/api/v1/fx-rate` update. |

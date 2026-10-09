@@ -17,7 +17,7 @@ public class AccountHoldController {
 
     @PostMapping("/{accountId}/holds")
     public ResponseEntity<HoldResponse> createHold(
-            @PathVariable String accountId,
+            @PathVariable("accountId") String accountId,
             @RequestBody CreateHoldRequest request) {
         HoldResponse response = accountHoldService.createHold(accountId, request);
         return ResponseEntity.ok(response);
@@ -25,20 +25,20 @@ public class AccountHoldController {
 
     @DeleteMapping("/{accountId}/holds/{holdId}")
     public ResponseEntity<ReleaseHoldResponse> releaseHold(
-            @PathVariable String accountId,
-            @PathVariable String holdId) {
+            @PathVariable("accountId") String accountId,
+            @PathVariable("holdId") String holdId) {
         ReleaseHoldResponse response = accountHoldService.releaseHold(accountId, holdId);
         return ResponseEntity.ok(response);
     }
 
     @GetMapping("/{accountId}/holds")
-    public ResponseEntity<?> getActiveHolds(@PathVariable String accountId) {
+    public ResponseEntity<?> getActiveHolds(@PathVariable("accountId") String accountId) {
         var holds = accountHoldService.getActiveHoldsForAccount(accountId);
         return ResponseEntity.ok(holds);
     }
 
     @GetMapping("/holds/{holdId}")
-    public ResponseEntity<?> getHold(@PathVariable String holdId) {
+    public ResponseEntity<?> getHold(@PathVariable("holdId") String holdId) {
         var hold = accountHoldService.getHold(holdId);
         return ResponseEntity.ok(hold);
     }

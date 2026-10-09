@@ -71,12 +71,18 @@ These conflicts exist between the contracts, task cards, backlog and the draft t
 | D-4 | Outbox table and status | Table **`outbox_master`**, final status **`PUBLISHED`**. | Yancey |
 | D-5 | Retry/DLQ naming | `<topic>.dlq` and `.retry` (not `dead-letter-events`). | Rohan |
 | D-6 | Cancellable states | **`INITIATED`, `AUTHORIZED`, `RESERVED`** are all cancellable. | Rohan |
-| D-7 | Reconciliation table | **`recon_result_audit`** (`ReconciliationController`). | Yancey |
+| D-7 | Reconciliation tables | **`recon_run_audit`** (run summary) and **`recon_result_audit`** (per-account break rows). | Yancey |
 | D-8 | Fixtures | Fix via API to setup pockets/thresholds. | Rohan |
 | D-9 | Entry point and auth mode | **JWT** validated at the API Gateway (`JwtAuthenticationGatewayFilterFactory`). | Rohan / PK |
 | D-10 | Exact balances | Calculated dynamically. | Rohan |
-| D-11 | Store locations | FX rates in **`fx_rate_cache`** (Postgres). | Yancey |
+| D-11 | Store locations | FX rates authoritative in Oracle **`fx_rate`**; cached in Postgres **`fx_rate_cache`** / Redis. | Yancey |
 | D-12 | Monitoring | **Done** (SSE feeds stream from services to Admin Portal). | PK |
+| D-13 | Oracle for black-box testing | `CONTRACTS.md` is the oracle; lines tagged `[VERIFY H-nn]` are unconfirmed and not an oracle; known gaps live in `CONTRACTS.md` section 5. | Rohan |
+| D-14 | Entry point for the fixer-breaker loop | Gateway `:8080` (plus Admin Portal `:8090`) only. Service ports have no authentication (D-9), so authorization tests are meaningless there. | Rohan / Russel |
+| D-15 | Undo window in black-box journeys | Test profile keeps `cancel_window_seconds` at 5; journeys poll to a final status. Race and load suites set it to 0 and restore it. | Rohan |
+| D-16 | Invariant I-9 sign convention | Sign-aware through `normal_balance` (DR/CR), compared with the baseline taken at stack reset; "sum of all balances unchanged" is wrong when a DR-normal account is involved. | Yancey |
+| D-17 | Opening-balance postings | Excluded from I-2 to I-5 (single-leg, no transaction, no outbox or audit rows); covered by I-10. | Yancey |
+| D-18 | Test harness language | pytest and Python are allowed under `tests/`; services remain Java-only (see `AGENTS.md`). | Rohan |
 
 ### 3.2 Minimal local stack
 
@@ -290,17 +296,7 @@ One probe per catalogue code so the mobile error screens (DIG-46) have something
 
 ### 6.4 Invariant checks (run after every module and at the end)
 
-| **ID** | **Invariant** |
-|----|----|
-| I-1 | No CUSTOMER account has a negative balance; held amount is not above balance |
-| I-2 | For every transaction, total debits equal total credits per currency in `ledger_entry` |
-| I-3 | (`txn_id`, `leg_no`) is unique; every POSTED transaction has a core reference and at least two legs; CANCELLED and FAILED transactions have no legs |
-| I-4 | Every ledger transaction has an outbox event; once the relay runs, no PENDING outbox row is older than a few seconds |
-| I-5 | Audit parity: after the queue drains, legs in PostgreSQL equal legs in Oracle (count and amount) for every transaction |
-| I-6 | For every account, held amount equals the sum of ACTIVE holds |
-| I-7 | No transaction remains in INITIATED, AUTHORIZED or PROCESSING beyond the sweeper threshold |
-| I-8 | At most one reversal exists per original transaction; the original stays POSTED |
-| I-9 | Per currency, the sum of all account balances (customer and bank accounts) is unchanged by transfers, conversions and cash movements. This holds only if every account treats DEBIT as decrease and CREDIT as increase, as in the contract examples; confirm the sign convention first |
+Defined in [`INVARIANTS.md`](INVARIANTS.md) (I-1 to I-11), together with the `check_invariants` interface, scope modes and exit codes. This section no longer carries a second copy of the definitions.
 
 **Exit gate.** All P0 journeys and probes green with clean invariants; P1 failures logged. The same suite is rerun unchanged in Phase 5.
 

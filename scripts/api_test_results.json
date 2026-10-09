@@ -7,7 +7,7 @@
                         "ExpectedStatus":  200,
                         "ActualStatus":  200,
                         "Passed":  true,
-                        "DurationMs":  181,
+                        "DurationMs":  5213,
                         "Details":  ""
                     },
                     {
@@ -17,7 +17,7 @@
                         "ExpectedStatus":  409,
                         "ActualStatus":  409,
                         "Passed":  true,
-                        "DurationMs":  16,
+                        "DurationMs":  169,
                         "Details":  ""
                     },
                     {
@@ -27,7 +27,7 @@
                         "ExpectedStatus":  200,
                         "ActualStatus":  200,
                         "Passed":  true,
-                        "DurationMs":  386,
+                        "DurationMs":  771,
                         "Details":  ""
                     },
                     {
@@ -37,7 +37,7 @@
                         "ExpectedStatus":  200,
                         "ActualStatus":  200,
                         "Passed":  true,
-                        "DurationMs":  445,
+                        "DurationMs":  501,
                         "Details":  ""
                     },
                     {
@@ -47,7 +47,7 @@
                         "ExpectedStatus":  200,
                         "ActualStatus":  200,
                         "Passed":  true,
-                        "DurationMs":  38,
+                        "DurationMs":  646,
                         "Details":  ""
                     },
                     {
@@ -57,7 +57,7 @@
                         "ExpectedStatus":  401,
                         "ActualStatus":  401,
                         "Passed":  true,
-                        "DurationMs":  17,
+                        "DurationMs":  38,
                         "Details":  ""
                     },
                     {
@@ -67,7 +67,7 @@
                         "ExpectedStatus":  200,
                         "ActualStatus":  200,
                         "Passed":  true,
-                        "DurationMs":  133,
+                        "DurationMs":  894,
                         "Details":  ""
                     },
                     {
@@ -77,7 +77,7 @@
                         "ExpectedStatus":  200,
                         "ActualStatus":  200,
                         "Passed":  true,
-                        "DurationMs":  53,
+                        "DurationMs":  65,
                         "Details":  ""
                     },
                     {
@@ -87,7 +87,7 @@
                         "ExpectedStatus":  403,
                         "ActualStatus":  403,
                         "Passed":  true,
-                        "DurationMs":  78,
+                        "DurationMs":  59,
                         "Details":  ""
                     },
                     {
@@ -97,7 +97,7 @@
                         "ExpectedStatus":  200,
                         "ActualStatus":  200,
                         "Passed":  true,
-                        "DurationMs":  197,
+                        "DurationMs":  446,
                         "Details":  ""
                     },
                     {
@@ -107,7 +107,7 @@
                         "ExpectedStatus":  200,
                         "ActualStatus":  200,
                         "Passed":  true,
-                        "DurationMs":  85,
+                        "DurationMs":  163,
                         "Details":  ""
                     },
                     {
@@ -117,7 +117,7 @@
                         "ExpectedStatus":  409,
                         "ActualStatus":  409,
                         "Passed":  true,
-                        "DurationMs":  96,
+                        "DurationMs":  92,
                         "Details":  ""
                     },
                     {
@@ -127,7 +127,7 @@
                         "ExpectedStatus":  403,
                         "ActualStatus":  403,
                         "Passed":  true,
-                        "DurationMs":  84,
+                        "DurationMs":  35,
                         "Details":  ""
                     },
                     {
@@ -137,7 +137,7 @@
                         "ExpectedStatus":  200,
                         "ActualStatus":  200,
                         "Passed":  true,
-                        "DurationMs":  72,
+                        "DurationMs":  59,
                         "Details":  ""
                     },
                     {
@@ -147,7 +147,7 @@
                         "ExpectedStatus":  200,
                         "ActualStatus":  200,
                         "Passed":  true,
-                        "DurationMs":  95,
+                        "DurationMs":  247,
                         "Details":  ""
                     },
                     {
@@ -157,7 +157,7 @@
                         "ExpectedStatus":  200,
                         "ActualStatus":  200,
                         "Passed":  true,
-                        "DurationMs":  42,
+                        "DurationMs":  111,
                         "Details":  ""
                     },
                     {
@@ -167,7 +167,7 @@
                         "ExpectedStatus":  200,
                         "ActualStatus":  200,
                         "Passed":  true,
-                        "DurationMs":  15,
+                        "DurationMs":  66,
                         "Details":  ""
                     },
                     {
@@ -177,7 +177,7 @@
                         "ExpectedStatus":  403,
                         "ActualStatus":  403,
                         "Passed":  true,
-                        "DurationMs":  10,
+                        "DurationMs":  152,
                         "Details":  ""
                     },
                     {
@@ -185,9 +185,9 @@
                         "TestId":  "API-PK-06.3",
                         "Description":  "Trigger dual-datasource reconciliation engine audit",
                         "ExpectedStatus":  200,
-                        "ActualStatus":  200,
-                        "Passed":  true,
-                        "DurationMs":  171,
+                        "ActualStatus":  401,
+                        "Passed":  false,
+                        "DurationMs":  2813,
                         "Details":  ""
                     },
                     {
@@ -197,7 +197,7 @@
                         "ExpectedStatus":  403,
                         "ActualStatus":  403,
                         "Passed":  true,
-                        "DurationMs":  18,
+                        "DurationMs":  1283,
                         "Details":  ""
                     },
                     {
@@ -207,7 +207,7 @@
                         "ExpectedStatus":  401,
                         "ActualStatus":  401,
                         "Passed":  true,
-                        "DurationMs":  6,
+                        "DurationMs":  22,
                         "Details":  ""
                     },
                     {
@@ -217,7 +217,7 @@
                         "ExpectedStatus":  400,
                         "ActualStatus":  400,
                         "Passed":  true,
-                        "DurationMs":  26,
+                        "DurationMs":  96,
                         "Details":  ""
                     },
                     {
@@ -227,16 +227,16 @@
                         "ExpectedStatus":  404,
                         "ActualStatus":  404,
                         "Passed":  true,
-                        "DurationMs":  74,
+                        "DurationMs":  68,
                         "Details":  ""
                     }
                 ],
-    "FailedTests":  0,
-    "ExecutionTimestamp":  "2026-10-09 12:02:09 +08:00",
+    "FailedTests":  null,
+    "ExecutionTimestamp":  "2026-10-09 16:01:35 +08:00",
     "GatewayBaseUrl":  "http://localhost:8080",
-    "PassedTests":  23,
+    "PassedTests":  22,
     "MonorepoBranch":  "test/pk-api-test",
     "TotalTests":  23,
-    "TotalDurationSec":  2.97,
-    "PassRate":  100
+    "TotalDurationSec":  14.77,
+    "PassRate":  95.65
 }

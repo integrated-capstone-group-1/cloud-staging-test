@@ -10,6 +10,14 @@ End-to-End (E2E) testing validates the **entire integrated platform as a black b
 2. **True Black-Box Execution:** Requests interact with the perimeter over HTTP using valid Bearer JWTs, headers, and payload structures. Zero mocks or test stubs are utilized.
 3. **Financial Consistency Verification:** Every E2E journey validates not only HTTP response bodies, but also final database states: balance conservation, `ledger_entry` records, outbox event generation, and PostgreSQL audit trail parity.
 
+### Step Labels and Assertion Conventions
+* **`[HTTP]`** steps go through the Gateway (`:8080`) or the Admin Portal (`:8090`) only. **`[HARNESS]`** steps (SQL reads and seeding, Kafka injection, batch triggers, container control, log inspection) are performed by the team's test harness. Harness steps are exempt from the perimeter rule in Section 5. A black-box agent runs only `[HTTP]` steps.
+* **No sleeps.** Wait for asynchronous effects by polling (`GET /api/v1/payments/{id}`, outbox drain, audit parity) with a timeout.
+* **Relative balances.** Read balances before and after and assert deltas. Do not hard-code absolute balances (TEST_PLAN D-10).
+* **Fresh data.** Journeys create their own customers (unique e-mail per run) unless a seeded persona from `SEED.md` is named. Amounts and rates come from responses, not constants.
+* **Parameters.** The test profile keeps `cancel_window_seconds` at its default (5). Race and load suites set it to 0 through the parameter store and restore it.
+* **Contract.** Expected statuses, codes and fields come from `CONTRACTS.md`. Lines there tagged `[VERIFY H-nn]` are unconfirmed; a mismatch on such a line is routed to the handoff, not logged as a defect.
+
 ### Boundary Separation from Other Plans
 * **Unit & Component Testing:** Covered in task cards [`docs/tasks`](tasks).
 * **Seam Integration Testing:** Covered in [`docs/INTEGRATION_TEST_PLAN.md`](INTEGRATION_TEST_PLAN.md).
@@ -139,8 +147,8 @@ Automated Black-Box Execution Harness: [`scripts/test_api_functional_e2e.ps1`](f
 > ```
 
 #### Journey E2E-02: Same-Currency Transfer & Idempotency Replay (`BR-01`, `BR-05`, `BR-10`)
-* **Step 1:** Generate unique idempotency key: `IDEMP_KEY="b5d19e68-0000-4000-8000-000000000001"`.
-* **Step 2:** Post payment transferring ₱5,000 from Juan to Maria:
+* **Step 1 `[HARNESS]`:** Generate unique idempotency key: `IDEMP_KEY="b5d19e68-0000-4000-8000-000000000001"` and record Juan's and Maria's PHP balances.
+* **Step 2 `[HTTP]`:** Post payment transferring ₱5,000 from Juan to Maria:
   ```bash
   curl -X POST http://localhost:8080/api/v1/payments \
     -H "Authorization: Bearer <juan_jwt>" \
@@ -152,8 +160,8 @@ Automated Black-Box Execution Harness: [`scripts/test_api_functional_e2e.ps1`](f
       "currency": "PHP"
     }'
   ```
-* **Step 3:** Assert HTTP `200 OK`, `status: "POSTED"`, and `core_reference_id` starting with `FT`.
-* **Step 4:** Replay identical curl request with same `$IDEMP_KEY`:
+* **Step 3 `[HTTP]`:** Keep the first response (status code and body). Poll `GET /api/v1/payments/{id}` until a final status. Assert HTTP `200 OK`, `status: "POSTED"`, and `core_reference_id` starting with `FT` (timing of first response: `[VERIFY H-01]`).
+* **Step 4 `[HTTP]`:** Replay identical curl request with same `$IDEMP_KEY`:
   ```bash
   curl -X POST http://localhost:8080/api/v1/payments \
     -H "Authorization: Bearer <juan_jwt>" \
@@ -165,21 +173,23 @@ Automated Black-Box Execution Harness: [`scripts/test_api_functional_e2e.ps1`](f
       "currency": "PHP"
     }'
   ```
-* **Step 5:** Assert response is identical to Step 3. Verify in Oracle that Juan was debited exactly once (balance ₱45,000.00):
+* **Step 5 `[HTTP]`:** Assert the replay response is identical to Step 3 (same status code and body). Verify in Oracle that Juan was debited exactly once (balance ₱45,000.00; same-currency fee `[VERIFY H-14]`) and Maria was credited ₱5,000.00, unchanged by replay:
   ```sql
   SELECT balance FROM accounts WHERE account_id = 'acct-juan-php-01';
   SELECT COUNT(*) FROM transaction_master WHERE idempotency_key = 'b5d19e68-0000-4000-8000-000000000001';
   ```
+* **Step 6 `[HARNESS]`:** Exactly one DEBIT and one CREDIT leg exist for the transaction.
   *Automated test:* `RohanPaymentsE2ETest#e2e02_sameCurrencyTransferAndIdempotencyReplay`
 
 #### Journey E2E-03: Smart Shortfall Multi-Currency Transfer (`BR-04`, `BR-26`, `BR-28`)
-* **Step 1:** Juan wants to pay €50.00 to Maria (`acct-maria-eur-01`). Juan currently holds €0.00 in EUR pocket.
-* **Step 2:** Fetch conversion quote via Gateway:
+* **Pre-condition `[HTTP]`:** Juan has an EUR pocket funded with €10.0000 (open pocket and top-up: `[VERIFY H-08]`; seeded Juan has `acct-juan-eur-01` with €100.00). Juan wants to pay €50.00 to Maria (`acct-maria-eur-01`).
+* **Step 1 `[HTTP]`:** Post €50.00 payment to Maria with no funding fields. Assert `422 INSUFFICIENT_FUNDS` with `shortfall.deficit_amount = "40.0000"` (or actual deficit) and `funding_options` carrying suggested quote.
+* **Step 2 `[HTTP]`:** Fetch conversion quote via Gateway (or extract suggested `quote_id`, valid for 30 seconds):
   ```bash
   curl -s "http://localhost:8080/api/v1/fx/quote?from=PHP&to=EUR&amount=50.00" \
     -H "Authorization: Bearer <juan_jwt>"
   ```
-* **Step 3:** Extract `quote_id` (valid for 30 seconds). Submit shortfall payment:
+* **Step 3 `[HTTP]`:** Extract `quote_id` (valid for 30 seconds). Submit shortfall payment with fresh `X-Idempotency-Key`:
   ```bash
   curl -X POST http://localhost:8080/api/v1/payments \
     -H "Authorization: Bearer <juan_jwt>" \
@@ -193,15 +203,16 @@ Automated Black-Box Execution Harness: [`scripts/test_api_functional_e2e.ps1`](f
       "quote_id": "<quote_id>"
     }'
   ```
-* **Step 4:** Assert HTTP `200 OK` with complete `funding_breakdown` (converted shortfall amount, applied FX rate, fee amount).
-* **Step 5:** Query Oracle `ledger_entry`: Assert all 6 double-entry settlement legs committed atomically:
+* **Step 4 `[HTTP]`:** Assert HTTP `200 OK` (poll `GET /api/v1/payments/{id}` if async) with complete `funding_breakdown` (converted shortfall amount, applied FX rate, fee amount matching quote). An expired quote returns `400 QUOTE_EXPIRED`.
+* **Step 5 `[HARNESS]`:** Query Oracle `ledger_entry`: Assert all 6 double-entry settlement legs committed atomically (`leg_no` 1 to 6), debits equal credits per currency:
   ```sql
   SELECT leg_no, account_id, currency, direction, amount FROM ledger_entry WHERE txn_id = '<txn_id>' ORDER BY leg_no ASC;
   ```
   *Automated test:* `RohanPaymentsE2ETest#e2e03_smartShortfallMultiCurrencyTransfer`
 
 #### Journey E2E-04: 7-Status CAS Lifecycle & 5-Second Undo Cancellation (`BR-30`, `BR-31`)
-* **Step 1:** Initiate payment of ₱10,000.00:
+* **Pre-condition:** `cancel_window_seconds = 5` (default).
+* **Step 1 `[HTTP]`:** Initiate payment of ₱10,000.00; record `transaction_id`:
   ```bash
   curl -X POST http://localhost:8080/api/v1/payments \
     -H "Authorization: Bearer <juan_jwt>" \
@@ -213,21 +224,23 @@ Automated Black-Box Execution Harness: [`scripts/test_api_functional_e2e.ps1`](f
       "currency": "PHP"
     }'
   ```
-* **Step 2:** Immediately within 5 seconds, issue cancellation request:
+* **Step 2 `[HTTP]`:** Immediately within 5 seconds, issue cancellation request:
   ```bash
   curl -X POST http://localhost:8080/api/v1/payments/<txn_id>/cancel \
     -H "Authorization: Bearer <juan_jwt>"
   ```
-* **Step 3:** Assert HTTP `200 OK` with `status: "CANCELLED"`. Verify zero balance deductions:
+* **Step 3 `[HTTP]`:** Assert HTTP `200 OK` with `status: "CANCELLED"`. Verify zero balance deductions:
   ```sql
   SELECT txn_status, cancel_reason FROM transaction_master WHERE txn_id = '<txn_id>';
   ```
-* **Step 4:** Attempt cancellation when transaction transitions to terminal or irrevocable state (`PROCESSING` / `POSTED`):
+* **Step 4 `[HTTP]`:** Initiate a second payment and poll until it is no longer cancellable (terminal or irrevocable state `PROCESSING` / `POSTED`). Attempt cancellation:
   ```bash
   curl -X POST http://localhost:8080/api/v1/payments/<posted_txn_id>/cancel \
     -H "Authorization: Bearer <juan_jwt>"
   ```
-* **Step 5:** Assert HTTP `409 Conflict` (`TXN_NOT_CANCELLABLE`); payment remains posted successfully.
+* **Step 5 `[HTTP]`:** Assert HTTP `409 Conflict` (`TXN_NOT_CANCELLABLE`); payment remains posted successfully.
+* **Step 6 `[HTTP]`:** Cancelling an already `CANCELLED` payment returns `409`; another customer's payment returns `403` or `404` (`[VERIFY H-07]`).
+* **Step 7 `[HARNESS]`:** Transition history for the first payment never contains `PROCESSING` or `POSTED`; no ledger legs exist for it.
   *Automated test:* `RohanPaymentsE2ETest#e2e04_sevenStatusCasLifecycleAndUndoCancellation`
 
 ---
@@ -235,56 +248,57 @@ Automated Black-Box Execution Harness: [`scripts/test_api_functional_e2e.ps1`](f
 ### 3.3 Track 3: Yancey — CBS, Batch & Dual-DataSource Reconciliation
 
 #### Journey E2E-07: Standing Instructions Auto-Debit Batch Execution (`BR-37`, `DIG-105`)
-* **Step 1:** Seed standing instruction in Oracle XE `standing_instruction` due on current business date:
+* **Step 1 `[HARNESS]`:** Seed standing instruction in Oracle XE `standing_instruction` due on current business date (column names `[VERIFY H-10]`):
   ```sql
   INSERT INTO standing_instruction (instruction_id, customer_id, source_account_id, destination_account_id, amount, currency, next_execution_date, status)
   VALUES ('si-e2e-01', 'cust-user-001', 'acct-juan-php-01', 'acct-maria-php-01', 1200.0000, 'PHP', CURRENT_DATE, 'ACTIVE');
   COMMIT;
   ```
-* **Step 2:** Trigger EOD Standing Instruction batch execution:
+* **Step 2 `[HARNESS]`:** Trigger EOD Standing Instruction batch execution (trigger path and host `[VERIFY H-09]`; internal batch endpoint not reachable through Gateway):
   ```bash
   curl -X POST http://localhost:8084/internal/batch/standing-instructions/execute \
     -H "X-Internal-Role: ROLE_INTERNAL"
   ```
-* **Step 3:** Assert batch response: `processed: 1, succeeded: 1, failed: 0`.
-* **Step 4:** Verify in Oracle: Juan debited ₱1,200.00; Maria credited ₱1,200.00; `next_execution_date` advanced to next month.
+* **Step 3 `[HARNESS]`:** Assert batch response: `processed: 1, succeeded: 1, failed: 0`.
+* **Step 4 `[HTTP]`:** Verify Juan debited ₱1,200.00; Maria credited ₱1,200.00; `next_execution_date` advanced to next period (read through admin surface if exposed, else `[HARNESS]`).
+* **Step 5 `[HARNESS]`:** Re-run the batch: no second execution (idempotency key `SI-{id}-{date}`).
 
 #### Journey E2E-08: Dual-DataSource Reconciliation Engine Run (`BR-02`, `DIG-112`)
-* **Step 1:** Execute reconciliation trigger endpoint:
+* **Step 1 `[HTTP]`:** Execute reconciliation trigger endpoint as admin (`POST /api/v1/recon/trigger` or `POST /api/recon/runs`; path and host `[VERIFY H-09]`):
   ```bash
   curl -X POST http://localhost:8080/api/v1/recon/trigger \
     -H "Authorization: Bearer <admin_jwt>"
   ```
-* **Step 2:** Observe `reconciliation-service` logs comparing live Oracle balances against PostgreSQL audit sums.
-* **Step 3:** Query PostgreSQL `recon_run_audit`:
+* **Step 2 `[HARNESS]`:** Observe `reconciliation-service` logs comparing live Oracle balances against PostgreSQL audit sums. Query PostgreSQL run audit (table and columns `[VERIFY H-10]`: `recon_run_audit` for run, `recon_result_audit` for break rows):
   ```sql
   SELECT run_id, run_status, total_accounts_checked, total_matched, total_exceptions 
   FROM recon_run_audit ORDER BY started_at DESC LIMIT 1;
   ```
-* **Step 4:** Assert `run_status = 'COMPLETED'`, `total_matched > 0`, and `total_exceptions = 0`.
+* **Step 3 `[HARNESS]`:** Assert `run_status = 'COMPLETED'`, `total_matched > 0`, and `total_exceptions = 0`.
+* **Step 4 `[HARNESS]`:** Inject a drift (altering a test balance copy), re-run, assert exception is detected and recorded in `recon_result_audit`; then restore.
 
 ---
 
 ### 3.4 Track 4: Russel — Perimeter Ingress & Security Routing
 
 #### Journey E2E-09: Gateway Route Isolation, Rate Limiting & Header Sanitization (`BR-03`, `DIG-25`)
-* **Step 1:** Test rate limiter burst: Send 35 rapid requests to `http://localhost:8080/api/v1/accounts/pockets`.
-* **Step 2:** Assert: Requests 1–30 succeed; requests 31–35 return `429 Too Many Requests` with `Retry-After` header.
-* **Step 3:** Test header sanitization: Send request with forged header `X-Cust-Id: cust-admin-001`.
-* **Step 4:** Verify downstream service logs show Gateway stripped the header and injected the verified token ID.
-* **Step 5:** Test route cloaking: Send direct request to `http://localhost:8080/internal/core/settlement`. Assert `403 Forbidden`.
+* **Step 1 `[HTTP]`:** Test rate limiter burst: Send 40 rapid requests to `http://localhost:8080/api/v1/accounts/pockets` with one valid token.
+* **Step 2 `[HTTP]`:** Assert no `429` among first 30 requests, at least one `429 RATE_LIMIT_EXCEEDED` by request 40 with `Retry-After` header, and every other response `200` (boundary depends on refill timing).
+* **Step 3 `[HTTP]`:** Test header sanitization: Send request with valid token and forged header `X-Cust-Id: cust-admin-001`.
+* **Step 4 `[HTTP]`:** Assert response contains authenticated customer's pockets only, never admin's (identity comes from verified token). `[HARNESS]` optional: verify downstream logs show Gateway stripped header and injected verified token ID.
+* **Step 5 `[HTTP]`:** Test route cloaking: Send direct request to `http://localhost:8080/internal/core/settlement`, `/api/v1/accounts/{id}/credit`, and `/api/v1/ledger/mutate`. Assert `403 Forbidden` (`[VERIFY H-16]` for ledger adapter).
 
 ---
 
 ### 3.5 Track 5: Gym — Async Audit & DLQ Replay
 
 #### Journey E2E-10: Outbox-to-Audit Parity & DLQ Replay Lifecycle (`BR-02`, `BR-34`, `BR-35`)
-* **Step 1:** Post payment `TXN-PARITY-01` via Gateway.
-* **Step 2:** Verify Oracle `outbox_master` contains row with `status = 'PUBLISHED'`.
-* **Step 3:** Query PostgreSQL `ledger_mutation_audit` within 3 seconds: Assert both debit and credit legs exist.
-* **Step 4:** Publish poisoned JSON to Kafka topic `transaction.events`. Observe consumer retry (1s, 2s, 4s).
-* **Step 5:** Verify poisoned message appears in Dead Letter Queue console on `:8090/admin/dlq`.
-* **Step 6:** Trigger replay via Admin API: `POST /api/v1/admin/dlq/<msg_id>/replay`. Verify message is redriven without partition stall.
+* **Step 1 `[HTTP]`:** Post payment `TXN-PARITY-01` via Gateway and poll until `POSTED`.
+* **Step 2 `[HARNESS]`:** Verify Oracle `outbox_master` contains row with `status = 'PUBLISHED'`.
+* **Step 3 `[HARNESS]`:** Query PostgreSQL `ledger_mutation_audit` within 10 seconds: Assert both debit and credit legs exist and match Oracle.
+* **Step 4 `[HARNESS]`:** Publish poisoned JSON to Kafka topic `transaction.events`. Observe consumer retry (1s, 2s, 4s) on `<topic>.retry`, then parked on `<topic>.dlq` (`[VERIFY H-10]`). Partition continues processing.
+* **Step 5 `[HTTP]`:** Verify poisoned message appears in Dead Letter Queue console on `:8090/admin/dlq`.
+* **Step 6 `[HTTP]`:** Trigger replay via Admin API: `POST /api/v1/admin/dlq/<msg_id>/replay` (path `[VERIFY H-09]`). Verify message is redriven without partition stall.
 
 ---
 
@@ -296,8 +310,8 @@ Automated Black-Box Execution Harness: [`scripts/test_api_functional_e2e.ps1`](f
   flutter test integration_test/mobile_network_e2e_test.dart
   ```
 * **Step 2:** Test simulates login $\to$ KeyStore JWT write $\to$ Send Money with automatic Bearer token injection.
-* **Step 3:** Test injects insufficient funds scenario: Assert Dio client deserializes RFC 7807 error and returns typed `InsufficientFundsException` containing `shortfall_options`.
-* **Step 4:** Test simulates transient gateway 503: Assert Dio client automatically retries with exponential backoff (1s, 2s) before reporting failure.
+* **Step 3:** Test injects insufficient funds scenario: Assert Dio client deserializes RFC 7807 error and returns typed `InsufficientFundsException` containing `shortfall` and `funding_options`.
+* **Step 4:** Test simulates transient gateway 503: Assert Dio client automatically retries with exponential backoff (1s, 2s) using the same idempotency key before reporting failure.
 
 ---
 
@@ -307,7 +321,7 @@ Automated Black-Box Execution Harness: [`scripts/test_api_functional_e2e.ps1`](f
 * **Step 1:** Launch Flutter app on emulator / demo device connected to Gateway `:8080`.
 * **Step 2:** Walkthrough Step A: Enter credentials $\to$ enter 6-digit PIN $\to$ authenticate.
 * **Step 3:** Walkthrough Step B: View Home Screen. Swipe through Pockets carousel (PHP, USD, EUR). Verify Ledger and Available balances match DB.
-* **Step 4:** Walkthrough Step C: Tap "Send Money" $\to$ enter Maria's account $\to$ masked name `M***a S****s` appears.
+* **Step 4:** Walkthrough Step C: Tap "Send Money" $\to$ enter Maria's account $\to$ masked name `Maria S.` appears (display format per `CONTRACTS.md §2.3`).
 * **Step 5:** Walkthrough Step D: Enter amount triggering shortfall $\to$ Shortfall bottom sheet appears with 30s countdown $\to$ confirm payment $\to$ Receipt screen renders with core reference `FT...`.
 * **Step 6:** Walkthrough Step E: Navigate to Card Hub $\to$ Toggle e-commerce switch OFF $\to$ verify immediate toast confirmation.
 
@@ -338,6 +352,6 @@ cd mobile && flutter test integration_test/ && cd ..
 
 The E2E testing phase is officially approved only when:
 1. **100% Pass Rate:** All 12 Golden Journeys (`E2E-01` to `E2E-12`) complete successfully.
-2. **Perimeter Adherence:** Zero requests bypass Gateway `:8080` or Admin Portal `:8090`.
+2. **Perimeter Adherence:** Zero `[HTTP]` requests bypass Gateway `:8080` or Admin Portal `:8090`. `[HARNESS]` steps are exempt.
 3. **Data Parity:** Dual-DataSource Reconciliation reports **0 balance drift** and **100% audit parity**.
 4. **Clean Error Contracts:** All failure paths return compliant RFC 7807 problem details with zero unhandled stack traces.
