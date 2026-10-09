@@ -20,6 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.capstone.accounts.entity.AccountHold;
 import com.capstone.accounts.entity.AccountMaster;
+import com.capstone.accounts.entity.LedgerEntry;
 import com.capstone.accounts.entity.OutboxMaster;
 import com.capstone.accounts.entity.PostingReference;
 import com.capstone.accounts.repository.AccountHoldRepository;
@@ -154,6 +155,22 @@ public class CoreSettlementService {
 
             account.setUpdatedAt(LocalDateTime.now());
             account.setUpdatedBy("SETTLEMENT_ENGINE");
+
+            LedgerEntry entry = LedgerEntry.builder()
+                    .entryId(UUID.randomUUID().toString())
+                    .txnId(request.postingReferenceId())
+                    .legNo(leg.legNo())
+                    .accountId(leg.accountId())
+                    .direction(leg.direction())
+                    .amount(leg.amount())
+                    .currencyCode(leg.currency())
+                    .runningBalance(account.getBalanceAmount())
+                    .valueDate(LocalDateTime.now())
+                    .businessDate(LocalDateTime.now())
+                    .narrative("Settlement leg " + leg.legNo() + " for " + request.txnType())
+                    .postedAt(LocalDateTime.now())
+                    .build();
+            ledgerEntryRepository.save(entry);
         }
 
         accountRepository.saveAll(accountMap.values());
@@ -164,6 +181,7 @@ public class CoreSettlementService {
         postingReference.setPostingReferenceId(request.postingReferenceId());
         postingReference.setCoreReferenceId(coreReferenceId);
         postingReference.setRequestHash(requestHash);
+        postingReference.setTxnType(request.txnType() != null && !request.txnType().isBlank() ? request.txnType() : "TRANSFER");
         postingReference.setStatus("SETTLED");
         postingReference.setSettledAt(LocalDateTime.now());
         postingReferenceRepository.save(postingReference);

@@ -74,11 +74,11 @@ public class AccountsClient {
         String token = resolveSystemToken();
         try {
             ApiResponse<List<AccountDTO>> response = restClient.get()
-                    .uri("/api/accounts/customer/{customerId}", customerId)
-                    .header("Authorization", token)
-                    .retrieve()
-                    .body(new ParameterizedTypeReference<ApiResponse<List<AccountDTO>>>() {});
-            return (response != null && response.data() != null) ? response.data() : Collections.emptyList();
+                .uri("/api/accounts/customer/{customerId}", customerId)
+                .header("Authorization", token)
+                .retrieve()
+                .body(new ParameterizedTypeReference<ApiResponse<List<AccountDTO>>>() {});
+            return response != null && response.data() != null ? response.data() : Collections.emptyList();
         } catch (ResourceNotFoundException ex) {
             return Collections.emptyList();
         }

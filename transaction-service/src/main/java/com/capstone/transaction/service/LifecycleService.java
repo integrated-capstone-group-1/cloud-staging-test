@@ -28,6 +28,35 @@ public class LifecycleService {
     private final TransactionEventProducer transactionEventProducer;
 
     /**
+     * Persists initial INITIATED transaction to Oracle DB and emits event.
+     */
+    @Transactional("oracleTransactionManager")
+    public TransactionMaster createInitiatedTransaction(TransactionMaster txn) {
+        TransactionMaster saved = txnMasterRepository.saveAndFlush(txn);
+        emitLifecycleEvent(saved, "INITIATED", "RISK_PENDING", null);
+        return saved;
+    }
+
+    /**
+     * Atomically transitions INITIATED transaction to AUTHORIZED / AUTH_CONFIRMED.
+     */
+    @Transactional("oracleTransactionManager")
+    public boolean markAuthorized(String txnId) {
+        int rowsUpdated = txnMasterRepository.updateStatusCas(
+                txnId,
+                "INITIATED",
+                "AUTHORIZED",
+                "AUTH_CONFIRMED",
+                LocalDateTime.now()
+        );
+        log.info("CAS updateStatusCas to AUTHORIZED for txn {}: updatedRows={}", txnId, rowsUpdated);
+        if (rowsUpdated > 0) {
+            emitLifecycleEvent(txnId, "AUTHORIZED", "AUTH_CONFIRMED", null);
+        }
+        return rowsUpdated > 0;
+    }
+
+    /**
      * Atomically claims an AUTHORIZED transaction to PROCESSING / SETTLING.
      * Returns true if CAS succeeded, false if aborted (0 rows updated).
      */

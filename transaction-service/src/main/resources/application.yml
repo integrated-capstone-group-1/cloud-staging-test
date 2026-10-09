@@ -71,6 +71,12 @@ spring:
 jwt:
   secret: ${JWT_SECRET:CapstoneBankingSuperSecretSigningKeyMustBe256BitsLong!}
 
+risk:
+  service:
+    url: ${RISK_SERVICE_URL:http://localhost:8088}
+  evaluation:
+    timeout-ms: ${RISK_EVALUATION_TIMEOUT_MS:500}
+
 # ── Actuator / Micrometer / Prometheus ─────────────────────────────────────────
 management:
   endpoints:

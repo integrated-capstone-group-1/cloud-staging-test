@@ -13,6 +13,7 @@ spring:
           predicates:
             - Path=/api/auth/**,/v1/auth/**,/api/v1/auth/**
 
+        # Orchestrator Routes (Channel Layer / BFF)
         - id: orchestrator-payments
           uri: http://orchestrator-service:8089
           predicates:
@@ -68,7 +69,7 @@ spring:
         - id: transaction-service
           uri: http://transaction-service:8084
           predicates:
-            - Path=/api/v1/ledger/**,/api/v1/payments/**,/api/v1/cards/**,/api/v1/transactions/**,/v1/transactions/**,/api/v1/statements/**,/v1/statements/**,/api/v1/admin/**
+            - Path=/api/v1/ledger/**,/api/v1/cards/**,/api/v1/transactions/**,/v1/transactions/**,/api/v1/statements/**,/v1/statements/**,/api/v1/admin/**
           filters:
             - JwtAuthentication
 

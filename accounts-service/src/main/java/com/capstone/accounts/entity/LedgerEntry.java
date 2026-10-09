@@ -22,7 +22,7 @@ public class LedgerEntry {
     @Column(name = "entry_id", length = 36, nullable = false, updatable = false)
     private String entryId;
 
-    @Column(name = "txn_id", length = 36, nullable = false)
+    @Column(name = "txn_id", length = 64, nullable = false)
     private String txnId;
 
     @Column(name = "leg_no", nullable = false)

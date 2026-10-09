@@ -106,8 +106,7 @@ public class PaymentOrchestrator {
                 .createdBy(customerId)
                 .build();
 
-        txnMasterRepository.save(txn);
-        lifecycleService.emitLifecycleEvent(txn, "INITIATED", "RISK_PENDING", null);
+        lifecycleService.createInitiatedTransaction(txn);
 
         // 2. Synchronous Risk Screening (<= 200ms fail-closed SLA)
         RiskEvaluationRequest riskReq = RiskEvaluationRequest.builder()
@@ -163,14 +162,12 @@ public class PaymentOrchestrator {
         }
 
         // Low risk: AUTHORIZE
-        txnMasterRepository.updateStatusCas(
-                txnId,
-                "INITIATED",
-                "AUTHORIZED",
-                "AUTH_CONFIRMED",
-                LocalDateTime.now()
-        );
-        lifecycleService.emitLifecycleEvent(txnId, "AUTHORIZED", "AUTH_CONFIRMED", null);
+        log.info("Low risk confirmed for txn {}. Updating CAS to AUTHORIZED.", txnId);
+        boolean authorized = lifecycleService.markAuthorized(txnId);
+        if (!authorized) {
+            log.warn("CAS update to AUTHORIZED failed for txn {}. Aborting settlement.", txnId);
+            throw new IllegalStateException("Transaction could not be authorized");
+        }
 
         // 4. CAS Claim: AUTHORIZED -> PROCESSING (ADR-002)
         boolean claimed = lifecycleService.claimForSettlement(txnId);
@@ -193,9 +190,11 @@ public class PaymentOrchestrator {
         }
 
         // 6. Execute Atomic Settlement in CBS
+        log.info("Dispatching settlement to CBS for txn {}: legs={}", txnId, settlementRequest.legs().size());
         CoreSettlementResponse cbsResponse;
         try {
             cbsResponse = coreBankingClient.settle(settlementRequest);
+            log.info("CBS settlement succeeded for txn {}: coreRef={}", txnId, cbsResponse.coreReferenceId());
         } catch (Exception ex) {
             log.error("Core settlement failed for txn {}. Marking FAILED.", txnId, ex);
             lifecycleService.markFailed(txnId, ex.getMessage());
@@ -204,6 +203,7 @@ public class PaymentOrchestrator {
 
         // 7. Finalize to POSTED
         lifecycleService.markPosted(txnId, cbsResponse.coreReferenceId());
+        log.info("Payment txn {} successfully POSTED with coreRef={}", txnId, cbsResponse.coreReferenceId());
 
         return PaymentResponse.builder()
                 .transactionId(txnId)

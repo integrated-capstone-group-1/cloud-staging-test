@@ -8,6 +8,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+
 /**
  * Service enforcing strict customer account ownership at the Channel Layer.
  *
@@ -60,6 +62,26 @@ public class AccountOwnershipService {
         }
 
         log.debug("Ownership verified for customer {} on account {}", authenticatedCustomerId, accountId);
+    }
+
+    /**
+     * Resolves the customer's primary account ID for the specified currency when omitted by caller.
+     */
+    public String resolveDefaultAccountId(String customerId, String currency) {
+        if (customerId == null || customerId.isBlank()) {
+            return null;
+        }
+        try {
+            List<AccountDTO> pockets = accountsClient.getCustomerPockets(customerId);
+            return pockets.stream()
+                    .filter(a -> currency != null && currency.equalsIgnoreCase(a.currencyCode()))
+                    .map(AccountDTO::accountId)
+                    .findFirst()
+                    .orElse(null);
+        } catch (Exception ex) {
+            log.warn("Could not resolve default account for customer {}: {}", customerId, ex.getMessage());
+            return null;
+        }
     }
 }
 

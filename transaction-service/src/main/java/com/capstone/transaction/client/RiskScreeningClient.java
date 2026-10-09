@@ -55,37 +55,35 @@ public class RiskScreeningClient {
     }
 
     public RiskEvaluationResponse evaluate(RiskEvaluationRequest request) {
-        CompletableFuture<RiskEvaluationResponse> future = CompletableFuture.supplyAsync(() -> {
+        log.info("Dispatching synchronous risk screening for txn {}", request.getTransactionId());
+        long start = System.currentTimeMillis();
+        try {
             String token = "Bearer " + jwtTokenProvider.generateToken(
                     "SYSTEM_TXN_SERVICE",
                     "system-txn@internal.bank",
                     List.of("ROLE_ADMIN", "ROLE_INTERNAL")
             );
 
-            return restClient.post()
+            RiskEvaluationResponse response = restClient.post()
                     .uri("/internal/risk/evaluate")
                     .header("Authorization", token)
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(request)
                     .retrieve()
                     .body(RiskEvaluationResponse.class);
-        });
 
-        try {
-            RiskEvaluationResponse response = future.get(timeoutMs, TimeUnit.MILLISECONDS);
+            long elapsed = System.currentTimeMillis() - start;
             if (response == null) {
+                log.error("Risk engine returned null response in {}ms for txn {}", elapsed, request.getTransactionId());
                 throw new SecurityCheckUnavailableException("Risk engine returned null response");
             }
+            log.info("Risk screening completed in {}ms for txn {}: score={}, decision={}",
+                    elapsed, request.getTransactionId(), response.getScore(), response.getDecision());
             return response;
-        } catch (TimeoutException ex) {
-            future.cancel(true);
-            log.error("Risk screening SLA breached (> {}ms) for txn {}. Failing closed.", timeoutMs, request.getTransactionId());
-            throw new SecurityCheckUnavailableException("Risk screening SLA breached (> 200ms). Failing closed.", ex);
-        } catch (ExecutionException ex) {
-            log.error("Risk screening execution failed for txn {}. Failing closed.", request.getTransactionId(), ex);
-            throw new SecurityCheckUnavailableException("Risk screening unavailable. Failing closed.", ex.getCause());
         } catch (Exception ex) {
-            log.error("Risk screening invocation failed for txn {}. Failing closed.", request.getTransactionId(), ex);
+            long elapsed = System.currentTimeMillis() - start;
+            log.error("Risk screening failed after {}ms for txn {}. Failing closed.",
+                    elapsed, request.getTransactionId(), ex);
             throw new SecurityCheckUnavailableException("Risk screening unavailable. Failing closed.", ex);
         }
     }

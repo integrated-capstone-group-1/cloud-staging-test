@@ -100,10 +100,10 @@ CREATE INDEX ix_account_master_customer_id ON account_master (customer_id);
 
 -- Filtered Unique Index: Prevents multi-currency pocket duplication per customer
 CREATE UNIQUE INDEX uq_cust_currency_pocket 
-    ON account_master (CASE WHEN customer_id IS NOT NULL THEN customer_id END, currency_code);
+    ON account_master (CASE WHEN customer_id IS NOT NULL THEN customer_id END, CASE WHEN customer_id IS NOT NULL THEN currency_code END);
 
 CREATE UNIQUE INDEX uq_cust_acct_num_curr 
-    ON account_master (CASE WHEN account_number IS NOT NULL THEN account_number END, currency_code);
+    ON account_master (CASE WHEN account_number IS NOT NULL THEN account_number END, CASE WHEN account_number IS NOT NULL THEN currency_code END);
 
 COMMENT ON TABLE account_master IS 'Authoritative vault for balances and currency pockets, row-locked via SELECT ... FOR UPDATE';
 

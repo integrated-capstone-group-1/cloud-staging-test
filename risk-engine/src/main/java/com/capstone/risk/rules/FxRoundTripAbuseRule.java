@@ -34,7 +34,8 @@ public class FxRoundTripAbuseRule {
      * an inverted round-trip flip of a recent conversion.
      */
     public boolean evaluate(String customerId, String sourceCurrency, String targetCurrency) {
-        if (customerId == null || sourceCurrency == null || targetCurrency == null) {
+        if (customerId == null || sourceCurrency == null || targetCurrency == null
+                || sourceCurrency.equalsIgnoreCase(targetCurrency)) {
             return false;
         }
 
@@ -64,7 +65,8 @@ public class FxRoundTripAbuseRule {
     }
 
     public void recordConversion(String customerId, String sourceCurrency, String targetCurrency) {
-        if (customerId == null || sourceCurrency == null || targetCurrency == null) {
+        if (customerId == null || sourceCurrency == null || targetCurrency == null
+                || sourceCurrency.equalsIgnoreCase(targetCurrency)) {
             return;
         }
         history.compute(customerId, (k, existing) -> {
