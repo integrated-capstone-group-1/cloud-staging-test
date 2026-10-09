@@ -159,3 +159,4 @@ During the black-box test cycle on branch `test/pk-api-test`, three critical cro
 - **Account Ownership Barrier:** Verified that authentic customers cannot debit from or view pockets belonging to other customers (HTTP 403 Forbidden).
 - **Administrative RBAC Route Isolation:** Verified that authentic customer Bearer tokens cannot query `/api/admin/**` endpoints, enforced via Spring Security & Gateway filters.
 - **Idempotency Lock & Payload Conflict Rejection:** Verified that replaying a payment with an identical key returns cached results safely, while reusing the key with altered payload parameters is blocked with HTTP 409 Conflict.
+

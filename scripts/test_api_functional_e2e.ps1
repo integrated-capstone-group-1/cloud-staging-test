@@ -78,7 +78,8 @@ function Invoke-ApiCall {
         $sw.Stop()
         if ($_.Exception.Response) {
             $statusCode = [int]$_.Exception.Response.StatusCode
-        } else {
+        }
+        else {
             $statusCode = 500
         }
         $errorMsg = $_.Exception.Message
@@ -306,7 +307,7 @@ Record-TestResult -SuiteId "S6" -TestId "API-PK-06.2" -Description "Block non-ad
 
 # 6.3: Admin Trigger Reconciliation Run
 $reconPayload = @{
-    auditDate = (Get-Date).ToString("yyyy-MM-dd")
+    auditDate   = (Get-Date).ToString("yyyy-MM-dd")
     initiatedBy = "ADMIN_AUTOMATION"
 } | ConvertTo-Json
 $res63 = Invoke-ApiCall -Uri "$GatewayBase/api/recon/runs" -Method "POST" `
