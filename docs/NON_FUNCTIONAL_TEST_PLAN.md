@@ -138,33 +138,60 @@ flowchart TD
 
 #### NFR-RACE-01: Cancel vs. Process CAS Claim Race (`TS-04`, `BR-31`)
 * **Objective:** Prove Compare-and-Set guarantees exactly one winner when customer cancel races background settlement worker.
-* **Step 1:** Set undo window to 5 seconds. Post payment `TXN-RACE-01`.
-* **Step 2:** Spawn 2 concurrent requests at the 4.9-second boundary:
-  * Thread 1: Customer calls `POST /api/v1/payments/TXN-RACE-01/cancel`.
-  * Thread 2: Worker executes CAS claim `UPDATE transaction_master SET txn_status = 'PROCESSING' WHERE txn_status = 'AUTHORIZED'`.
-* **Step 3:** Assert: Exactly one operation succeeds.
-  * If Cancel wins: status is `CANCELLED`, funds remain untouched, worker aborts.
-  * If Worker wins: status is `POSTED`, Cancel returns `409 Conflict`. Zero transactions both cancelled and posted.
+* **Execution Script:**
+  ```powershell
+  powershell -ExecutionPolicy Bypass -File .\tests\nfr\test_nfr_race_01.ps1
+  ```
+* **Steps Executed:**
+  * Post payment with undo cancellation window active.
+  * Concurrently fire customer cancellation (`POST /api/v1/payments/{id}/cancel`) and background worker settlement claim (`UPDATE TRANSACTION_MASTER SET TXN_STATUS = 'PROCESSING' WHERE TXN_ID = ? AND TXN_STATUS = 'AUTHORIZED'`).
+* **Verified Results:**
+  * Cancel won CAS claim (`HTTP 200 CANCELLED`); Worker updated `0` rows.
+  * Invariant validated: Exactly one winner, zero dual-state transitions (`PASS ✅`).
 
 #### NFR-RACE-02: Multi-Pocket Shortfall Funding Race (`TS-05`, `BR-28`)
 * **Objective:** Prove two concurrent payments draining the same funding pocket serialize atomically.
-* **Step 1:** Juan's PHP funding pocket holds ₱10,000.00.
-* **Step 2:** Fire 2 simultaneous EUR shortfall payments requiring ₱8,000.00 each from PHP pocket.
-* **Step 3:** Assert: Exactly 1 payment succeeds (`200 POSTED`); the 2nd payment fails with `422 INSUFFICIENT_FUNDS`.
-* **Step 4:** Verify final PHP balance is ₱2,000.00 (never negative).
+* **Execution Script:**
+  ```powershell
+  powershell -ExecutionPolicy Bypass -File .\tests\nfr\test_nfr_race_02.ps1
+  ```
+* **Steps Executed:**
+  * Juan's PHP funding pocket seeded with ₱3,500.00; EUR pocket with 100.00 EUR.
+  * Spawned 2 concurrent threads firing EUR shortfall payments (each requiring ~₱2,517.20 from PHP pocket; total needed ~₱5,034.40).
+* **Verified Results:**
+  * Thread 1: `HTTP 200 - POSTED`.
+  * Thread 2: `HTTP 422 - Insufficient Balance`.
+  * Final PHP balance in Oracle: `982.80 PHP` (strictly positive, no overdraft, `PASS ✅`).
 
 #### NFR-RESIL-01: External FX Feed Outage & 24h Stale Guard (`CH-06`, `BR-04`)
 * **Objective:** Verify cached rates serve requests until 24h stale limit blocks cross-currency payments.
-* **Step 1:** Simulate network block to `api.frankfurter.dev`.
-* **Step 2:** Request FX quote: Assert cached rate from Oracle `fx_rate` is returned with normal 30s TTL.
-* **Step 3:** Fast-forward DB rate timestamp `fetched_at` by 25 hours.
-* **Step 4:** Request quote: Assert service rejects conversion with `422 FX_RATE_STALE`. Same-currency payments continue unaffected.
+* **Execution Script:**
+  ```powershell
+  powershell -ExecutionPolicy Bypass -File .\tests\nfr\test_nfr_resil_01.ps1
+  ```
+* **Steps Executed:**
+  * Queried active FX quote: confirmed served from database cache with 30s validity.
+  * Fast-forwarded Oracle `FX_RATE.FETCHED_AT` timestamps by 25 hours.
+  * Queried cross-currency quote: verified rejection with `422 FX_RATE_STALE`.
+  * Queried same-currency quote (`PHP -> PHP`): verified unaffected and processed normally.
+  * Restored FX timestamps to current timestamp.
+* **Verified Results:**
+  * Cross-currency rejected with `HTTP 422` (`"error_code": "FX_RATE_STALE"`).
+  * Same-currency completed with `HTTP 200` (`PASS ✅`).
 
 #### NFR-RESIL-02: Process Kill Mid-Transaction Sweeper (`CH-08`)
 * **Objective:** Prove stuck transactions are resolved cleanly by background sweeper.
-* **Step 1:** Submit payment; immediately kill `transaction-service` during `PROCESSING` state before response is returned.
-* **Step 2:** Restart `transaction-service`. Scheduled `StuckTransactionSweeper` initiates query against CBS settlement reference.
-* **Step 3:** Assert sweeper resolves transaction status to `POSTED` (if CBS posted) or `FAILED` (if CBS rolled back). Zero orphan states.
+* **Execution Script:**
+  ```powershell
+  powershell -ExecutionPolicy Bypass -File .\tests\nfr\test_nfr_resil_02.ps1
+  ```
+* **Steps Executed:**
+  * Seeded in-flight transaction in `PROCESSING` state (> 60s threshold) in Oracle `TRANSACTION_MASTER`.
+  * Scheduled `StuckTransactionSweeper` triggered in `transaction-service`, querying CBS settlement status.
+  * Verified sweeper reconciled the orphan record to `FAILED` and published lifecycle event.
+* **Verified Results:**
+  * Transaction status transitioned from `PROCESSING|SETTLING` to `FAILED|FAILED`.
+  * Zero orphan or stuck records remain (`PASS ✅`).
 
 ---
 

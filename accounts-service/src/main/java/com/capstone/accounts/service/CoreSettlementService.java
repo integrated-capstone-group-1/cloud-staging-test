@@ -23,6 +23,7 @@ import com.capstone.accounts.entity.AccountMaster;
 import com.capstone.accounts.entity.LedgerEntry;
 import com.capstone.accounts.entity.OutboxMaster;
 import com.capstone.accounts.entity.PostingReference;
+import com.capstone.common.exception.ResourceNotFoundException;
 import com.capstone.accounts.repository.AccountHoldRepository;
 import com.capstone.accounts.repository.AccountRepository;
 import com.capstone.accounts.repository.LedgerEntryRepository;
@@ -216,7 +217,7 @@ public class CoreSettlementService {
     @Transactional(readOnly = true)
     public CoreSettlementResponse getSettlementStatus(String postingReferenceId) {
         PostingReference ref = postingReferenceRepository.findByPostingReferenceId(postingReferenceId)
-                .orElseThrow(() -> new IllegalArgumentException("Settlement record " + postingReferenceId + " not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Settlement record " + postingReferenceId + " not found"));
 
         return new CoreSettlementResponse(
             ref.getPostingReferenceId(),
