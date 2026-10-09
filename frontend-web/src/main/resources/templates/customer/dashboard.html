@@ -17,7 +17,11 @@
                           th:text="${customer.kycStatus.displayName}">Verified</span>
                 </div>
                 <div class="text-muted small">
-                    <span class="me-3"><i class="bi bi-person me-1"></i> Customer ID: <strong th:text="${customer.customerId}">CUST-1001</strong></span>
+                    <span class="me-3"><i class="bi bi-person me-1"></i> CIF: <strong class="font-monospace" th:text="${customer.cifNumber}">CIF-8000-0001</strong>
+                        <button type="button" class="btn btn-sm btn-link p-0 text-muted copy-btn" th:data-copy="${customer.customerId}" title="Copy UUID">
+                            <i class="bi bi-clipboard" style="font-size: 0.72rem;"></i>
+                        </button>
+                    </span>
                     <span class="me-3"><i class="bi bi-envelope me-1"></i> <span th:text="${customer.email}">email@example.com</span></span>
                     <span class="me-3"><i class="bi bi-telephone me-1"></i> <span th:text="${customer.contactNo}">+63 917 000 0000</span></span>
                     <a href="/customer/profile" class="text-primary text-decoration-none fw-semibold">View KYC Profile &rarr;</a>

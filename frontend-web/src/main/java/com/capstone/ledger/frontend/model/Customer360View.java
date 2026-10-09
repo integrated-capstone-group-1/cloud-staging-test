@@ -77,6 +77,15 @@ public class Customer360View {
         return CurrencyMoneyFormat.format(getTotalAvailableInPhp(), "PHP");
     }
 
+    public String getCifNumber() {
+        return CustomerView.deriveCifNumber(customerId, email);
+    }
+
+    public String getShortCustomerId() {
+        if (customerId == null) return "";
+        return customerId.length() > 8 ? customerId.substring(0, 8) + "..." : customerId;
+    }
+
     // --- Inner View Classes ---
 
     public static class PocketBalanceView {

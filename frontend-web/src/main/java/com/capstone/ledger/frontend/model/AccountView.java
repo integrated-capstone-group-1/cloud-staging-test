@@ -120,6 +120,15 @@ public class AccountView {
         return accountId != null ? accountId : "";
     }
 
+    public String getCifNumber() {
+        return CustomerView.deriveCifNumber(customerId, null);
+    }
+
+    public String getShortCustomerId() {
+        if (customerId == null) return "";
+        return customerId.length() > 8 ? customerId.substring(0, 8) + "..." : customerId;
+    }
+
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
 }

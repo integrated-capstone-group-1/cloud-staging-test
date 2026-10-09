@@ -29,6 +29,7 @@
                             th:data-copy="${account.accountId}" title="Copy UUID">
                         <i class="bi bi-clipboard"></i>
                     </button>
+                    <span th:if="${account.customerId != null}" class="text-muted">· CIF: <strong class="text-dark font-monospace" th:text="${account.cifNumber}">CIF-8000-0001</strong></span>
                     <span class="text-muted">· Provisioned <span th:text="${#temporals.format(account.createdAt, 'dd MMM yyyy')}"></span></span>
                 </div>
                 <div class="balance-figure text-primary mt-2" th:text="${account.formattedBalance}">₱0.00</div>
@@ -52,8 +53,8 @@
                 <span class="badge bg-secondary-subtle text-secondary border px-2 py-1 small">
                     <i class="bi bi-shield-lock me-1"></i>Admin Read-Only Ledger View
                 </span>
-                <a th:href="@{/admin/customers/{id}(id=${account.customerId})}" class="btn btn-outline-info btn-sm">
-                    <i class="bi bi-person-badge me-1"></i> Customer 360
+                <a th:if="${account.customerId != null}" th:href="@{/admin/customers/{id}(id=${account.customerId})}" class="btn btn-outline-info btn-sm">
+                    <i class="bi bi-person-badge me-1"></i> Customer 360 (<span class="font-monospace" th:text="${account.cifNumber}"></span>)
                 </a>
                 <!-- Freeze / Unfreeze Action Button triggering Enterprise Modal -->
                 <button th:if="${account.accountStatus.name() == 'ACTIVE'}" type="button"

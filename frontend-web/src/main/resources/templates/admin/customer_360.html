@@ -18,7 +18,14 @@
                 <span th:if="${c360.locked}" class="badge bg-danger ms-2" style="font-size: 0.75rem;"><i class="bi bi-lock-fill me-1"></i>LOCKED</span>
                 <span th:unless="${c360.locked}" class="badge bg-success ms-2" style="font-size: 0.75rem;"><i class="bi bi-check-circle me-1"></i>ACTIVE</span>
             </h3>
-            <p class="text-muted small mb-0 font-monospace">Customer ID: <span th:text="${c360.customerId}">CUST-1001</span></p>
+            <div class="d-flex align-items-center gap-2 mt-1">
+                <span class="badge bg-secondary-subtle text-dark border font-monospace px-2 py-1">Customer CIF: <strong th:text="${c360.cifNumber}">CIF-8000-0001</strong></span>
+                <span class="text-muted small font-monospace">UUID: <span class="text-secondary" th:text="${c360.shortCustomerId}">7bd20304...</span></span>
+                <button type="button" class="btn btn-sm btn-link p-0 text-muted copy-btn"
+                        th:data-copy="${c360.customerId}" title="Copy Full Customer UUID">
+                    <i class="bi bi-clipboard"></i>
+                </button>
+            </div>
         </div>
         <div class="d-flex align-items-center gap-2">
             <!-- Customer Lock / Unlock Toggle -->
@@ -507,8 +514,16 @@
                         </div>
                     </div>
                     <div class="bg-light p-3 rounded border small">
-                        <div><strong>Customer Name:</strong> <span th:text="${c360.fullName}"></span></div>
-                        <div><strong>Customer ID:</strong> <span class="font-monospace" th:text="${c360.customerId}"></span></div>
+                        <div class="mb-1"><strong>Customer Name:</strong> <span th:text="${c360.fullName}"></span></div>
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span><strong>Customer CIF:</strong> <span class="font-monospace fw-bold" th:text="${c360.cifNumber}"></span></span>
+                            <div class="d-inline-flex align-items-center gap-1">
+                                <span class="text-secondary font-monospace" th:text="${c360.shortCustomerId}"></span>
+                                <button type="button" class="btn btn-sm btn-link p-0 text-muted copy-btn" th:data-copy="${c360.customerId}" title="Copy UUID">
+                                    <i class="bi bi-clipboard" style="font-size: 0.72rem;"></i>
+                                </button>
+                            </div>
+                        </div>
                         <div><strong>Email:</strong> <span th:text="${c360.email}"></span></div>
                     </div>
                 </div>
@@ -542,8 +557,16 @@
                         </div>
                     </div>
                     <div class="bg-light p-3 rounded border small">
-                        <div><strong>Customer Name:</strong> <span th:text="${c360.fullName}"></span></div>
-                        <div><strong>Customer ID:</strong> <span class="font-monospace" th:text="${c360.customerId}"></span></div>
+                        <div class="mb-1"><strong>Customer Name:</strong> <span th:text="${c360.fullName}"></span></div>
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span><strong>Customer CIF:</strong> <span class="font-monospace fw-bold" th:text="${c360.cifNumber}"></span></span>
+                            <div class="d-inline-flex align-items-center gap-1">
+                                <span class="text-secondary font-monospace" th:text="${c360.shortCustomerId}"></span>
+                                <button type="button" class="btn btn-sm btn-link p-0 text-muted copy-btn" th:data-copy="${c360.customerId}" title="Copy UUID">
+                                    <i class="bi bi-clipboard" style="font-size: 0.72rem;"></i>
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer py-2 bg-light">

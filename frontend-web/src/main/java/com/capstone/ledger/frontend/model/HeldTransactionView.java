@@ -72,6 +72,14 @@ public class HeldTransactionView {
 
     public String getCustomerId() { return customerId; }
     public void setCustomerId(String customerId) { this.customerId = customerId; }
+    public String getCifNumber() {
+        return CustomerView.deriveCifNumber(customerId, null);
+    }
+
+    public String getShortCustomerId() {
+        if (customerId == null) return "";
+        return customerId.length() > 8 ? customerId.substring(0, 8) + "..." : customerId;
+    }
 
     public String getCustomerName() { return customerName; }
     public void setCustomerName(String customerName) { this.customerName = customerName; }

@@ -49,7 +49,16 @@
                             </div>
                         </td>
                         <td>
-                            <a th:href="@{/admin/customers/{id}(id=${a.customerId})}" class="font-monospace text-decoration-none small" th:text="${a.customerId}"></a>
+                            <div th:if="${a.customerId != null}">
+                                <a th:href="@{/admin/customers/{id}(id=${a.customerId})}" class="font-monospace fw-semibold text-decoration-none" th:text="${a.cifNumber}">CIF-8000-0001</a>
+                                <div class="d-flex align-items-center gap-1 text-muted mt-1" style="font-size: 0.72rem;">
+                                    <span class="text-secondary font-monospace" th:text="${a.shortCustomerId}">7bd20304...</span>
+                                    <button type="button" class="btn btn-sm btn-link p-0 text-muted copy-btn" th:data-copy="${a.customerId}" title="Copy Customer UUID">
+                                        <i class="bi bi-clipboard" style="font-size: 0.72rem;"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <span th:unless="${a.customerId != null}" class="badge bg-secondary-subtle text-secondary border">Internal Bank Pool</span>
                         </td>
                         <td th:text="${a.accountType.displayName}">Savings</td>
                         <td><span class="currency-badge" th:text="${a.currencyCode}">PHP</span></td>
