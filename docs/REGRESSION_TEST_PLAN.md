@@ -238,21 +238,37 @@ flowchart TD
 
 #### Regression Test Procedures:
 * **REG-LAN-01: Dio Bearer Token Automatic Injection (`DIG-94`, `T-009`)**
-  * *Objective:* Verify client automatically extracts JWT from secure storage and attaches Authorization header.
+  * *Objective:* Verify client automatically extracts JWT from secure storage and attaches Authorization header, preventing unauthenticated leakage.
   * *Step 1:* Run `flutter test test/core/network/auth_interceptor_test.dart`.
-  * *Step 2:* Assert: Every authenticated API call includes `Authorization: Bearer <valid_token>`. If token is absent, request throws unauthenticated client exception before network call.
+  * *Step 2:* Populate `SecureStorageService` with a valid JWT access token (`eyJhbGciOi...`). Dispatch API call via `ApiClient` and assert `Authorization: Bearer <valid_token>` header is automatically present on outbound request options.
+  * *Step 3:* Update the access token in secure storage (simulating token refresh). Dispatch another request and assert the header immediately updates to the new token without requiring client re-instantiation.
+  * *Step 4:* Clear secure storage session (`clearSession()`). Attempt an authenticated request with `requiresAuth: true`.
+  * *Step 5:* Assert: `AuthInterceptor` rejects the request before dispatching network I/O, throwing a `401 UNAUTHENTICATED` client-side `DioException` without hitting the network adapter.
+  * *Step 6:* Verify public auth endpoints (e.g. `/api/auth/login`, `/api/auth/register`) execute normally without requiring an existing token.
 * **REG-LAN-02: Automatic UUID Idempotency-Key Header (`DIG-94`, `BR-05`)**
-  * *Objective:* Verify every mutating request (`POST /api/v1/payments`) attaches a fresh UUIDv4 header.
+  * *Objective:* Verify every mutating request (`POST`, `PUT`) attaches a fresh UUIDv4 header, while retries preserve identical keys to ensure exactly-once execution.
   * *Step 1:* Run `flutter test test/core/network/idempotency_interceptor_test.dart`.
-  * *Step 2:* Assert: `X-Idempotency-Key` header is present and formatted as a standard 36-character UUID string.
+  * *Step 2:* Dispatch `POST /api/v1/payments` without an idempotency key. Assert `X-Idempotency-Key` header is automatically generated and matches RFC 4122 UUIDv4 canonical format (36 chars, 4 hyphens).
+  * *Step 3:* Dispatch `PUT /api/v1/cards/card-01/status`. Assert mutating `PUT` request also receives an auto-generated UUIDv4 idempotency key.
+  * *Step 4:* Dispatch consecutive mutating requests; assert each generated key is distinct and cryptographically random across executions.
+  * *Step 5:* Simulate network retry with pre-set `X-Idempotency-Key: <fixed-uuid>`. Assert `AuthInterceptor` preserves the caller-supplied key without overwriting it across repeated attempts.
+  * *Step 6:* Dispatch non-mutating `GET /api/v1/cards`; assert `X-Idempotency-Key` header is omitted.
 * **REG-LAN-03: Client Circuit Breaker & Exponential Backoff (`DIG-44`)**
-  * *Objective:* Verify client does not flood backend on repeated 503 errors.
+  * *Objective:* Verify client isolates gateway failures, trips to OPEN after 3 consecutive timeouts/503 errors, and suppresses outbound traffic during cooldown.
   * *Step 1:* Run `flutter test test/core/network/circuit_breaker_test.dart`.
-  * *Step 2:* Simulate 3 consecutive `503 SERVICE_DEGRADED` responses. Assert: Circuit breaker trips to OPEN and client displays offline error banner without issuing network calls for 10 seconds.
+  * *Step 2:* Assert initial state is `CircuitBreakerState.closed`, `consecutiveFailures` is 0, and `allowRequest()` returns `true`.
+  * *Step 3:* Simulate consecutive gateway failures (HTTP 503 `SERVICE_DEGRADED` or connection timeouts). Assert failures 1 and 2 increment failure counter while remaining in CLOSED state.
+  * *Step 4:* Simulate 3rd consecutive gateway failure. Assert: Circuit breaker trips to `CircuitBreakerState.open`, `isOpen == true`, and `openedAt` timestamp is recorded.
+  * *Step 5:* Attempt outbound requests while circuit breaker is OPEN. Assert: `AuthInterceptor` immediately rejects request client-side with 503 `SERVICE_DEGRADED` without invoking HTTP adapter (zero network traffic).
+  * *Step 6:* Verify `remainingCooldownSeconds` decrements from configured timeout and `ChangeNotifier` triggers listeners for UI notification.
+  * *Step 7:* Simulate cooldown expiry: assert state transitions to `halfOpen`. Dispatch successful probe request; assert circuit breaker resets to `closed` with `consecutiveFailures = 0`.
 * **REG-LAN-04: RFC 7807 Error Response Parsing (`DIG-46`, `BR-23`)**
-  * *Objective:* Verify backend error payloads parse cleanly into domain error models.
+  * *Objective:* Verify backend RFC 7807 problem details payloads parse cleanly into domain models and map to actionable user guidance.
   * *Step 1:* Run `flutter test test/core/network/error_catalog_test.dart`.
-  * *Step 2:* Pass mock response `{"error_code": "INSUFFICIENT_FUNDS", "shortfall": {"shortfall_amount": "500.00"}}`. Assert client model correctly deserializes shortfall details.
+  * *Step 2:* Pass mock 422 response `{"error_code": "INSUFFICIENT_FUNDS", "shortfall": {"shortfall_amount": "500.00", "target_currency": "EUR"}, "funding_options": [...]}`. Assert `InsufficientFundsResult` and `ShortfallDetails` parse `shortfall_amount`, `target_currency`, and `funding_options` accurately without numeric truncation.
+  * *Step 3:* Test RFC 7807 standard envelope parsing (`ApiProblemDetails`: `type`, `title`, `status`, `detail`, `error_code`, `instance`).
+  * *Step 4:* Iterate across all 18 banking error codes from `CONTRACTS.md` §1.2 through `BankingErrorMapper.messageForCode()`. Assert each code returns a human-readable message without falling back to default generic error.
+  * *Step 5:* Assert `BankingErrorMapper.canRetryWithSameKey()` returns `true` only for transient errors (`SECURITY_CHECK_UNAVAILABLE`, `SERVICE_DEGRADED`, `RATE_LIMIT_EXCEEDED`) and `false` for terminal business rejections (`INSUFFICIENT_FUNDS`, `DECLINED_HIGH_RISK`, `ACCOUNT_FROZEN`).
 
 ---
 
