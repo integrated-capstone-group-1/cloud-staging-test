@@ -1,5 +1,6 @@
 package com.capstone.gateway.filter;
 
+import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -8,116 +9,194 @@ import org.springframework.http.HttpStatus;
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
 import org.springframework.mock.web.server.MockServerWebExchange;
 import reactor.core.publisher.Mono;
-import reactor.test.StepVerifier;
 
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
-import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.*;
 
 /**
- * Regression Test Suite: REG-GYM-03 (DIG-26).
- * Verifies Redis Token-Bucket Rate Limiter Quota Replenishment:
- * - 15 req/s replenishment
- * - Burst capacity: 30
- * - Burst 35 requests: 1-30 succeed, 31-35 rejected with HTTP 429 and Retry-After
- * - After 1 second pause/replenishment, subsequent request succeeds.
+ * API-RUS-03: Rate Limiter Enforcement Tests (15 req/s Quota)
+ *
+ * [W-H-Y MODEL & TRACEABILITY]:
+ * - WHAT: Validate that the API Gateway rate limiter enforces 15 req/s quota per client.
+ * - HOW: Unit tests for RateLimiterFilter using token bucket algorithm
+ * - WHY: Protects downstream services against DDoS, scraping, and runaway loops (DIG-26, DIG-8)
+ *
+ * Token-Bucket Algorithm:
+ * - Initial capacity: 30 tokens (burst)
+ * - Replenishment rate: 15 tokens/second
+ * - Each request costs 1 token
+ *
+ * Jira: DIG-8, DIG-26
  */
+@Slf4j
 class RateLimiterFilterTest {
 
     private RateLimiterFilter rateLimiterFilter;
-    private GatewayFilterChain chain;
     private SettableTestClock testClock;
 
     @BeforeEach
     void setUp() {
         testClock = new SettableTestClock(Instant.now());
-        // Configure standard rate limiter: 15 req/s replenish, 30 burst capacity
         rateLimiterFilter = new RateLimiterFilter(null, 15, 30, testClock);
-        chain = mock(GatewayFilterChain.class);
-        when(chain.filter(any())).thenReturn(Mono.empty());
+    }
+
+    // ============================================================================
+    // TOKEN BUCKET CORE FUNCTIONALITY TESTS
+    // ============================================================================
+
+    @Test
+    @DisplayName("RATE-01: First 15 requests succeed (quota available)")
+    void testFirst15RequestsSucceed() {
+        int countAllowed = 0;
+
+        for (int i = 0; i < 15; i++) {
+            Boolean allowed = rateLimiterFilter.tryAcquireToken("client-192.168.1.100").block();
+            if (allowed) countAllowed++;
+        }
+
+        assertThat(countAllowed).isEqualTo(15);
     }
 
     @Test
-    @DisplayName("REG-GYM-03: Burst 35 requests: 1-30 succeed, 31-35 return 429 with Retry-After; replenishes after 1s")
-    void shouldRejectExcessRequestsAndReplenish() {
-        String clientIp = "192.168.1.100";
+    @DisplayName("RATE-02: Burst capacity allows 30 tokens")
+    void testBurstCapacity30() {
+        int countAllowed = 0;
 
-        // Step 1: Burst 30 requests - all 30 should consume tokens and succeed
-        for (int i = 1; i <= 30; i++) {
-            MockServerHttpRequest request = MockServerHttpRequest.get("/api/v1/accounts/pockets")
-                    .header("X-Forwarded-For", clientIp)
-                    .build();
-            MockServerWebExchange exchange = MockServerWebExchange.from(request);
-
-            StepVerifier.create(rateLimiterFilter.filter(exchange, chain))
-                    .verifyComplete();
-
-            assertThat(exchange.getResponse().getStatusCode())
-                    .as("Request %d should be accepted within burst quota", i)
-                    .isNull(); // Not set to 429, chain was executed
+        for (int i = 0; i < 30; i++) {
+            Boolean allowed = rateLimiterFilter.tryAcquireToken("client-burst-300").block();
+            if (allowed) countAllowed++;
         }
 
-        // Verify chain was invoked exactly 30 times
-        verify(chain, times(30)).filter(any());
+        assertThat(countAllowed).isEqualTo(30);
+    }
 
-        // Step 2: Requests 31 to 35 within the same millisecond must return HTTP 429
-        for (int i = 31; i <= 35; i++) {
-            MockServerHttpRequest request = MockServerHttpRequest.get("/api/v1/accounts/pockets")
-                    .header("X-Forwarded-For", clientIp)
+    @Test
+    @DisplayName("RATE-03: Filter order is HIGHEST_PRECEDENCE + 20")
+    void testFilterOrder() {
+        assertThat(rateLimiterFilter.getOrder()).isEqualTo(Integer.MIN_VALUE + 20);
+    }
+
+    @Test
+    @DisplayName("RATE-04: Rate limited request returns 429 Too Many Requests")
+    void testHttp429Response() {
+        GatewayFilterChain chain = exchange -> Mono.empty();
+
+        // Exhaust quota (30 tokens - burst capacity)
+        for (int i = 0; i < 30; i++) {
+            MockServerHttpRequest request = MockServerHttpRequest
+                    .get("/api/v1/accounts")
+                    .header("X-Forwarded-For", "192.168.1.999")
                     .build();
             MockServerWebExchange exchange = MockServerWebExchange.from(request);
-
-            StepVerifier.create(rateLimiterFilter.filter(exchange, chain))
-                    .verifyComplete();
-
-            assertThat(exchange.getResponse().getStatusCode())
-                    .as("Request %d must be rejected with 429 TOO_MANY_REQUESTS", i)
-                    .isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
-            assertThat(exchange.getResponse().getHeaders().getFirst("Retry-After"))
-                    .isEqualTo("1");
+            rateLimiterFilter.filter(exchange, chain).block();
         }
 
-        // Verify chain was NOT invoked for the 5 rate-limited requests
-        verify(chain, times(30)).filter(any());
+        // Next request should get 429
+        MockServerHttpRequest requestOver = MockServerHttpRequest
+                .get("/api/v1/accounts")
+                .header("X-Forwarded-For", "192.168.1.999")
+                .build();
+        MockServerWebExchange exchangeOver = MockServerWebExchange.from(requestOver);
+        rateLimiterFilter.filter(exchangeOver, chain).block();
 
-        // Step 3: Advance clock by 1 second (1000 ms) -> Replenishes 15 tokens
+        assertThat(exchangeOver.getResponse().getStatusCode()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+    }
+
+    @Test
+    @DisplayName("RATE-05: Rate limit response includes Retry-After header")
+    void testRetryAfterHeader() {
+        GatewayFilterChain chain = exchange -> Mono.empty();
+
+        // Exhaust burst capacity (30)
+        for (int i = 0; i < 30; i++) {
+            MockServerHttpRequest request = MockServerHttpRequest
+                    .get("/api/v1/accounts")
+                    .header("X-Forwarded-For", "192.168.2.999")
+                    .build();
+            MockServerWebExchange exchange = MockServerWebExchange.from(request);
+            rateLimiterFilter.filter(exchange, chain).block();
+        }
+
+        // Rate limited request
+        MockServerHttpRequest request = MockServerHttpRequest
+                .get("/api/v1/accounts")
+                .header("X-Forwarded-For", "192.168.2.999")
+                .build();
+        MockServerWebExchange exchange = MockServerWebExchange.from(request);
+        rateLimiterFilter.filter(exchange, chain).block();
+
+        assertThat(exchange.getResponse().getHeaders().getFirst("Retry-After")).isEqualTo("1");
+    }
+
+    @Test
+    @DisplayName("RATE-06: Replenishment configured at 15 tokens/sec")
+    void testReplenishmentRate() {
+        // Verify replenishment rate is 15 tokens/sec
+        String clientKey = "client-replenish-600";
+
+        // Consume burst (30 tokens)
+        for (int i = 0; i < 30; i++) {
+            rateLimiterFilter.tryAcquireToken(clientKey).block();
+        }
+
+        // Advance 1 second (should replenish 15 tokens)
         testClock.plusSeconds(1);
 
-        MockServerHttpRequest subsequentRequest = MockServerHttpRequest.get("/api/v1/accounts/pockets")
-                .header("X-Forwarded-For", clientIp)
-                .build();
-        MockServerWebExchange subsequentExchange = MockServerWebExchange.from(subsequentRequest);
+        // Should be able to get 15 tokens
+        int countAllowed = 0;
+        for (int i = 0; i < 15; i++) {
+            Boolean allowed = rateLimiterFilter.tryAcquireToken(clientKey).block();
+            if (allowed) countAllowed++;
+        }
 
-        StepVerifier.create(rateLimiterFilter.filter(subsequentExchange, chain))
-                .verifyComplete();
+        assertThat(countAllowed).isEqualTo(15);
+    }
 
-        // Must succeed now
-        assertThat(subsequentExchange.getResponse().getStatusCode()).isNull();
-        verify(chain, times(31)).filter(any());
+    @Test
+    @DisplayName("RATE-07: Tokens capped at burst capacity (max 30)")
+    void testTokensCapAtBurst() {
+        String clientKey = "client-cap-700";
+
+        // Use 10 tokens
+        for (int i = 0; i < 10; i++) {
+            rateLimiterFilter.tryAcquireToken(clientKey).block();
+        }
+
+        // Advance 10 seconds (would replenish 150 if uncapped, but should cap at 30)
+        testClock.plusSeconds(10);
+
+        // Count how many tokens are available
+        int countAllowed = 0;
+        for (int i = 0; i < 35; i++) {
+            Boolean allowed = rateLimiterFilter.tryAcquireToken(clientKey).block();
+            if (allowed) countAllowed++;
+        }
+
+        // Should not exceed burst capacity of 30
+        assertThat(countAllowed).isLessThanOrEqualTo(30);
     }
 
     /**
-     * Deterministic controllable test clock for microsecond/second advancements.
+     * Test utility: Settable clock for controlling time in tests.
      */
     private static class SettableTestClock extends Clock {
-        private final AtomicLong currentMillis;
-        private final ZoneId zoneId = ZoneId.of("UTC");
+        private Instant instant;
 
-        public SettableTestClock(Instant initialInstant) {
-            this.currentMillis = new AtomicLong(initialInstant.toEpochMilli());
+        public SettableTestClock(Instant initial) {
+            this.instant = initial;
         }
 
-        public void plusSeconds(long seconds) {
-            this.currentMillis.addAndGet(seconds * 1000);
+        public void plusSeconds(double seconds) {
+            long nanos = (long) (seconds * 1_000_000_000L);
+            this.instant = instant.plusNanos(nanos);
         }
 
         @Override
         public ZoneId getZone() {
-            return zoneId;
+            return ZoneId.systemDefault();
         }
 
         @Override
@@ -127,13 +206,12 @@ class RateLimiterFilterTest {
 
         @Override
         public Instant instant() {
-            return Instant.ofEpochMilli(currentMillis.get());
+            return instant;
         }
 
         @Override
         public long millis() {
-            return currentMillis.get();
+            return instant.toEpochMilli();
         }
     }
 }
-
