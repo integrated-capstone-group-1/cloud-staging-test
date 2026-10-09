@@ -45,7 +45,7 @@ public class CardController {
      * Get all virtual cards for a specific customer (staff / admin access)
      */
     @GetMapping("/customer/{customerId}")
-    public ResponseEntity<ApiResponse<List<CardResponse>>> getCardsByCustomer(@PathVariable String customerId) {
+    public ResponseEntity<ApiResponse<List<CardResponse>>> getCardsByCustomer(@PathVariable("customerId") String customerId) {
         List<CardResponse> cards = cardService.getCards(customerId);
         return ResponseEntity.ok(ApiResponse.ok("Cards retrieved successfully", cards));
     }
@@ -54,7 +54,7 @@ public class CardController {
      * Get a specific card by ID
      */
     @GetMapping("/{cardId}")
-    public ResponseEntity<ApiResponse<CardResponse>> getCard(@PathVariable String cardId) {
+    public ResponseEntity<ApiResponse<CardResponse>> getCard(@PathVariable("cardId") String cardId) {
         String customerId = SecurityUtils.getCurrentCustomerId()
                 .orElseThrow(() -> new InvalidTokenException("Authenticated customer ID not found"));
         CardResponse card = cardService.getCard(cardId, customerId);
@@ -67,7 +67,7 @@ public class CardController {
      */
     @PutMapping("/{cardId}/status")
     public ResponseEntity<ApiResponse<CardResponse>> updateCardStatus(
-            @PathVariable String cardId,
+            @PathVariable("cardId") String cardId,
             @Valid @RequestBody CardStatusRequest request) {
         String customerId = SecurityUtils.getCurrentCustomerId()
                 .orElseThrow(() -> new InvalidTokenException("Authenticated customer ID not found"));
@@ -81,7 +81,7 @@ public class CardController {
      */
     @PutMapping("/{cardId}/ecom")
     public ResponseEntity<ApiResponse<CardResponse>> updateEcomStatus(
-            @PathVariable String cardId,
+            @PathVariable("cardId") String cardId,
             @Valid @RequestBody CardEcomRequest request) {
         String customerId = SecurityUtils.getCurrentCustomerId()
                 .orElseThrow(() -> new InvalidTokenException("Authenticated customer ID not found"));

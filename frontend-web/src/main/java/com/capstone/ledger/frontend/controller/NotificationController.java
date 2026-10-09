@@ -41,7 +41,7 @@ public class NotificationController {
     }
 
     @PostMapping("/notifications/{id}/read")
-    public String markRead(@PathVariable String id) {
+    public String markRead(@PathVariable("id") String id) {
         bankingClient.markNotificationAsRead(id);
         return "redirect:/notifications";
     }

@@ -6,11 +6,13 @@ import com.capstone.ledger.frontend.service.AdminPortalService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.math.BigDecimal;
@@ -308,6 +310,20 @@ public class AdminPortalController {
         model.addAttribute("p95LatencyMs", "340 ms");
         model.addAttribute("activeTps", "18.4 tx/s");
         return "admin/monitoring";
+    }
+
+    @GetMapping(value = {"/admin/api/monitoring/stream", "/api/v1/monitoring/stream"}, produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @ResponseBody
+    public SseEmitter monitoringStream(HttpSession session) {
+        requireAdmin(session);
+        return adminPortalService.subscribeMonitoringStream();
+    }
+
+    @GetMapping(value = {"/admin/api/monitoring/feed", "/api/v1/monitoring/feed"}, produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public ResponseEntity<List<TransactionMonitoringView>> monitoringFeedRest(HttpSession session) {
+        requireAdmin(session);
+        return ResponseEntity.ok(adminPortalService.getMonitoringFeed());
     }
 
     // =========================================================================

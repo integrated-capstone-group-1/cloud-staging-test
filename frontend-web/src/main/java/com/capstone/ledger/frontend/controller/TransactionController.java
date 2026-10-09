@@ -126,7 +126,7 @@ public class TransactionController {
     }
 
     @GetMapping("/transactions/receipt/{txnId}")
-    public String transactionReceipt(@PathVariable String txnId, HttpSession session, Model model) {
+    public String transactionReceipt(@PathVariable("txnId") String txnId, HttpSession session, Model model) {
         UserSession user = (UserSession) session.getAttribute(SessionAuthInterceptor.SESSION_USER);
         if (user == null) {
             return "redirect:/login";

@@ -28,13 +28,17 @@
         </div>
 
         <div class="d-flex align-items-center gap-2">
+            <span id="liveSyncPill" class="badge bg-success-subtle text-success border border-success-subtle py-1 px-2 d-inline-flex align-items-center gap-1" style="font-size: 0.72rem;">
+                <span class="spinner-grow spinner-grow-sm text-success" style="width: 6px; height: 6px;" role="status"></span>
+                <span>LIVE TELEMETRY (3s)</span>
+            </span>
             <a href="/admin/transfers/held" class="btn btn-sm btn-outline-danger position-relative">
                 <i class="bi bi-shield-exclamation me-1"></i> Held Queue
-                <span th:if="${heldCount > 0}" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" th:text="${heldCount}">2</span>
+                <span id="headerHeldBadge" th:if="${heldCount > 0}" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" th:text="${heldCount}">2</span>
             </a>
             <a href="/admin/dlq" class="btn btn-sm btn-outline-warning position-relative">
                 <i class="bi bi-inbox-fill me-1"></i> DLQ Console
-                <span th:if="${dlqPendingCount > 0}" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-warning text-dark" th:text="${dlqPendingCount}">1</span>
+                <span id="headerDlqBadge" th:if="${dlqPendingCount > 0}" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-warning text-dark" th:text="${dlqPendingCount}">1</span>
             </a>
             <a href="/admin/monitoring" class="btn btn-sm btn-outline-info">
                 <i class="bi bi-activity me-1"></i> Observability &amp; Grafana
@@ -57,9 +61,9 @@
                     <strong class="text-success">SYSTEM NOMINAL</strong>
                 </span>
                 <span class="text-muted">|</span>
-                <span><i class="bi bi-cpu text-primary me-1"></i>Throughput: <strong th:text="${activeTps + ' TPS'}">24.6 TPS</strong></span>
+                <span><i class="bi bi-cpu text-primary me-1"></i>Throughput: <strong id="telemetryTps" th:text="${activeTps + ' TPS'}">24.6 TPS</strong></span>
                 <span class="text-muted">|</span>
-                <span><i class="bi bi-stopwatch text-info me-1"></i>p95 Latency: <strong th:text="${p95Latency}">180 ms</strong></span>
+                <span><i class="bi bi-stopwatch text-info me-1"></i>p95 Latency: <strong id="telemetryP95" th:text="${p95Latency}">180 ms</strong></span>
                 <span class="text-muted">|</span>
                 <span><i class="bi bi-broadcast text-warning me-1"></i>Kafka Lag: <strong>0 msgs</strong></span>
             </div>
@@ -83,11 +87,11 @@
         <div class="col-xl-2 col-md-4 col-sm-6">
             <div class="card executive-kpi-card p-3 border-start border-primary border-4 h-100">
                 <div class="text-muted small text-uppercase fw-semibold" style="font-size: 0.72rem;">Consolidated Liquidity</div>
-                <div class="h4 fw-bold mt-2 text-primary mb-1" th:text="${'₱' + #numbers.formatDecimal(totalBalance, 1, 'COMMA', 2, 'POINT')}">₱14,250,000.00</div>
+                <div id="kpiTotalBalance" class="h4 fw-bold mt-2 text-primary mb-1" th:text="${'₱' + #numbers.formatDecimal(totalBalance, 1, 'COMMA', 2, 'POINT')}">₱14,250,000.00</div>
                 <div class="small text-muted d-flex gap-1 flex-wrap mt-auto">
-                    <span class="badge bg-secondary-subtle text-dark border py-0 px-1" style="font-size: 0.65rem;" th:text="${'₱' + #numbers.formatDecimal(totalPhpBalance, 1, 'COMMA', 2, 'POINT')}">₱0.00</span>
-                    <span th:if="${totalUsdBalance != null && totalUsdBalance.compareTo(T(java.math.BigDecimal).ZERO) > 0}" class="badge bg-secondary-subtle text-dark border py-0 px-1" style="font-size: 0.65rem;" th:text="${'$' + #numbers.formatDecimal(totalUsdBalance, 1, 'COMMA', 2, 'POINT')}">$0.00</span>
-                    <span th:if="${totalEurBalance != null && totalEurBalance.compareTo(T(java.math.BigDecimal).ZERO) > 0}" class="badge bg-secondary-subtle text-dark border py-0 px-1" style="font-size: 0.65rem;" th:text="${'€' + #numbers.formatDecimal(totalEurBalance, 1, 'COMMA', 2, 'POINT')}">€0.00</span>
+                    <span id="kpiPhpBalance" class="badge bg-secondary-subtle text-dark border py-0 px-1" style="font-size: 0.65rem;" th:text="${'₱' + #numbers.formatDecimal(totalPhpBalance, 1, 'COMMA', 2, 'POINT')}">₱0.00</span>
+                    <span id="kpiUsdBalance" th:if="${totalUsdBalance != null && totalUsdBalance.compareTo(T(java.math.BigDecimal).ZERO) > 0}" class="badge bg-secondary-subtle text-dark border py-0 px-1" style="font-size: 0.65rem;" th:text="${'$' + #numbers.formatDecimal(totalUsdBalance, 1, 'COMMA', 2, 'POINT')}">$0.00</span>
+                    <span id="kpiEurBalance" th:if="${totalEurBalance != null && totalEurBalance.compareTo(T(java.math.BigDecimal).ZERO) > 0}" class="badge bg-secondary-subtle text-dark border py-0 px-1" style="font-size: 0.65rem;" th:text="${'€' + #numbers.formatDecimal(totalEurBalance, 1, 'COMMA', 2, 'POINT')}">€0.00</span>
                 </div>
             </div>
         </div>
@@ -96,10 +100,10 @@
         <div class="col-xl-2 col-md-4 col-sm-6">
             <div class="card executive-kpi-card p-3 border-start border-info border-4 h-100">
                 <div class="text-muted small text-uppercase fw-semibold" style="font-size: 0.72rem;">Accounts &amp; Pockets</div>
-                <div class="h4 fw-bold mt-2 mb-1" th:text="${accountCount}">4</div>
+                <div id="kpiAccountCount" class="h4 fw-bold mt-2 mb-1" th:text="${accountCount}">4</div>
                 <div class="small text-muted mt-auto">
-                    <span class="text-success"><i class="bi bi-check-circle"></i> <span th:text="${activeAccounts}">4</span> Active</span> ·
-                    <span class="text-warning"><i class="bi bi-pause-circle"></i> <span th:text="${frozenAccounts}">0</span> Frozen</span>
+                    <span class="text-success"><i class="bi bi-check-circle"></i> <span id="kpiActiveAccounts" th:text="${activeAccounts}">4</span> Active</span> ·
+                    <span class="text-warning"><i class="bi bi-pause-circle"></i> <span id="kpiFrozenAccounts" th:text="${frozenAccounts}">0</span> Frozen</span>
                 </div>
             </div>
         </div>
@@ -108,21 +112,21 @@
         <div class="col-xl-2 col-md-4 col-sm-6">
             <div class="card executive-kpi-card p-3 border-start border-success border-4 h-100">
                 <div class="text-muted small text-uppercase fw-semibold" style="font-size: 0.72rem;">24h Mutations &amp; Volume</div>
-                <div class="h4 fw-bold mt-2 text-success mb-1" th:text="${totalTransactionCount}">0</div>
+                <div id="kpiTxnCount" class="h4 fw-bold mt-2 text-success mb-1" th:text="${totalTransactionCount}">0</div>
                 <div class="small text-muted mt-auto">
-                    <span class="text-success"><i class="bi bi-arrow-up-right me-1"></i><span th:text="${successRate}">100.0%</span> Success</span> · 0 Lock Timeouts
+                    <span class="text-success"><i class="bi bi-arrow-up-right me-1"></i><span id="kpiSuccessRate" th:text="${successRate}">100.0%</span> Success</span> · 0 Lock Timeouts
                 </div>
             </div>
         </div>
 
         <!-- 4. Held Transfers Queue -->
         <div class="col-xl-2 col-md-4 col-sm-6">
-            <div class="card executive-kpi-card p-3 border-start border-4 h-100"
+            <div id="kpiHeldCard" class="card executive-kpi-card p-3 border-start border-4 h-100"
                  th:classappend="${heldCount > 0} ? 'border-danger' : 'border-success'">
                 <div class="text-muted small text-uppercase fw-semibold" style="font-size: 0.72rem;">Held Queue (AMLA/Risk)</div>
                 <div class="d-flex align-items-baseline gap-2 mt-2 mb-1">
-                    <span class="h4 fw-bold mb-0" th:classappend="${heldCount > 0} ? 'text-danger' : 'text-success'" th:text="${heldCount}">2</span>
-                    <span class="badge" th:classappend="${heldCount > 0} ? 'bg-danger' : 'bg-success'" style="font-size: 0.65rem;"
+                    <span id="kpiHeldCount" class="h4 fw-bold mb-0" th:classappend="${heldCount > 0} ? 'text-danger' : 'text-success'" th:text="${heldCount}">2</span>
+                    <span id="kpiHeldBadge" class="badge" th:classappend="${heldCount > 0} ? 'bg-danger' : 'bg-success'" style="font-size: 0.65rem;"
                           th:text="${heldCount > 0} ? 'NEEDS REVIEW' : 'CLEAR'">NEEDS REVIEW</span>
                 </div>
                 <div class="small text-muted mt-auto">
@@ -133,12 +137,12 @@
 
         <!-- 5. DLQ Message Depth -->
         <div class="col-xl-2 col-md-4 col-sm-6">
-            <div class="card executive-kpi-card p-3 border-start border-4 h-100"
+            <div id="kpiDlqCard" class="card executive-kpi-card p-3 border-start border-4 h-100"
                  th:classappend="${dlqPendingCount > 0} ? 'border-warning' : 'border-success'">
                 <div class="text-muted small text-uppercase fw-semibold" style="font-size: 0.72rem;">Kafka DLQ Depth</div>
                 <div class="d-flex align-items-baseline gap-2 mt-2 mb-1">
-                    <span class="h4 fw-bold mb-0" th:classappend="${dlqPendingCount > 0} ? 'text-warning' : 'text-success'" th:text="${dlqPendingCount}">1</span>
-                    <span class="badge" th:classappend="${dlqPendingCount > 0} ? 'bg-warning text-dark' : 'bg-success'" style="font-size: 0.65rem;"
+                    <span id="kpiDlqCount" class="h4 fw-bold mb-0" th:classappend="${dlqPendingCount > 0} ? 'text-warning' : 'text-success'" th:text="${dlqPendingCount}">1</span>
+                    <span id="kpiDlqBadge" class="badge" th:classappend="${dlqPendingCount > 0} ? 'bg-warning text-dark' : 'bg-success'" style="font-size: 0.65rem;"
                           th:text="${dlqPendingCount > 0} ? 'PENDING REPLAY' : 'CLEARED'">PENDING REPLAY</span>
                 </div>
                 <div class="small text-muted mt-auto">
@@ -231,7 +235,7 @@
                     <h6 class="fw-bold mb-0 text-danger">
                         <i class="bi bi-exclamation-octagon text-danger me-2"></i>Action Required · Held Transfers Queue
                     </h6>
-                    <a href="/admin/transfers/held" class="small text-decoration-none">View All (<span th:text="${heldCount}">2</span>) &rarr;</a>
+                    <a href="/admin/transfers/held" class="small text-decoration-none">View All (<span id="tableHeldCount" th:text="${heldCount}">2</span>) &rarr;</a>
                 </div>
 
                 <div class="table-responsive">
@@ -245,7 +249,7 @@
                                 <th>Actions</th>
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody id="heldQueueTbody">
                             <tr th:each="h : ${heldList}">
                                 <td class="font-monospace small fw-bold" th:text="${h.txnId}">TXN-HELD-9021</td>
                                 <td>
@@ -260,12 +264,12 @@
                                 </td>
                                 <td>
                                     <div class="d-flex gap-1">
-                                        <form th:action="@{/admin/transfers/held/{id}/approve(id=${h.txnId})}" method="post" class="d-inline">
+                                        <form th:action="@{/admin/transfers/held/{id}/approve(id=${h.txnId})}" method="post" class="d-inline held-action-form" th:data-txn-id="${h.txnId}" data-action="approve">
                                             <button type="submit" class="btn btn-sm btn-success py-0 px-2" style="font-size: 0.72rem;" title="Release to Core Ledger">
                                                 <i class="bi bi-check-lg"></i> Release
                                             </button>
                                         </form>
-                                        <form th:action="@{/admin/transfers/held/{id}/reject(id=${h.txnId})}" method="post" class="d-inline">
+                                        <form th:action="@{/admin/transfers/held/{id}/reject(id=${h.txnId})}" method="post" class="d-inline held-action-form" th:data-txn-id="${h.txnId}" data-action="reject">
                                             <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2" style="font-size: 0.72rem;" title="Reject & Reverse">
                                                 <i class="bi bi-x-lg"></i>
                                             </button>
@@ -319,7 +323,7 @@
                                 <th>Time</th>
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody id="recentTransactionsTbody">
                             <tr th:each="tx : ${recentTransactions}">
                                 <td class="font-monospace small fw-bold" th:text="${tx.txnId}">TXN-1001</td>
                                 <td class="font-monospace small" th:text="${tx.accountId}">ACCT-1001</td>
@@ -404,6 +408,210 @@
      CHART.JS ENTERPRISE VISUALIZATION SCRIPTS
      ========================================================= -->
 <script th:inline="javascript">
+var chartTxVolume = null;
+var chartReserves = null;
+var chartPipeline = null;
+
+// Async handler for Release / Reject on held transactions without full reload
+window.handleHeldDecision = function(txnId, action, formElement) {
+    const url = "/admin/transfers/held/" + encodeURIComponent(txnId) + "/" + action;
+    fetch(url, {
+        method: "POST",
+        headers: { "Accept": "application/json" }
+    })
+    .then(res => res.json())
+    .then(data => {
+        pollTelemetry();
+    })
+    .catch(err => {
+        console.error("Held decision error, falling back:", err);
+        if (formElement) formElement.submit();
+    });
+};
+
+document.addEventListener("submit", function(event) {
+    const form = event.target && event.target.closest ? event.target.closest(".held-action-form") : null;
+    if (form) {
+        event.preventDefault();
+        const txnId = form.getAttribute("data-txn-id");
+        const action = form.getAttribute("data-action");
+        if (txnId && action) {
+            handleHeldDecision(txnId, action, form);
+        }
+    }
+});
+
+async function pollTelemetry() {
+    try {
+        const res = await fetch("/admin/api/telemetry", { headers: { "Accept": "application/json" } });
+        if (!res.ok) return;
+        const data = await res.json();
+
+        // 1. Telemetry strip
+        const elTps = document.getElementById("telemetryTps");
+        if (elTps && data.activeTps) elTps.textContent = data.activeTps + " TPS";
+        const elP95 = document.getElementById("telemetryP95");
+        if (elP95 && data.p95Latency) elP95.textContent = data.p95Latency;
+
+        // 2. Header Badges
+        const hdrHeld = document.getElementById("headerHeldBadge");
+        if (hdrHeld) {
+            hdrHeld.textContent = data.heldCount;
+            hdrHeld.style.display = data.heldCount > 0 ? "" : "none";
+        }
+        const hdrDlq = document.getElementById("headerDlqBadge");
+        if (hdrDlq) {
+            hdrDlq.textContent = data.dlqPendingCount;
+            hdrDlq.style.display = data.dlqPendingCount > 0 ? "" : "none";
+        }
+
+        // 3. KPI Card 1: Consolidated Liquidity
+        const kpiBal = document.getElementById("kpiTotalBalance");
+        if (kpiBal && data.totalBalance) kpiBal.textContent = data.totalBalance;
+        const kpiPhp = document.getElementById("kpiPhpBalance");
+        if (kpiPhp && data.totalPhpBalance) kpiPhp.textContent = data.totalPhpBalance;
+        const kpiUsd = document.getElementById("kpiUsdBalance");
+        if (kpiUsd && data.totalUsdBalance) kpiUsd.textContent = data.totalUsdBalance;
+        const kpiEur = document.getElementById("kpiEurBalance");
+        if (kpiEur && data.totalEurBalance) kpiEur.textContent = data.totalEurBalance;
+
+        // 4. KPI Card 2: Accounts & Pockets
+        const kpiAcct = document.getElementById("kpiAccountCount");
+        if (kpiAcct) kpiAcct.textContent = data.accountCount;
+        const kpiAct = document.getElementById("kpiActiveAccounts");
+        if (kpiAct) kpiAct.textContent = data.activeAccounts;
+        const kpiFrz = document.getElementById("kpiFrozenAccounts");
+        if (kpiFrz) kpiFrz.textContent = data.frozenAccounts;
+
+        // 5. KPI Card 3: 24h Mutations & Volume
+        const kpiTx = document.getElementById("kpiTxnCount");
+        if (kpiTx) kpiTx.textContent = data.totalTransactionCount;
+        const kpiSr = document.getElementById("kpiSuccessRate");
+        if (kpiSr) kpiSr.textContent = data.successRate;
+
+        // 6. KPI Card 4: Held Queue
+        const kpiHc = document.getElementById("kpiHeldCount");
+        if (kpiHc) {
+            kpiHc.textContent = data.heldCount;
+            kpiHc.className = "h4 fw-bold mb-0 " + (data.heldCount > 0 ? "text-danger" : "text-success");
+        }
+        const kpiHb = document.getElementById("kpiHeldBadge");
+        if (kpiHb) {
+            kpiHb.textContent = data.heldCount > 0 ? "NEEDS REVIEW" : "CLEAR";
+            kpiHb.className = "badge " + (data.heldCount > 0 ? "bg-danger" : "bg-success");
+        }
+        const kpiHCard = document.getElementById("kpiHeldCard");
+        if (kpiHCard) {
+            kpiHCard.classList.remove("border-danger", "border-success");
+            kpiHCard.classList.add(data.heldCount > 0 ? "border-danger" : "border-success");
+        }
+        const tblHc = document.getElementById("tableHeldCount");
+        if (tblHc) tblHc.textContent = data.heldCount;
+
+        // 7. KPI Card 5: DLQ
+        const kpiDc = document.getElementById("kpiDlqCount");
+        if (kpiDc) {
+            kpiDc.textContent = data.dlqPendingCount;
+            kpiDc.className = "h4 fw-bold mb-0 " + (data.dlqPendingCount > 0 ? "text-warning" : "text-success");
+        }
+        const kpiDb = document.getElementById("kpiDlqBadge");
+        if (kpiDb) {
+            kpiDb.textContent = data.dlqPendingCount > 0 ? "PENDING REPLAY" : "CLEARED";
+            kpiDb.className = "badge " + (data.dlqPendingCount > 0 ? "bg-warning text-dark" : "bg-success");
+        }
+        const kpiDCard = document.getElementById("kpiDlqCard");
+        if (kpiDCard) {
+            kpiDCard.classList.remove("border-warning", "border-success");
+            kpiDCard.classList.add(data.dlqPendingCount > 0 ? "border-warning" : "border-success");
+        }
+
+        // 8. Charts Update (Dynamic & In-Place)
+        if (chartTxVolume && data.txHourlyData && data.txTpsData) {
+            chartTxVolume.data.datasets[0].data = data.txHourlyData;
+            chartTxVolume.data.datasets[1].data = data.txTpsData;
+            chartTxVolume.update("none");
+        }
+        if (chartReserves && data.totalPhpBalanceRaw !== undefined) {
+            chartReserves.data.datasets[0].data = [data.totalPhpBalanceRaw, data.totalUsdBalanceRaw, data.totalEurBalanceRaw];
+            chartReserves.update("none");
+        }
+        if (chartPipeline && data.pipelineLatencyData) {
+            chartPipeline.data.datasets[0].data = data.pipelineLatencyData;
+            chartPipeline.update("none");
+        }
+
+        // 9. Held Queue Table Update
+        const heldTbody = document.getElementById("heldQueueTbody");
+        if (heldTbody && data.heldList) {
+            if (data.heldList.length === 0) {
+                heldTbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted small py-3"><i class="bi bi-check-circle text-success me-1"></i>No pending held transactions in queue.</td></tr>';
+            } else {
+                let html = "";
+                for (const h of data.heldList) {
+                    html += `<tr>
+                        <td class="font-monospace small fw-bold">${h.txnId}</td>
+                        <td>
+                            <div class="fw-semibold small">${h.customerName || "Customer"}</div>
+                            <small class="text-muted font-monospace">${h.fromAccount}</small>
+                        </td>
+                        <td>
+                            <div class="fw-bold small text-danger">${h.formattedAmount}</div>
+                        </td>
+                        <td style="max-width: 170px;">
+                            <div class="small text-truncate" title="${h.flaggedReason || ''}">${h.flaggedReason || 'Flagged for review'}</div>
+                        </td>
+                        <td>
+                            <div class="d-flex gap-1">
+                                <form action="/admin/transfers/held/${h.txnId}/approve" method="post" class="d-inline held-action-form" data-txn-id="${h.txnId}" data-action="approve">
+                                    <button type="submit" class="btn btn-sm btn-success py-0 px-2" style="font-size: 0.72rem;" title="Release to Core Ledger">
+                                        <i class="bi bi-check-lg"></i> Release
+                                    </button>
+                                </form>
+                                <form action="/admin/transfers/held/${h.txnId}/reject" method="post" class="d-inline held-action-form" data-txn-id="${h.txnId}" data-action="reject">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2" style="font-size: 0.72rem;" title="Reject & Reverse">
+                                        <i class="bi bi-x-lg"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>`;
+                }
+                heldTbody.innerHTML = html;
+            }
+        }
+
+        // 10. Recent Transactions Table Update
+        const recentTbody = document.getElementById("recentTransactionsTbody");
+        if (recentTbody && data.recentTransactions) {
+            if (data.recentTransactions.length === 0) {
+                recentTbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted small py-3">No recent mutations recorded.</td></tr>';
+            } else {
+                let txHtml = "";
+                for (const tx of data.recentTransactions) {
+                    const isDep = tx.txnType === "DEPOSIT";
+                    const colorCls = isDep ? "text-success" : "text-dark";
+                    const prefix = isDep ? "+" : "-";
+                    txHtml += `<tr>
+                        <td class="font-monospace small fw-bold">${tx.txnId}</td>
+                        <td class="font-monospace small">${tx.accountId}</td>
+                        <td>
+                            <span class="badge bg-light text-dark border py-0 px-1" style="font-size: 0.7rem;">${tx.txnType}</span>
+                        </td>
+                        <td class="text-end font-monospace small fw-bold ${colorCls}">${prefix}${tx.formattedAmount}</td>
+                        <td>
+                            <span class="badge bg-success-subtle text-success border border-success-subtle" style="font-size: 0.68rem;">SETTLED</span>
+                        </td>
+                        <td class="small text-muted font-monospace" style="font-size: 0.72rem;">${tx.timestamp}</td>
+                    </tr>`;
+                }
+                recentTbody.innerHTML = txHtml;
+            }
+        }
+    } catch (e) {
+        console.warn("Telemetry polling error:", e);
+    }
+}
+
 document.addEventListener("DOMContentLoaded", function () {
     const isDark = document.documentElement.classList.contains("dark-mode");
     const textColor = isDark ? "#c9c3d2" : "#514d58";
@@ -419,7 +627,7 @@ document.addEventListener("DOMContentLoaded", function () {
     // 1. Transaction Volume & Throughput Line Chart
     const ctxTx = document.getElementById("txVolumeChart");
     if (ctxTx) {
-        new Chart(ctxTx, {
+        chartTxVolume = new Chart(ctxTx, {
             type: "line",
             data: {
                 labels: ["00:00", "03:00", "06:00", "09:00", "12:00", "15:00", "18:00", "21:00", "Now"],
@@ -465,7 +673,7 @@ document.addEventListener("DOMContentLoaded", function () {
     // 2. Multi-Currency Reserves Donut Chart
     const ctxReserves = document.getElementById("currencyReservesChart");
     if (ctxReserves) {
-        new Chart(ctxReserves, {
+        chartReserves = new Chart(ctxReserves, {
             type: "doughnut",
             data: {
                 labels: ["Philippine Peso (PHP)", "US Dollar (USD)", "Euro (EUR)"],
@@ -490,7 +698,7 @@ document.addEventListener("DOMContentLoaded", function () {
     // 3. 11-Stage Pipeline Latency Horizontal Bar Chart
     const ctxPipeline = document.getElementById("pipelineLatencyChart");
     if (ctxPipeline) {
-        new Chart(ctxPipeline, {
+        chartPipeline = new Chart(ctxPipeline, {
             type: "bar",
             data: {
                 labels: [
@@ -534,6 +742,9 @@ document.addEventListener("DOMContentLoaded", function () {
             }
         });
     }
+
+    // Start Real-Time Auto-Refresh Poll (every 3000ms = 3 seconds)
+    setInterval(pollTelemetry, 3000);
 });
 </script>
 
