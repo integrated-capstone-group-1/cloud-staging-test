@@ -3,8 +3,10 @@ package com.capstone.ledger.frontend.adapter.dto;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 public class BackendDtos {
 
@@ -65,7 +67,7 @@ public class BackendDtos {
             String accountStatus,
             BigDecimal balanceAmount,
             String currencyCode,
-            LocalDateTime createdAt,
+            Object createdAt,
             BigDecimal heldAmount,
             String accountNumber
     ) {}
@@ -169,6 +171,37 @@ public class BackendDtos {
             String message,
             String status,
             java.time.OffsetDateTime createdAt
+    ) {}
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record TransactionHistoryRes(
+            @JsonProperty("transaction_id") String transactionId,
+            @JsonProperty("status") String status,
+            @JsonProperty("stage") String stage,
+            @JsonProperty("txn_type") String txnType,
+            @JsonProperty("amount") BigDecimal amount,
+            @JsonProperty("currency") String currency,
+            @JsonProperty("debit_account_id") String debitAccountId,
+            @JsonProperty("credit_account_id") String creditAccountId,
+            @JsonProperty("customer_id") String customerId,
+            @JsonProperty("core_reference_id") String coreReferenceId,
+            @JsonProperty("audit_ref") String auditRef,
+            @JsonProperty("audit_trail_url") String auditTrailUrl,
+            @JsonProperty("is_cross_currency") String isCrossCurrency,
+            @JsonProperty("fx_rate") BigDecimal fxRate,
+            @JsonProperty("dest_amount") BigDecimal destAmount,
+            @JsonProperty("dest_currency_code") String destCurrencyCode,
+            @JsonProperty("created_at") Object createdAt,
+            @JsonProperty("completed_at") Object completedAt
+    ) {}
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record PageRes<T>(
+            List<T> content,
+            int page,
+            int size,
+            @JsonProperty("total_elements") long totalElements,
+            @JsonProperty("total_pages") int totalPages
     ) {}
 }
 

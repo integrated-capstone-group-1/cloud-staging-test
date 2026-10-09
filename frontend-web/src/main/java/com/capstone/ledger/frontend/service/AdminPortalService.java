@@ -379,9 +379,15 @@ public class AdminPortalService {
     // --- Account Lock & Freeze Governance (DIG-54, BR-09) ---
 
     public void freezeAccount(String accountId, String adminUser) {
+        freezeAccount(accountId, adminUser, null);
+    }
+
+    public void freezeAccount(String accountId, String adminUser, String reason) {
         bankingClient.updateAccountStatus(accountId, AccountStatus.FROZEN);
-        logAudit("ACCOUNT_FREEZE", adminUser, "ACCOUNT", accountId,
-                "Admin enforced account freeze (sets status = FROZEN, takes precedence over customer lock)");
+        String details = "Admin enforced account freeze" + (reason != null && !reason.isBlank()
+                ? " (Reason: " + reason.trim() + ")"
+                : " (sets status = FROZEN, takes precedence over customer lock)");
+        logAudit("ACCOUNT_FREEZE", adminUser, "ACCOUNT", accountId, details);
     }
 
     public void unfreezeAccount(String accountId, String adminUser) {

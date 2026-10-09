@@ -25,7 +25,7 @@
             <table class="table table-sm table-hover" id="ledgerTable">
                 <thead>
                     <tr>
-                        <th>Timestamp</th>
+                        <th>Timestamp (PHT)</th>
                         <th>Transaction ID</th>
                         <th>Mutation ID</th>
                         <th>Account ID</th>
@@ -45,7 +45,14 @@
                         <td>
                             <a th:href="@{/accounts/{id}(id=${t.accountId})}" class="font-monospace small text-decoration-none" th:text="${t.accountId}"></a>
                         </td>
-                        <td class="font-monospace small text-muted" th:text="${t.counterpartyAccountId != null ? t.counterpartyAccountId : '—'}"></td>
+                        <td>
+                            <a th:if="${t.counterpartyAccountId != null and !t.counterpartyAccountId.isBlank()}"
+                               th:href="@{/accounts/{id}(id=${t.counterpartyAccountId})}"
+                               class="font-monospace small text-decoration-none"
+                               th:text="${t.counterpartyAccountId}"></a>
+                            <span th:if="${t.counterpartyAccountId == null or t.counterpartyAccountId.isBlank()}"
+                                  class="font-monospace small text-muted">—</span>
+                        </td>
                         <td>
                             <span class="badge" th:classappend="${t.txnType.badgeClass}" th:text="${t.txnType.displayName}">TRANSFER</span>
                             <span th:if="${t.crossCurrency}" class="badge bg-warning-subtle text-warning border small" title="ForEx Cross Currency">FX</span>

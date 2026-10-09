@@ -320,13 +320,17 @@
                                 <th>Type</th>
                                 <th class="text-end">Amount</th>
                                 <th>Status</th>
-                                <th>Time</th>
+                                <th>Time (PHT)</th>
                             </tr>
                         </thead>
                         <tbody id="recentTransactionsTbody">
                             <tr th:each="tx : ${recentTransactions}">
-                                <td class="font-monospace small fw-bold" th:text="${tx.txnId}">TXN-1001</td>
-                                <td class="font-monospace small" th:text="${tx.accountId}">ACCT-1001</td>
+                                <td class="font-monospace small fw-bold">
+                                    <a th:href="@{/transactions/receipt/{id}(id=${tx.txnId})}" class="text-decoration-none" th:text="${tx.txnId}">TXN-1001</a>
+                                </td>
+                                <td class="font-monospace small">
+                                    <a th:href="@{/accounts/{id}(id=${tx.accountId})}" class="text-decoration-none" th:text="${tx.accountId}">ACCT-1001</a>
+                                </td>
                                 <td>
                                     <span class="badge bg-light text-dark border py-0 px-1" style="font-size: 0.7rem;" th:text="${tx.txnType}">TRANSFER</span>
                                 </td>

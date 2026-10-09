@@ -28,13 +28,15 @@
                         <th>Currency</th>
                         <th>Current Balance</th>
                         <th>Status</th>
-                        <th>Provisioned</th>
+                        <th>Provisioned (PHT)</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     <tr th:each="a : ${accounts}">
-                        <td class="font-monospace fw-bold" th:text="${a.accountId}">ACCT-1001</td>
+                        <td class="font-monospace fw-bold">
+                            <a th:href="@{/accounts/{id}(id=${a.accountId})}" class="text-decoration-none" th:text="${a.accountId}">ACCT-1001</a>
+                        </td>
                         <td>
                             <a th:href="@{/admin/customers/{id}(id=${a.customerId})}" class="font-monospace text-decoration-none small" th:text="${a.customerId}"></a>
                         </td>
@@ -52,22 +54,24 @@
                                     <i class="bi bi-journal-text"></i>
                                 </a>
 
-                                <!-- Freeze / Unfreeze toggle forms -->
-                                <form th:if="${a.accountStatus.name() == 'ACTIVE'}"
-                                      th:action="@{/admin/accounts/{id}/status(id=${a.accountId})}" method="post">
-                                    <input type="hidden" name="status" value="FROZEN"/>
-                                    <button type="submit" class="btn btn-sm btn-outline-warning py-0 px-2" title="Freeze account">
-                                        <i class="bi bi-pause-circle"></i> Freeze
-                                    </button>
-                                </form>
+                                <!-- Freeze / Unfreeze toggle buttons triggering confirmation modal -->
+                                <button th:if="${a.accountStatus.name() == 'ACTIVE'}" type="button"
+                                        class="btn btn-sm btn-outline-warning py-0 px-2"
+                                        th:data-account-id="${a.accountId}"
+                                        th:data-balance="${a.formattedBalance}"
+                                        onclick="openAdminFreezeModal(this.getAttribute('data-account-id'), this.getAttribute('data-balance'))"
+                                        title="Freeze account">
+                                    <i class="bi bi-pause-circle"></i> Freeze
+                                </button>
 
-                                <form th:if="${a.accountStatus.name() == 'FROZEN'}"
-                                      th:action="@{/admin/accounts/{id}/status(id=${a.accountId})}" method="post">
-                                    <input type="hidden" name="status" value="ACTIVE"/>
-                                    <button type="submit" class="btn btn-sm btn-outline-success py-0 px-2" title="Unfreeze account">
-                                        <i class="bi bi-play-circle"></i> Unfreeze
-                                    </button>
-                                </form>
+                                <button th:if="${a.accountStatus.name() == 'FROZEN'}" type="button"
+                                        class="btn btn-sm btn-outline-success py-0 px-2"
+                                        th:data-account-id="${a.accountId}"
+                                        th:data-balance="${a.formattedBalance}"
+                                        onclick="openAdminUnfreezeModal(this.getAttribute('data-account-id'), this.getAttribute('data-balance'))"
+                                        title="Unfreeze account">
+                                    <i class="bi bi-play-circle"></i> Unfreeze
+                                </button>
                             </div>
                         </td>
                     </tr>
@@ -157,9 +161,122 @@
 })();
 </script>
 
+<!-- Admin Freeze Account Confirmation Modal -->
+<div class="modal fade" id="adminFreezeAccountModal" tabindex="-1" aria-labelledby="adminFreezeModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-warning shadow">
+            <form id="adminFreezeForm" method="post" action="">
+                <input type="hidden" name="status" value="FROZEN"/>
+                <div class="modal-header bg-warning-subtle text-warning-emphasis">
+                    <h5 class="modal-title fw-bold" id="adminFreezeModalLabel">
+                        <i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>Confirm Account Freeze
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-warning d-flex align-items-start gap-2 mb-3">
+                        <i class="bi bi-shield-slash-fill fs-4 mt-1"></i>
+                        <div>
+                            <strong>Critical Governance Action:</strong> Freezing this account will immediately halt all outbound payments, debit mutations, transfers, and card authorizations for this account.
+                        </div>
+                    </div>
+                    <div class="bg-light p-3 rounded mb-3 border">
+                        <div class="d-flex justify-content-between mb-1 small">
+                            <span class="text-muted">Target Account ID:</span>
+                            <span class="font-monospace fw-bold" id="adminFreezeModalAcctId"></span>
+                        </div>
+                        <div class="d-flex justify-content-between small">
+                            <span class="text-muted">Current Ledger Balance:</span>
+                            <span class="font-monospace fw-bold" id="adminFreezeModalBalance"></span>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="adminFreezeStandardReason" class="form-label small fw-semibold">Administrative Reason Category</label>
+                        <select class="form-select form-select-sm" id="adminFreezeStandardReason" onchange="document.getElementById('adminFreezeReasonInput').value = this.value">
+                            <option value="Suspected Fraud / AML Risk Hold" selected>Suspected Fraud / AML Risk Hold</option>
+                            <option value="AMLA Regulatory / Court Hold Order">AMLA Regulatory / Court Hold Order</option>
+                            <option value="Customer Security / Stolen Device Report">Customer Security / Stolen Device Report</option>
+                            <option value="Administrative Risk &amp; Reconciliation Review">Administrative Risk &amp; Reconciliation Review</option>
+                            <option value="Account Owner KYC Discrepancy">Account Owner KYC Discrepancy</option>
+                        </select>
+                    </div>
+                    <div class="mb-2">
+                        <label for="adminFreezeReasonInput" class="form-label small fw-semibold">Audit Justification Notes</label>
+                        <textarea class="form-control form-control-sm" id="adminFreezeReasonInput" name="reason" rows="2" required>Suspected Fraud / AML Risk Hold</textarea>
+                        <div class="form-text small">This reason will be recorded in the immutable audit ledger.</div>
+                    </div>
+                </div>
+                <div class="modal-footer py-2 bg-light">
+                    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-sm btn-danger px-3">
+                        <i class="bi bi-snow me-1"></i> Confirm &amp; Freeze Account
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Admin Unfreeze Account Confirmation Modal -->
+<div class="modal fade" id="adminUnfreezeAccountModal" tabindex="-1" aria-labelledby="adminUnfreezeModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-success shadow">
+            <form id="adminUnfreezeForm" method="post" action="">
+                <input type="hidden" name="status" value="ACTIVE"/>
+                <div class="modal-header bg-success-subtle text-success-emphasis">
+                    <h5 class="modal-title fw-bold" id="adminUnfreezeModalLabel">
+                        <i class="bi bi-check-circle-fill text-success me-2"></i>Confirm Account Unfreeze
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info d-flex align-items-start gap-2 mb-3">
+                        <i class="bi bi-info-circle-fill fs-4 mt-1"></i>
+                        <div>
+                            Unfreezing will restore full transactional capabilities. Outbound transfers, debit mutations, and card payments will be permitted immediately.
+                        </div>
+                    </div>
+                    <div class="bg-light p-3 rounded mb-2 border">
+                        <div class="d-flex justify-content-between mb-1 small">
+                            <span class="text-muted">Target Account ID:</span>
+                            <span class="font-monospace fw-bold" id="adminUnfreezeModalAcctId"></span>
+                        </div>
+                        <div class="d-flex justify-content-between small">
+                            <span class="text-muted">Current Ledger Balance:</span>
+                            <span class="font-monospace fw-bold" id="adminUnfreezeModalBalance"></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer py-2 bg-light">
+                    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-sm btn-success px-3">
+                        <i class="bi bi-sun me-1"></i> Confirm &amp; Restore to Active
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <div th:replace="~{fragments/layout :: footer}"></div>
 
 <script>
+function openAdminFreezeModal(acctId, balance) {
+    document.getElementById("adminFreezeForm").action = "/admin/accounts/" + encodeURIComponent(acctId) + "/status";
+    document.getElementById("adminFreezeModalAcctId").textContent = acctId;
+    document.getElementById("adminFreezeModalBalance").textContent = balance || "₱0.00";
+    document.getElementById("adminFreezeStandardReason").value = "Suspected Fraud / AML Risk Hold";
+    document.getElementById("adminFreezeReasonInput").value = "Suspected Fraud / AML Risk Hold";
+    new bootstrap.Modal(document.getElementById("adminFreezeAccountModal")).show();
+}
+
+function openAdminUnfreezeModal(acctId, balance) {
+    document.getElementById("adminUnfreezeForm").action = "/admin/accounts/" + encodeURIComponent(acctId) + "/status";
+    document.getElementById("adminUnfreezeModalAcctId").textContent = acctId;
+    document.getElementById("adminUnfreezeModalBalance").textContent = balance || "₱0.00";
+    new bootstrap.Modal(document.getElementById("adminUnfreezeAccountModal")).show();
+}
+
 function filterAccounts() {
     const query = document.getElementById('acctSearch').value.toLowerCase();
     const rows = document.querySelectorAll('#acctTable tbody tr');

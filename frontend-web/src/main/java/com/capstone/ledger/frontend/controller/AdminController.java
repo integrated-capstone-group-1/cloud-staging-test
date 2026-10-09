@@ -408,8 +408,19 @@ public class AdminController {
     @PostMapping("/admin/accounts/{accountId}/status")
     public String toggleAccountStatus(@PathVariable("accountId") String accountId,
                                       @RequestParam AccountStatus status,
+                                      @RequestParam(value = "reason", required = false) String reason,
+                                      HttpSession session,
                                       RedirectAttributes redirectAttributes) {
-        bankingClient.updateAccountStatus(accountId, status);
+        UserSession user = (UserSession) session.getAttribute(SessionAuthInterceptor.SESSION_USER);
+        if (user != null && user.isAdmin()) {
+            if (status == AccountStatus.FROZEN) {
+                adminPortalService.freezeAccount(accountId, user.getEmail(), reason);
+            } else {
+                adminPortalService.unfreezeAccount(accountId, user.getEmail());
+            }
+        } else {
+            bankingClient.updateAccountStatus(accountId, status);
+        }
         redirectAttributes.addFlashAttribute("successMessage",
                 "Account " + accountId + " status updated to " + status.getDisplayName());
         return "redirect:/admin/accounts";

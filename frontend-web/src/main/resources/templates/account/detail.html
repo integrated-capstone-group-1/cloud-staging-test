@@ -43,23 +43,17 @@
                 <a th:href="@{/admin/customers/{id}(id=${account.customerId})}" class="btn btn-outline-info btn-sm">
                     <i class="bi bi-person-badge me-1"></i> Customer 360
                 </a>
-                <!-- Freeze / Unfreeze Action Button -->
-                <form th:if="${account.accountStatus.name() == 'ACTIVE'}"
-                      th:action="@{/admin/accounts/{id}/freeze(id=${account.accountId})}" method="post" class="d-inline">
-                    <input type="hidden" name="redirectAcctId" th:value="${account.accountId}"/>
-                    <button type="submit" class="btn btn-outline-warning btn-sm"
-                            onclick="return confirm('Freeze this account? All balance mutations and outbound payments will be halted.');">
-                        <i class="bi bi-snow me-1"></i> Freeze Account
-                    </button>
-                </form>
-                <form th:if="${account.accountStatus.name() == 'FROZEN'}"
-                      th:action="@{/admin/accounts/{id}/unfreeze(id=${account.accountId})}" method="post" class="d-inline">
-                    <input type="hidden" name="redirectAcctId" th:value="${account.accountId}"/>
-                    <button type="submit" class="btn btn-outline-success btn-sm"
-                            onclick="return confirm('Unfreeze this account and restore to active status?');">
-                        <i class="bi bi-sun me-1"></i> Unfreeze Account
-                    </button>
-                </form>
+                <!-- Freeze / Unfreeze Action Button triggering Enterprise Modal -->
+                <button th:if="${account.accountStatus.name() == 'ACTIVE'}" type="button"
+                        class="btn btn-outline-warning btn-sm"
+                        data-bs-toggle="modal" data-bs-target="#freezeAccountModal">
+                    <i class="bi bi-snow me-1"></i> Freeze Account
+                </button>
+                <button th:if="${account.accountStatus.name() == 'FROZEN'}" type="button"
+                        class="btn btn-outline-success btn-sm"
+                        data-bs-toggle="modal" data-bs-target="#unfreezeAccountModal">
+                    <i class="bi bi-sun me-1"></i> Unfreeze Account
+                </button>
                 <a href="/admin/accounts" class="btn btn-outline-secondary btn-sm">
                     <i class="bi bi-arrow-left me-1"></i> Accounts Registry
                 </a>
@@ -81,7 +75,7 @@
             <table class="table table-sm table-hover">
                 <thead>
                     <tr>
-                        <th>Timestamp</th>
+                        <th>Timestamp (PHT)</th>
                         <th>Transaction ID</th>
                         <th>Mutation ID</th>
                         <th>Type</th>
@@ -207,6 +201,107 @@
 
 })();
 </script>
+
+<!-- Freeze Account Confirmation Modal -->
+<div class="modal fade" id="freezeAccountModal" tabindex="-1" aria-labelledby="freezeAccountModalLabel" aria-hidden="true" th:if="${user != null && user.admin}">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-warning shadow">
+            <form th:action="@{/admin/accounts/{id}/freeze(id=${account.accountId})}" method="post">
+                <input type="hidden" name="redirectAcctId" th:value="${account.accountId}"/>
+                <div class="modal-header bg-warning-subtle text-warning-emphasis">
+                    <h5 class="modal-title fw-bold" id="freezeAccountModalLabel">
+                        <i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>Confirm Account Freeze
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-warning d-flex align-items-start gap-2 mb-3">
+                        <i class="bi bi-shield-slash-fill fs-4 mt-1"></i>
+                        <div>
+                            <strong>Critical Governance Action:</strong> Freezing this account will immediately halt all outbound payments, debit mutations, transfers, and card authorizations for this account.
+                        </div>
+                    </div>
+                    <div class="bg-light p-3 rounded mb-3 border">
+                        <div class="d-flex justify-content-between mb-1 small">
+                            <span class="text-muted">Target Account:</span>
+                            <span class="font-monospace fw-bold" th:text="${account.accountNumber != null ? account.accountNumber + ' (' + account.accountId + ')' : account.accountId}"></span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-1 small">
+                            <span class="text-muted">Account Type &amp; Currency:</span>
+                            <span class="fw-semibold" th:text="${account.accountType.displayName + ' · ' + account.currencyCode}"></span>
+                        </div>
+                        <div class="d-flex justify-content-between small">
+                            <span class="text-muted">Current Ledger Balance:</span>
+                            <span class="font-monospace fw-bold" th:text="${account.formattedBalance}"></span>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="freezeStandardReason" class="form-label small fw-semibold">Administrative Reason Category</label>
+                        <select class="form-select form-select-sm" id="freezeStandardReason" onchange="document.getElementById('freezeReasonInput').value = this.value">
+                            <option value="Suspected Fraud / AML Risk Hold" selected>Suspected Fraud / AML Risk Hold</option>
+                            <option value="AMLA Regulatory / Court Hold Order">AMLA Regulatory / Court Hold Order</option>
+                            <option value="Customer Security / Stolen Device Report">Customer Security / Stolen Device Report</option>
+                            <option value="Administrative Risk &amp; Reconciliation Review">Administrative Risk &amp; Reconciliation Review</option>
+                            <option value="Account Owner KYC Discrepancy">Account Owner KYC Discrepancy</option>
+                        </select>
+                    </div>
+                    <div class="mb-2">
+                        <label for="freezeReasonInput" class="form-label small fw-semibold">Audit Justification Notes</label>
+                        <textarea class="form-control form-control-sm" id="freezeReasonInput" name="reason" rows="2" required>Suspected Fraud / AML Risk Hold</textarea>
+                        <div class="form-text small">This reason will be permanently recorded in the immutable audit ledger.</div>
+                    </div>
+                </div>
+                <div class="modal-footer py-2 bg-light">
+                    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-sm btn-danger px-3">
+                        <i class="bi bi-snow me-1"></i> Confirm &amp; Freeze Account
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Unfreeze Account Confirmation Modal -->
+<div class="modal fade" id="unfreezeAccountModal" tabindex="-1" aria-labelledby="unfreezeAccountModalLabel" aria-hidden="true" th:if="${user != null && user.admin}">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-success shadow">
+            <form th:action="@{/admin/accounts/{id}/unfreeze(id=${account.accountId})}" method="post">
+                <input type="hidden" name="redirectAcctId" th:value="${account.accountId}"/>
+                <div class="modal-header bg-success-subtle text-success-emphasis">
+                    <h5 class="modal-title fw-bold" id="unfreezeAccountModalLabel">
+                        <i class="bi bi-check-circle-fill text-success me-2"></i>Confirm Account Unfreeze
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info d-flex align-items-start gap-2 mb-3">
+                        <i class="bi bi-info-circle-fill fs-4 mt-1"></i>
+                        <div>
+                            Unfreezing will restore full transactional capabilities. Outbound transfers, debit mutations, and card payments will be permitted immediately.
+                        </div>
+                    </div>
+                    <div class="bg-light p-3 rounded mb-2 border">
+                        <div class="d-flex justify-content-between mb-1 small">
+                            <span class="text-muted">Target Account:</span>
+                            <span class="font-monospace fw-bold" th:text="${account.accountNumber != null ? account.accountNumber + ' (' + account.accountId + ')' : account.accountId}"></span>
+                        </div>
+                        <div class="d-flex justify-content-between small">
+                            <span class="text-muted">Current Ledger Balance:</span>
+                            <span class="font-monospace fw-bold" th:text="${account.formattedBalance}"></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer py-2 bg-light">
+                    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-sm btn-success px-3">
+                        <i class="bi bi-sun me-1"></i> Confirm &amp; Restore to Active
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 
 <div th:replace="~{fragments/layout :: footer}"></div>
 

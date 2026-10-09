@@ -84,11 +84,12 @@ public class AdminPortalController {
     public Object freezeAccount(@PathVariable("id") String accountId,
                                 @RequestParam(value = "redirectCustId", required = false) String redirectCustId,
                                 @RequestParam(value = "redirectAcctId", required = false) String redirectAcctId,
+                                @RequestParam(value = "reason", required = false) String reason,
                                 HttpServletRequest request,
                                 HttpSession session,
                                 RedirectAttributes redirectAttributes) {
         UserSession user = requireAdmin(session);
-        adminPortalService.freezeAccount(accountId, user.getEmail());
+        adminPortalService.freezeAccount(accountId, user.getEmail(), reason);
 
         if (isJsonRequest(request)) {
             return ResponseEntity.ok(Map.of(

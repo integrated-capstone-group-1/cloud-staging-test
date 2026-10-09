@@ -27,7 +27,7 @@
                 <thead>
                     <tr class="small text-muted">
                         <th>Audit ID</th>
-                        <th>Timestamp</th>
+                        <th>Timestamp (PHT)</th>
                         <th>Action</th>
                         <th>Operator</th>
                         <th>Resource Target</th>
@@ -43,7 +43,10 @@
                         </td>
                         <td class="small fw-semibold" th:text="${log.performedBy}">admin@ledgerbank.com</td>
                         <td class="small font-monospace">
-                            <span class="badge bg-light text-dark border" th:text="${log.targetResource + ':' + log.targetId}">ACCOUNT:ACCT-1001-PHP</span>
+                            <a th:if="${log.targetResource == 'ACCOUNT'}" th:href="@{/accounts/{id}(id=${log.targetId})}" class="badge bg-light text-primary border text-decoration-none" th:text="${log.targetResource + ':' + log.targetId}">ACCOUNT:ACCT-1001-PHP</a>
+                            <a th:if="${log.targetResource == 'CUSTOMER'}" th:href="@{/admin/customers/{id}(id=${log.targetId})}" class="badge bg-light text-primary border text-decoration-none" th:text="${log.targetResource + ':' + log.targetId}">CUSTOMER:CUST-1001</a>
+                            <a th:if="${log.targetResource == 'TRANSACTION'}" th:href="@{/transactions/receipt/{id}(id=${log.targetId})}" class="badge bg-light text-primary border text-decoration-none" th:text="${log.targetResource + ':' + log.targetId}">TRANSACTION:TXN-1001</a>
+                            <span th:if="${log.targetResource != 'ACCOUNT' and log.targetResource != 'CUSTOMER' and log.targetResource != 'TRANSACTION'}" class="badge bg-light text-dark border" th:text="${log.targetResource + ':' + log.targetId}">SYSTEM:PORTAL</span>
                         </td>
                         <td class="small text-muted" th:text="${log.details}">Admin enforced freeze</td>
                     </tr>

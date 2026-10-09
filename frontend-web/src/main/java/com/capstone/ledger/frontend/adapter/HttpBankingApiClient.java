@@ -30,6 +30,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Optional;
 
@@ -400,8 +401,86 @@ public class HttpBankingApiClient implements BankingApiClient {
         }
     }
 
+    private TransactionView mapTransactionHistoryRes(TransactionHistoryRes res, String targetAccountId) {
+        TransactionView tv = new TransactionView();
+        String tid = res.transactionId() != null ? res.transactionId() : "";
+        tv.setTxnId(tid);
+        tv.setMutationId("MUT-" + (tid.length() >= 8 ? tid.substring(0, 8) : tid));
+        tv.setAmount(res.amount() != null ? res.amount() : BigDecimal.ZERO);
+        tv.setCurrencyCode(res.currency() != null ? res.currency() : "PHP");
+
+        if (targetAccountId != null && !targetAccountId.isBlank()) {
+            tv.setAccountId(targetAccountId);
+            if (targetAccountId.equalsIgnoreCase(res.debitAccountId())) {
+                tv.setDirection(MutationDirection.DEBIT);
+                tv.setCounterpartyAccountId(res.creditAccountId());
+            } else if (targetAccountId.equalsIgnoreCase(res.creditAccountId())) {
+                tv.setDirection(MutationDirection.CREDIT);
+                tv.setCounterpartyAccountId(res.debitAccountId());
+            } else {
+                tv.setDirection(MutationDirection.DEBIT);
+                tv.setCounterpartyAccountId(res.creditAccountId());
+            }
+        } else {
+            if (res.debitAccountId() != null && !res.debitAccountId().isBlank()) {
+                tv.setAccountId(res.debitAccountId());
+                tv.setCounterpartyAccountId(res.creditAccountId());
+                tv.setDirection(MutationDirection.DEBIT);
+            } else {
+                tv.setAccountId(res.creditAccountId() != null ? res.creditAccountId() : "");
+                tv.setDirection(MutationDirection.CREDIT);
+            }
+        }
+
+        String txnTypeStr = res.txnType() != null ? res.txnType() : "TRANSFER";
+        try {
+            tv.setTxnType(TransactionType.valueOf(txnTypeStr.toUpperCase()));
+        } catch (Exception e) {
+            tv.setTxnType(TransactionType.TRANSFER);
+        }
+
+        String status = res.status() != null ? res.status() : "";
+        if ("FAILED".equalsIgnoreCase(status) || "REVERSED".equalsIgnoreCase(status)) {
+            tv.setAuditState(AuditState.ROLLED_BACK);
+        } else if ("PENDING".equalsIgnoreCase(status) || "INITIATED".equalsIgnoreCase(status)) {
+            tv.setAuditState(AuditState.PENDING);
+        } else {
+            tv.setAuditState(AuditState.COMMITTED);
+        }
+
+        if ("Y".equalsIgnoreCase(res.isCrossCurrency()) || (res.destCurrencyCode() != null && !res.destCurrencyCode().equalsIgnoreCase(tv.getCurrencyCode()))) {
+            tv.setCrossCurrency(true);
+            tv.setFxRate(res.fxRate());
+            tv.setDestAmount(res.destAmount());
+            tv.setDestCurrencyCode(res.destCurrencyCode());
+        }
+
+        tv.setTimestamp(parseAuditTimestamp(res.createdAt()));
+        return tv;
+    }
+
     @Override
     public List<TransactionView> getTransactionsByAccountId(String accountId) {
+        Map<String, TransactionView> deduplicated = new LinkedHashMap<>();
+
+        // 1. Query Oracle TRANSACTION_MASTER via Transaction Service
+        try {
+            PageRes<TransactionHistoryRes> response = restClient.get()
+                    .uri("/api/v1/transactions?accountId={accountId}&size=100", accountId)
+                    .retrieve()
+                    .body(new ParameterizedTypeReference<PageRes<TransactionHistoryRes>>() {});
+
+            if (response != null && response.content() != null) {
+                for (TransactionHistoryRes r : response.content()) {
+                    TransactionView tv = mapTransactionHistoryRes(r, accountId);
+                    deduplicated.put(tv.getTxnId(), tv);
+                }
+            }
+        } catch (Exception ex) {
+            log.warn("Failed to fetch Oracle master transactions for account {}: {}", accountId, ex.getMessage());
+        }
+
+        // 2. Query PostgreSQL LEDGER_MUTATION_AUDIT to enrich/supplement
         try {
             String currency = getAccountById(accountId).map(AccountView::getCurrencyCode).orElse("PHP");
 
@@ -411,85 +490,114 @@ public class HttpBankingApiClient implements BankingApiClient {
                     .body(new ParameterizedTypeReference<ApiResponseDto<List<Map<String, Object>>>>() {});
 
             if (response != null && response.getData() != null) {
-                return response.getData().stream().map(m -> {
-                    TransactionView tv = new TransactionView();
+                for (Map<String, Object> m : response.getData()) {
                     String tid = m.get("txnId") != null ? m.get("txnId").toString() : "";
-                    tv.setTxnId(tid);
-                    tv.setMutationId("MUT-" + (tid.length() >= 8 ? tid.substring(0, 8) : tid));
-                    tv.setAccountId(m.get("accountId") != null ? m.get("accountId").toString() : accountId);
-                    tv.setCurrencyCode(currency);
+                    if (!deduplicated.containsKey(tid)) {
+                        TransactionView tv = new TransactionView();
+                        tv.setTxnId(tid);
+                        tv.setMutationId("MUT-" + (tid.length() >= 8 ? tid.substring(0, 8) : tid));
+                        tv.setAccountId(m.get("accountId") != null ? m.get("accountId").toString() : accountId);
+                        tv.setCurrencyCode(currency);
 
-                    String txnTypeStr = m.get("txnType") != null ? m.get("txnType").toString() : "TRANSFER";
-                    try {
-                        tv.setTxnType(TransactionType.valueOf(txnTypeStr.toUpperCase()));
-                    } catch (Exception e) {
-                        tv.setTxnType(TransactionType.TRANSFER);
-                    }
-
-                    String mutType = m.get("mutationType") != null ? m.get("mutationType").toString() : "DEBIT";
-                    tv.setDirection("CREDIT".equalsIgnoreCase(mutType) ? MutationDirection.CREDIT : MutationDirection.DEBIT);
-
-                    if (m.get("mutationAmount") != null) {
-                        tv.setAmount(new BigDecimal(m.get("mutationAmount").toString()));
-                    }
-
-                    String auditStateStr = m.get("auditState") != null ? m.get("auditState").toString() : "COMMITTED";
-                    try {
-                        tv.setAuditState(AuditState.valueOf(auditStateStr.toUpperCase()));
-                    } catch (Exception e) {
-                        tv.setAuditState(AuditState.COMMITTED);
-                    }
-
-                    if (m.get("createdAt") != null) {
+                        String txnTypeStr = m.get("txnType") != null ? m.get("txnType").toString() : "TRANSFER";
                         try {
-                            tv.setTimestamp(LocalDateTime.ofInstant(java.time.Instant.parse(m.get("createdAt").toString()), java.time.ZoneId.systemDefault()));
-                        } catch (Exception ignored) {
-                            tv.setTimestamp(LocalDateTime.now());
+                            tv.setTxnType(TransactionType.valueOf(txnTypeStr.toUpperCase()));
+                        } catch (Exception e) {
+                            tv.setTxnType(TransactionType.TRANSFER);
                         }
-                    } else {
-                        tv.setTimestamp(LocalDateTime.now());
+
+                        String mutType = m.get("mutationType") != null ? m.get("mutationType").toString() : "DEBIT";
+                        tv.setDirection("CREDIT".equalsIgnoreCase(mutType) ? MutationDirection.CREDIT : MutationDirection.DEBIT);
+
+                        if (m.get("mutationAmount") != null) {
+                            tv.setAmount(new BigDecimal(m.get("mutationAmount").toString()));
+                        }
+
+                        String auditStateStr = m.get("auditState") != null ? m.get("auditState").toString() : "COMMITTED";
+                        try {
+                            tv.setAuditState(AuditState.valueOf(auditStateStr.toUpperCase()));
+                        } catch (Exception e) {
+                            tv.setAuditState(AuditState.COMMITTED);
+                        }
+
+                        tv.setTimestamp(parseAuditTimestamp(m.get("createdAt")));
+                        deduplicated.put(tid, tv);
                     }
-                    return tv;
-                }).sorted(Comparator.comparing(TransactionView::getTimestamp).reversed()).toList();
+                }
             }
         } catch (Exception ex) {
-            log.warn("Failed to fetch audits for account {}: {}", accountId, ex.getMessage());
+            log.warn("Failed to fetch ledger audit for account {}: {}", accountId, ex.getMessage());
         }
-        return Collections.emptyList();
+
+        return deduplicated.values().stream()
+                .sorted(Comparator.comparing(TransactionView::getTimestamp).reversed())
+                .toList();
     }
 
     private LocalDateTime parseAuditTimestamp(Object value) {
         if (value == null) {
-            return LocalDateTime.now();
+            return LocalDateTime.now(BANKING_ZONE);
         }
 
-        String timestamp = value.toString();
+        String timestamp = value.toString().trim();
         try {
             return Instant.parse(timestamp)
-                    .atZone(ZoneId.systemDefault())
+                    .atZone(BANKING_ZONE)
                     .toLocalDateTime();
-        } catch (java.time.format.DateTimeParseException ignored) {
+        } catch (Exception ignored) {
             try {
-                return LocalDateTime.parse(timestamp);
-            } catch (java.time.format.DateTimeParseException invalidTimestamp) {
-                log.warn("Invalid ledger audit timestamp: {}", timestamp);
-                return LocalDateTime.now();
+                return OffsetDateTime.parse(timestamp)
+                        .atZoneSameInstant(BANKING_ZONE)
+                        .toLocalDateTime();
+            } catch (Exception ignored2) {
+                try {
+                    // Raw ISO string without offset emitted by UTC backend database
+                    return LocalDateTime.parse(timestamp)
+                            .atZone(java.time.ZoneOffset.UTC)
+                            .withZoneSameInstant(BANKING_ZONE)
+                            .toLocalDateTime();
+                } catch (Exception invalidTimestamp) {
+                    log.warn("Invalid ledger audit timestamp: {}", timestamp);
+                    return LocalDateTime.now(BANKING_ZONE);
+                }
             }
         }
     }
 
     @Override
     public List<TransactionView> getAllTransactions() {
+        Map<String, TransactionView> deduplicated = new LinkedHashMap<>();
+
+        // 1. Query Oracle Master via Transaction Service (top 100 recent)
+        try {
+            PageRes<TransactionHistoryRes> response = restClient.get()
+                    .uri("/api/v1/transactions?size=100")
+                    .retrieve()
+                    .body(new ParameterizedTypeReference<PageRes<TransactionHistoryRes>>() {});
+
+            if (response != null && response.content() != null) {
+                for (TransactionHistoryRes r : response.content()) {
+                    TransactionView tv = mapTransactionHistoryRes(r, null);
+                    deduplicated.put(tv.getTxnId(), tv);
+                }
+            }
+        } catch (Exception ex) {
+            log.warn("Failed to fetch global transactions from gateway: {}", ex.getMessage());
+        }
+
+        // 2. Supplement with any additional account ledger entries
         try {
             List<AccountView> accounts = getAllAccounts();
-            List<TransactionView> all = new java.util.ArrayList<>();
             for (AccountView a : accounts) {
-                all.addAll(getTransactionsByAccountId(a.getAccountId()));
+                for (TransactionView tv : getTransactionsByAccountId(a.getAccountId())) {
+                    deduplicated.putIfAbsent(tv.getTxnId(), tv);
+                }
             }
-            all.sort((x, y) -> y.getTimestamp().compareTo(x.getTimestamp()));
-            return all;
         } catch (Exception ignored) {}
-        return Collections.emptyList();
+
+        return deduplicated.values().stream()
+                .sorted(Comparator.comparing(TransactionView::getTimestamp).reversed())
+                .toList();
     }
 
     @Override
@@ -503,7 +611,7 @@ public class HttpBankingApiClient implements BankingApiClient {
             if (response == null || response.getData() == null || response.getData().isEmpty()) {
                 // Short wait and retry once to accommodate distributed ledger replication
                 try {
-                    Thread.sleep(400);
+                    Thread.sleep(300);
                 } catch (InterruptedException ignored) {}
                 response = restClient.get()
                         .uri("/api/v1/ledger/audit/{txnId}", txnId)
@@ -587,6 +695,22 @@ public class HttpBankingApiClient implements BankingApiClient {
         } catch (Exception ex) {
             log.warn("Failed to fetch transaction audit for {}: {}", txnId, ex.getMessage());
         }
+
+        // Direct fallback: Fetch from Oracle TRANSACTION_MASTER via Transaction Service
+        try {
+            TransactionHistoryRes res = restClient.get()
+                    .uri("/api/v1/transactions/{id}", txnId)
+                    .retrieve()
+                    .body(TransactionHistoryRes.class);
+
+            if (res != null && res.transactionId() != null) {
+                TransactionView tv = mapTransactionHistoryRes(res, res.debitAccountId());
+                return Optional.of(tv);
+            }
+        } catch (Exception ex) {
+            log.warn("Failed to fetch transaction details from Oracle master for {}: {}", txnId, ex.getMessage());
+        }
+
         return Optional.empty();
     }
 
@@ -679,8 +803,8 @@ public class HttpBankingApiClient implements BankingApiClient {
             if (response != null && response.getData() != null) {
                 return response.getData().stream().map(n -> {
                     LocalDateTime sentAt = n.createdAt() != null
-                            ? n.createdAt().toLocalDateTime()
-                            : LocalDateTime.now();
+                            ? n.createdAt().atZoneSameInstant(BANKING_ZONE).toLocalDateTime()
+                            : LocalDateTime.now(BANKING_ZONE);
                     boolean isRead = "READ".equalsIgnoreCase(n.status());
                     return new NotificationView(
                             n.notifId(),
@@ -758,10 +882,10 @@ public class HttpBankingApiClient implements BankingApiClient {
         view.setTotalTxnChecked(res.totalChecked());
         view.setTotalMatched(res.totalMatched());
         view.setTotalExceptions(res.totalExceptions());
-        view.setWindowStart(res.windowStart() != null ? res.windowStart().toLocalDateTime() : null);
-        view.setWindowEnd(res.windowEnd() != null ? res.windowEnd().toLocalDateTime() : null);
-        view.setRunStartedAt(res.startedAt() != null ? res.startedAt().toLocalDateTime() : null);
-        view.setRunCompletedAt(res.completedAt() != null ? res.completedAt().toLocalDateTime() : null);
+        view.setWindowStart(res.windowStart() != null ? res.windowStart().atZoneSameInstant(BANKING_ZONE).toLocalDateTime() : null);
+        view.setWindowEnd(res.windowEnd() != null ? res.windowEnd().atZoneSameInstant(BANKING_ZONE).toLocalDateTime() : null);
+        view.setRunStartedAt(res.startedAt() != null ? res.startedAt().atZoneSameInstant(BANKING_ZONE).toLocalDateTime() : null);
+        view.setRunCompletedAt(res.completedAt() != null ? res.completedAt().atZoneSameInstant(BANKING_ZONE).toLocalDateTime() : null);
 
         if (res.results() != null && !res.results().isEmpty()) {
             List<ReconciliationResultView> resultViews = res.results().stream()
@@ -778,9 +902,9 @@ public class HttpBankingApiClient implements BankingApiClient {
         view.setRunId(res.runId() != null ? res.runId().toUpperCase() : "N/A");
         view.setTxnId(res.txnId());
         view.setAccountId(res.accountId());
-        view.setTransactionDateTime(res.txnCompletedAt() != null ? res.txnCompletedAt().toLocalDateTime()
-            : res.ledgerPostedAt() != null ? res.ledgerPostedAt().toLocalDateTime()
-            : res.createdAt() != null ? res.createdAt().toLocalDateTime() : null);
+        view.setTransactionDateTime(res.txnCompletedAt() != null ? res.txnCompletedAt().atZoneSameInstant(BANKING_ZONE).toLocalDateTime()
+            : res.ledgerPostedAt() != null ? res.ledgerPostedAt().atZoneSameInstant(BANKING_ZONE).toLocalDateTime()
+            : res.createdAt() != null ? res.createdAt().atZoneSameInstant(BANKING_ZONE).toLocalDateTime() : null);
         view.setReconStatus(res.reconStatus());
         view.setExceptionType(res.exceptionType());
         view.setExpectedCurrencyCode(res.expectedCurrencyCode());
@@ -790,7 +914,7 @@ public class HttpBankingApiClient implements BankingApiClient {
         view.setVarianceAmount(res.varianceAmount() != null ? res.varianceAmount() : BigDecimal.ZERO);
         view.setPostingLagSeconds(res.postingLagSeconds() != null ? res.postingLagSeconds() : 0);
         view.setSeverity(res.severity() != null ? res.severity() : "LOW");
-        view.setCreatedAt(res.createdAt() != null ? res.createdAt().toLocalDateTime() : null);
+        view.setCreatedAt(res.createdAt() != null ? res.createdAt().atZoneSameInstant(BANKING_ZONE).toLocalDateTime() : null);
         return view;
     }
 
@@ -875,7 +999,7 @@ public class HttpBankingApiClient implements BankingApiClient {
                 res.currencyCode() != null ? res.currencyCode() : "PHP",
                 status,
                 res.balanceAmount() != null ? res.balanceAmount() : BigDecimal.ZERO,
-                res.createdAt() != null ? res.createdAt() : LocalDateTime.now()
+                parseAuditTimestamp(res.createdAt())
         );
         view.setHeldAmount(res.heldAmount() != null ? res.heldAmount() : BigDecimal.ZERO);
         view.setAccountNumber(res.accountNumber());
