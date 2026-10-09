@@ -222,31 +222,56 @@ docker compose up -d redis api-gateway login-service accounts-service transactio
 
 #### Step-by-Step Execution:
 * **SEAM-RUS-01: Gateway JWT Fast-Path Validation & Header Injection Seam (`DIG-8`, `DIG-25`)**
-  * *Step 1:* Send authenticated request through Gateway:
+  * *Step 1:* Run automated Maven seam test:
+    ```bash
+    ./mvnw test -pl api-gateway "-Dtest=GatewayPerimeterSecurityIntegrationTest#seamRus01_jwtFastPathAndHeaderInjection"
+    ```
+    Live curl equivalent:
     ```bash
     curl -s http://localhost:8080/api/v1/accounts/pockets \
       -H "Authorization: Bearer <valid_customer_jwt>"
     ```
-  * *Step 2:* Verify Gateway forwards request to `accounts-service:8083`.
-  * *Step 3:* Verify `accounts-service` receives forwarded request with verified header `X-Cust-Id: cust-user-001` injected by Gateway.
+  * *Step 2:* Verify Gateway strips any inbound untrusted headers (`X-Cust-Id`, `X-Cust-Role`, `X-Cust-Email`) and validates JWT signature.
+  * *Step 3:* Verify Gateway forwards request to downstream service with cryptographically verified header `X-Cust-Id: cust-user-001` injected.
 * **SEAM-RUS-02: Token Blacklist Interception Filter Seam (`DIG-8`)**
-  * *Step 1:* Insert blacklisted token hash in Redis:
+  * *Step 1:* Run automated Maven blacklist interception test:
     ```bash
-    redis-cli SET "token:<jwt_hash>" "revoked" EX 900
+    ./mvnw test -pl api-gateway "-Dtest=GatewayPerimeterSecurityIntegrationTest#seamRus02_tokenBlacklistInterception"
     ```
-  * *Step 2:* Send request to `http://localhost:8080/api/v1/accounts/pockets` using the revoked token.
-  * *Step 3:* Assert Gateway intercepts request before routing downstream and returns `401 Unauthorized` (`TOKEN_REVOKED`).
+    Live verification steps (Redis + curl):
+    ```bash
+    # 1. Insert blacklisted token in Redis:
+    redis-cli SET "token:<jwt_token>" "BLACKLISTED" EX 900
+    # 2. Send request with revoked token:
+    curl -i http://localhost:8080/api/v1/accounts/pockets \
+      -H "Authorization: Bearer <jwt_token>"
+    ```
+  * *Step 2:* Assert Gateway intercepts request before routing downstream and returns `401 Unauthorized` with header `X-Auth-Error: TOKEN_REVOKED`.
+  * *Step 3:* Verify downstream microservices receive 0 requests.
 * **SEAM-RUS-03: Redis Reactive Rate Limiter Seam (`DIG-26`)**
-  * *Step 1:* Send 35 rapid requests to `http://localhost:8080/api/v1/accounts/pockets` using Apache Bench or curl loop.
-  * *Step 2:* Verify requests 1–30 return `200 OK`.
-  * *Step 3:* Verify requests 31–35 return `429 Too Many Requests` with `Retry-After: 1` header.
-* **SEAM-RUS-04: Internal Route Cloaking Filter Seam (`CONTRACTS.md` §1.1)**
-  * *Step 1:* Attempt direct external access to internal CBS routes:
+  * *Step 1:* Run automated Maven token-bucket rate limiter test:
     ```bash
-    curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/internal/core/settlement
-    curl -s -o /dev/null -w "%{http_code}" http://localhost:8080/api/accounts/acct-01/credit
+    ./mvnw test -pl api-gateway "-Dtest=GatewayPerimeterSecurityIntegrationTest#seamRus03_reactiveRateLimiterBurstAndReplenish"
     ```
-  * *Step 2:* Assert Gateway returns `403 Forbidden` across all internal paths.
+    Live curl verification equivalent:
+    ```bash
+    # Send 35 rapid requests in a loop:
+    for i in {1..35}; do curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8080/api/v1/accounts/pockets -H "Authorization: Bearer <valid_jwt>"; done
+    ```
+  * *Step 2:* Verify requests 1–30 return `200 OK` (burst quota).
+  * *Step 3:* Verify requests 31–35 return `429 Too Many Requests` with `Retry-After: 1` header.
+  * *Step 4:* Verify requests resume `200 OK` after 1 second token replenishment.
+* **SEAM-RUS-04: Internal Route Cloaking Filter Seam (`CONTRACTS.md` §1.1)**
+  * *Step 1:* Run automated Maven route cloaking test:
+    ```bash
+    ./mvnw test -pl api-gateway "-Dtest=GatewayPerimeterSecurityIntegrationTest#seamRus04_internalRouteCloaking"
+    ```
+    Live curl equivalent:
+    ```bash
+    curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8080/internal/core/settlement
+    curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8080/api/accounts/acct-01/credit
+    ```
+  * *Step 2:* Assert Gateway returns `403 Forbidden` across all internal CBS mutation routes with header `X-Route-Error: ACCESS_DENIED`. Downstream services receive 0 requests.
 
 ---
 
