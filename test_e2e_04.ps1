@@ -5,7 +5,7 @@ Write-Host "Obtained JWT Token: $($token.Substring(0, 20))..."
 
 Write-Host "`n=== SCENARIO A: Cancel AUTHORIZED transaction within undo window ==="
 try {
-    $cancelRes = Invoke-RestMethod -Uri "http://localhost:8080/api/v1/payments/txn-cas-test-01/cancel?reason=User%20requested%20undo" -Method Post -Headers @{
+    $cancelRes = Invoke-RestMethod -Uri "http://localhost:8080/api/v1/payments/txn-cas-test-02/cancel?reason=User%20requested%20undo" -Method Post -Headers @{
         "Authorization" = "Bearer $token"
     } -ContentType "application/json" -Body "{}"
     Write-Host "Cancel Response:"

@@ -14,6 +14,9 @@ $quote | ConvertTo-Json -Depth 5
 $quoteId = if ($quote.quote_id) { $quote.quote_id } elseif ($quote.data.quote_id) { $quote.data.quote_id } else { $quote.id }
 Write-Host "Extracted Quote ID: $quoteId"
 
+# Ensure Juan's EUR source pocket has sufficient balance for the direct debit portion (10.00 EUR)
+"UPDATE ACCOUNT_MASTER SET BALANCE_AMOUNT = 100.0000 WHERE ACCOUNT_ID = 'acct-juan-eur-01';`nCOMMIT;`nexit;" | docker exec -i oracle-db sqlplus -s ledger_app/LedgerAppPass123@//localhost:1521/XEPDB1 > $null
+
 Write-Host "`n=== STEP 3 & 4: Submit Shortfall Payment (€50.00 funded by PHP pocket) ==="
 $idempKey = [System.Guid]::NewGuid().ToString()
 $payBody = @{

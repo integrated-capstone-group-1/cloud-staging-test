@@ -25,6 +25,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
                 .addPathPatterns("/api/v1/ledger/mutate");
         
         registry.addInterceptor(idempotencyInterceptor)
-                .addPathPatterns("/api/v1/ledger/mutate", "/api/v1/payments/**", "/api/v1/admin/transfers/**", "/api/v1/admin/transactions/**");
+                .addPathPatterns("/api/v1/ledger/mutate", "/api/v1/payments", "/api/v1/admin/transfers/**", "/api/v1/admin/transactions/**")
+                .excludePathPatterns("/api/v1/payments/*/cancel");
     }
 }
