@@ -284,32 +284,59 @@ docker compose up -d oracle-db postgres-db kafka accounts-service
 
 #### Step-by-Step Execution:
 * **SEAM-GYM-01: Outbox Polling Relay to Kafka Seam (`DIG-20`, `DIG-32`, `BR-02`)**
-  * *Step 1:* Insert a mock outbox record into Oracle XE `outbox_master` with `status = 'PENDING'`:
+  * *Step 1:* Run automated Maven seam test:
+    ```bash
+    ./mvnw test -pl transaction-service "-Dtest=AsyncOutboxAndAuditIntegrationTest#seamGym01_outboxPollingRelayToKafka"
+    ```
+    Live Oracle & Kafka verification equivalent:
     ```sql
-    INSERT INTO outbox_master (outbox_id, txn_id, event_type, payload, status, created_at)
-    VALUES ('ob-int-01', 'txn-int-01', 'LEDGER_SETTLED', '{"txn_id":"txn-int-01","legs":[]}', 'PENDING', CURRENT_TIMESTAMP);
+    -- 1. Insert staged outbox record into Oracle XE outbox_master:
+    INSERT INTO outbox_master (outbox_id, source_service, aggregate_type, aggregate_id, event_type, payload, status, attempt_count, created_at)
+    VALUES ('ob-int-01', 'accounts-service', 'SETTLEMENT', 'txn-int-01', 'SETTLEMENT_COMPLETED', '{"postingReferenceId":"txn-int-01","legs":[{"accountId":"acct-juan-eur-01","direction":"DEBIT","amount":10.0000,"currency":"EUR","legNo":1},{"accountId":"acct-maria-eur-01","direction":"CREDIT","amount":10.0000,"currency":"EUR","legNo":2}]}', 'PENDING', 0, CURRENT_TIMESTAMP);
     COMMIT;
     ```
-  * *Step 2:* Observe `OutboxMasterRelay` scheduled execution log.
-  * *Step 3:* Query Oracle XE: Assert `status` updates to `'PUBLISHED'`.
-  * *Step 4:* Consume Kafka topic:
+  * *Step 2:* Observe `OutboxMasterRelayService` scheduled poll (executes every 500ms).
+  * *Step 3:* Query Oracle XE: Assert `status` updates to `'PUBLISHED'` with `published_at` populated.
+    ```sql
+    SELECT outbox_id, status, published_at FROM outbox_master WHERE outbox_id = 'ob-int-01';
+    ```
+  * *Step 4:* Consume Kafka topic `transaction.events`:
     ```bash
     kafka-console-consumer --bootstrap-server localhost:9092 --topic transaction.events --from-beginning --max-messages 1
     ```
-  * *Step 5:* Assert the exact JSON payload is emitted with `event_key = 'txn-int-01'`.
+  * *Step 5:* Assert `payment.completed` event is emitted with `event_key = 'txn-int-01'` and full leg details.
 * **SEAM-GYM-02: Audit Consumer to PostgreSQL Seam (`DIG-88`, `BR-02`)**
-  * *Step 1:* Publish synthetic settlement event to Kafka topic `transaction.events`.
-  * *Step 2:* Observe `AuditLedgerConsumer` log.
+  * *Step 1:* Run automated Maven audit consumer test:
+    ```bash
+    ./mvnw test -pl transaction-service "-Dtest=AsyncOutboxAndAuditIntegrationTest#seamGym02_auditConsumerToPostgres"
+    ```
+    Live Kafka & PostgreSQL verification equivalent:
+    ```bash
+    # Publish synthetic settlement event to Kafka:
+    echo '{"eventId":"evt-int-01","aggregateType":"TRANSACTION","aggregateId":"txn-int-01","eventType":"payment.completed","timestamp":"2026-10-08T14:00:00Z","payload":{"txnId":"txn-int-01","postingReferenceId":"FT2627800001","customerId":"cust-user-001","legs":[{"leg_no":1,"account_id":"acct-juan-eur-01","direction":"DEBIT","amount":10.0000,"currency":"EUR"},{"leg_no":2,"account_id":"acct-maria-eur-01","direction":"CREDIT","amount":10.0000,"currency":"EUR"}]}}' | kafka-console-producer --bootstrap-server localhost:9092 --topic transaction.events
+    ```
+  * *Step 2:* Observe `AuditLedgerConsumer` log: `processed 2 legs for txnId=txn-int-01`.
   * *Step 3:* Query PostgreSQL `ledger_mutation_audit`:
     ```sql
-    SELECT * FROM ledger_mutation_audit WHERE txn_id = 'txn-int-01';
+    SELECT mutation_uuid, txn_id, account_id, leg_no, mutation_type, mutation_amount, currency_code, audit_state FROM ledger_mutation_audit WHERE txn_id = 'txn-int-01';
     ```
-  * *Step 4:* Assert rows exist with deterministic UUIDv5 `audit_id` matching leg details.
+  * *Step 4:* Assert 2 immutable rows exist (DEBIT and CREDIT) with deterministic UUIDv5 `mutation_uuid` matching leg index.
 * **SEAM-GYM-03: Transient Retry & Poison Message Dead-Letter Queue Seam (`DIG-89`, `BR-34`)**
-  * *Step 1:* Publish malformed JSON to Kafka topic `transaction.events`.
-  * *Step 2:* Verify consumer pauses and retries with backoff (1s, 2s, 4s).
-  * *Step 3:* Consume topic `transaction.events.dlq`. Assert message is routed to DLQ with error headers attached.
-  * *Step 4:* Assert consumer partition remains unblocked and immediately processes subsequent valid messages.
+  * *Step 1:* Run automated Maven DLQ isolation and transient recovery test:
+    ```bash
+    ./mvnw test -pl transaction-service "-Dtest=AsyncOutboxAndAuditIntegrationTest#seamGym03_poisonMessageRoutedToDlqAndConsumerRecovers,AsyncOutboxAndAuditIntegrationTest#seamGym03_transientPostgresOutagePausesConsumerWithoutDlq"
+    ```
+    Live Kafka DLQ verification equivalent:
+    ```bash
+    # 1. Publish malformed poison JSON to Kafka:
+    echo '{ invalid_json: corrupt }' | kafka-console-producer --bootstrap-server localhost:9092 --topic transaction.events
+    ```
+  * *Step 2:* Consume topic `transaction.events.dlq`:
+    ```bash
+    kafka-console-consumer --bootstrap-server localhost:9092 --topic transaction.events.dlq --from-beginning --max-messages 1
+    ```
+  * *Step 3:* Assert poison message is isolated into DLQ without stopping the consumer or dropping subsequent messages.
+  * *Step 4:* Assert transient PostgreSQL connection failures trigger listener container pause and rethrow for Kafka backoff without sending valid financial records to DLQ.
 
 ---
 
