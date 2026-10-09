@@ -34,7 +34,7 @@ flowchart TD
 | Workstream | Owner | Subsystems & Boundaries Tested | Primary Task Cards | Mapped Jira Issues |
 |:---|:---|:---|:---|:---|
 | **Workstream 1** | **Yancey** | `accounts-service` $\leftrightarrow$ Oracle XE `CBS` schema & `reconciliation-service` read replica. | `T-002`, `T-012` | `DIG-3`, `DIG-4`, `DIG-52`, `DIG-66`, `DIG-84`, `DIG-85`, `DIG-112` |
-| **Workstream 2** | **Rohan** | `transaction-service` $\leftrightarrow$ `accounts-service` (Feign) & `forex-service` (Quotes & CAS claims). | `T-001`, `T-007` | `DIG-14`, `DIG-15`, `DIG-73`, `DIG-74`, `DIG-75`, `DIG-80`, `DIG-83` |
+| **Workstream 2** | **Rohan** | `orchestrator-service` (:8089) $\leftrightarrow$ `transaction-service` (:8084) $\leftrightarrow$ `accounts-service` (Feign) & `forex-service` (Quotes & CAS). | `T-001`, `T-007` | `DIG-14`, `DIG-15`, `DIG-70`, `DIG-71`, `DIG-73`, `DIG-74`, `DIG-75`, `DIG-80`, `DIG-83` |
 | **Workstream 3** | **PK** | `login-service` / `registration-service` $\leftrightarrow$ `accounts-service`, `risk-engine` & `frontend-web`. | `T-003`, `T-006`, `T-011` | `DIG-6`, `DIG-7`, `DIG-12`, `DIG-21`, `DIG-22`, `DIG-23`, `DIG-50`, `DIG-54`, `DIG-90` |
 | **Workstream 4** | **Russel** | `api-gateway` (:8080) $\leftrightarrow$ Downstream Microservices, Redis 7, and Zero-Trust Network. | `T-005`, `T-014` | `DIG-8`, `DIG-25`, `DIG-26`, `DIG-28`, `DIG-30`, `DIG-31` |
 | **Workstream 5** | **Gym** | Oracle `outbox_master` $\leftrightarrow$ Kafka Broker $\leftrightarrow$ `AuditLedgerConsumer` $\leftrightarrow$ PostgreSQL Audit DB. | `T-004`, `T-014` | `DIG-5`, `DIG-20`, `DIG-32`, `DIG-88`, `DIG-89` |
@@ -118,12 +118,16 @@ docker compose up -d oracle-db postgres-db redis forex-service accounts-service 
 * **SEAM-ROH-01: CoreBankingClient Feign Bridge Seam (`DIG-14`)**
   * *Step 1:* Run Feign client contract test:
     ```bash
-    ./mvnw test -pl transaction-service -Dtest=CoreBankingClientIntegrationTest
+    ./mvnw test -pl transaction-service "-Dtest=CoreBankingClientIntegrationTest"
     ```
   * *Step 2:* Test issues settlement from `transaction-service` to `http://accounts-service:8083/internal/core/settlement`.
-  * *Step 3:* Assert: Feign client correctly serializes `CoreSettlementRequest`, handles `200 OK` response mapping, and translates `422 INSUFFICIENT_FUNDS` into domain `InsufficientFundsException`.
+  * *Step 3:* Assert: Feign client correctly serializes `CoreSettlementRequest`, handles `200 OK` response mapping, and translates `422 INSUFFICIENT_FUNDS` into domain `InsufficientBalanceException`.
 * **SEAM-ROH-02: Forex Quote & 30s Locked Rate Seam (`DIG-74`, `DIG-75`, `BR-04`)**
-  * *Step 1:* Request conversion quote from `forex-service`:
+  * *Step 1:* Run automated Maven FX quote test (or request conversion quote from live `forex-service`):
+    ```bash
+    ./mvnw test -pl forex-service "-Dtest=ForexQuoteAndSchedulerTest#quoteCalculatesSpreadAccurately"
+    ```
+    Live curl equivalent:
     ```bash
     curl -s "http://localhost:8087/api/v1/fx/quote?from=PHP&to=EUR&amount=100.00"
     ```
@@ -133,13 +137,17 @@ docker compose up -d oracle-db postgres-db redis forex-service accounts-service 
 * **SEAM-ROH-03: Compare-and-Set (CAS) Lifecycle Transition Seam (`DIG-80`, `BR-30`)**
   * *Step 1:* Run CAS transition test:
     ```bash
-    ./mvnw test -pl transaction-service -Dtest=TransactionLifecycleIntegrationTest#verifyCasClaimTransition
+    ./mvnw test -pl transaction-service "-Dtest=TransactionLifecycleIntegrationTest#verifyCasClaimTransition"
     ```
   * *Step 2:* Initiate transaction `TXN-CAS-1` in status `AUTHORIZED`.
   * *Step 3:* Two concurrent worker threads execute CAS claim to `PROCESSING`.
   * *Step 4:* Assert: Exactly 1 thread receives 1 updated row and proceeds to settlement; the 2nd thread receives 0 updated rows and safely aborts.
 * **SEAM-ROH-04: Smart Shortfall Multi-Currency Orchestration Seam (`DIG-73`, `BR-28`)**
-  * *Step 1:* Post payment where Juan pays €50.00 to Maria, with €10.00 in primary pocket and shortfall funded from PHP:
+  * *Step 1:* Run automated Smart Shortfall test (or post payment through thin orchestrator / transaction-service):
+    ```bash
+    ./mvnw test -pl transaction-service "-Dtest=SmartShortfallIntegrationTest#verifySmartShortfallOrchestration"
+    ```
+    Live curl equivalent:
     ```bash
     curl -X POST http://localhost:8084/api/v1/payments \
       -H "Content-Type: application/json" \
@@ -154,8 +162,52 @@ docker compose up -d oracle-db postgres-db redis forex-service accounts-service 
       }'
     ```
   * *Step 2:* Verify HTTP `200 OK` with status `POSTED`.
-  * *Step 3:* Check `funding_breakdown`: direct debited €10.00, converted shortfall €40.00, PHP debited ₱2,480.00.
   * *Step 4:* Verify CBS settlement executed all 6 legs atomically.
+* **SEAM-ROH-05: Channel Orchestrator Payment Forwarding & Ownership Enforcement Seam (`DIG-14`, `DIG-70`, `BR-01`)**
+  * *Step 1:* Run Channel Orchestrator payment and ownership integration tests:
+    ```bash
+    ./mvnw test -pl orchestrator-service "-Dtest=ChannelOrchestratorIntegrationTest#shouldOrchestratePaymentJourneyEndToEnd,ChannelOrchestratorIntegrationTest#shouldBlockUnauthorizedPaymentBeforeReachingCoreLedger"
+    ```
+    Live curl equivalent (Forwarding to Transaction Service):
+    ```bash
+    curl -X POST http://localhost:8089/api/v1/payments \
+      -H "Content-Type: application/json" \
+      -H "Authorization: Bearer <customer-jwt>" \
+      -H "X-Idempotency-Key: idemp-orch-001" \
+      -d '{
+        "sender_account_id": "acct-juan-eur-01",
+        "recipient_account_id": "acct-maria-eur-01",
+        "amount": 50.00,
+        "currency": "EUR"
+      }'
+    ```
+  * *Step 2:* Verify caller identity and account ownership check (`cust-user-101` owns `acct-juan-eur-01`).
+  * *Step 3:* Verify orchestrator forwards valid authenticated payment to Transaction Service (`:8084`) and returns `200 OK` with `status: POSTED` and `transaction_id`.
+  * *Step 4:* Attempt unauthorized payment from an unowned sender account (`acct-victim-php-01`).
+  * *Step 5:* Assert orchestrator rejects with `403 Forbidden` (`Access denied: You do not own account`) before reaching Transaction Service or core ledger.
+* **SEAM-ROH-06: Backend-for-Frontend (BFF) Home Dashboard Aggregation Seam (`DIG-39`, `DIG-41`)**
+  * *Step 1:* Run BFF Home Dashboard aggregation test:
+    ```bash
+    ./mvnw test -pl orchestrator-service "-Dtest=ChannelOrchestratorIntegrationTest#shouldAggregateHomeDashboardAcrossAllThreeServices"
+    ```
+    Live curl equivalent:
+    ```bash
+    curl -s http://localhost:8089/api/v1/dashboard/home \
+      -H "Authorization: Bearer <customer-jwt>"
+    ```
+  * *Step 2:* Assert `orchestrator-service` aggregates accounts from `accounts-service` (`:8083`), recent payments from `transaction-service` (`:8084`), and notifications from `notification-service` (`:8085`) into a single unified JSON response in 1 network roundtrip.
+* **SEAM-ROH-07: Multi-Currency Pockets Presentation & Ownership Seam (`DIG-71`, `BR-01`)**
+  * *Step 1:* Run pockets query test:
+    ```bash
+    ./mvnw test -pl orchestrator-service "-Dtest=ChannelOrchestratorIntegrationTest#shouldRetrieveMultiCurrencyPockets"
+    ```
+    Live curl equivalent:
+    ```bash
+    curl -s http://localhost:8089/api/v1/accounts/acct-php-01/pockets \
+      -H "Authorization: Bearer <customer-jwt>"
+    ```
+  * *Step 2:* Assert caller ownership is verified before querying multi-currency pockets.
+  * *Step 3:* Assert JSON array contains all customer multi-currency accounts (e.g. PHP, EUR, USD) with accurate balances and currency codes.
 
 ---
 
