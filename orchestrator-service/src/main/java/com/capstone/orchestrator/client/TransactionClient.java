@@ -52,6 +52,10 @@ public class TransactionClient {
                         throw new ResourceNotFoundException("Transaction not found");
                     } else if (status == 503) {
                         throw new SecurityCheckUnavailableException("Security screening unavailable");
+                    } else if (status == 400) {
+                        throw new IllegalArgumentException(body.isBlank() ? "Bad Request" : body);
+                    } else {
+                        throw new IllegalStateException("Transaction service error [" + status + "]: " + body);
                     }
                 })
                 .build();

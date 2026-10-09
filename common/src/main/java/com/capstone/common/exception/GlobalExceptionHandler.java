@@ -162,6 +162,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     public ResponseEntity<ProblemDetail> handleIllegalArgument(IllegalArgumentException ex, WebRequest request) {
         ProblemDetail pd = build(HttpStatus.BAD_REQUEST, "https://capstone.bank/errors/bad-request",
                 "Bad Request", ex.getMessage(), request);
+        pd.setProperty("error_code", "VALIDATION_FAILED");
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(pd);
     }
 
@@ -204,8 +205,9 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ProblemDetail> handleGeneric(Exception ex, WebRequest request) {
+        log.error("Unhandled internal server error: ", ex);
         ProblemDetail pd = build(HttpStatus.INTERNAL_SERVER_ERROR, "https://capstone.bank/errors/internal",
-                "Internal Server Error", "An unexpected error occurred: " + ex.getMessage(), request);
+                "Internal Server Error", "An unexpected error occurred", request);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(pd);
     }
 
