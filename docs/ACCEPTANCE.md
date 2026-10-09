@@ -6,7 +6,7 @@
 
 A task is completed and eligible for merge to `main` only when:
 1. **Clean Compilation:** Builds cleanly with `./mvnw clean test-compile` (or `flutter analyze`) producing zero compilation errors.
-2. **Contract Strictness:** Payload schemas, error codes, and HTTP statuses strictly match [`docs/CONTRACTS.md`](file:///c:/Users/RBS83790/OneDrive%20-%20EastWest%20Banking%20Corporation/Documents/training/integrated-capstone/capstone-banking-system/docs/CONTRACTS.md).
+2. **Contract Strictness:** Payload schemas, error codes, and HTTP statuses strictly match [`docs/CONTRACTS.md`](CONTRACTS.md).
 3. **Single-Writer Ownership Compliance:**
    * Only `accounts-service` mutates `account_master`, `account_hold`, and `outbox_master`.
    * `transaction-service` owns `transaction_master` and CAS transitions.
@@ -16,6 +16,7 @@ A task is completed and eligible for merge to `main` only when:
    * At least 1 unit/slice test verifying the successful path.
    * At least 1 test verifying failure/edge handling (insufficient funds, duplicate key, or timeout).
 6. **Zero Plaintext Secrets:** Logs contain no PAN, CVV, raw passwords, or unmasked authorization tokens.
+7. **Invariants:** `check_invariants` ([`docs/INVARIANTS.md`](INVARIANTS.md)) reports clean after the task's tests.
 
 ---
 
@@ -92,6 +93,6 @@ The following 4 primary scenarios are **graded live demonstration requirements**
 
 * **`CH-05` (Kafka Outage):** Outbox accumulates in Oracle `outbox_master`; drains on broker recovery.
 * **`CH-06` (FX API Outage):** `api.frankfurter.dev` unreachable; system serves from cache until 24h stale rate guard blocks new conversions with `FX_RATE_STALE`.
-* **`CH-07` (Poison Message):** Malformed JSON routes to `*.retry.1`, `*.retry.2`, then `*.dlq` without blocking the consumer partition.
+* **`CH-07` (Poison Message):** Malformed JSON routes to `<topic>.retry`, then `<topic>.dlq`, without blocking the consumer partition. `[VERIFY H-10]` (number of retry topics)
 * **`CH-08` (Process Kill Mid-Transaction):** Service killed during `PROCESSING`; `StuckTransactionSweeper` calls `GET /internal/core/settlement/{ref}` to resolve to `POSTED` or `FAILED`.
 

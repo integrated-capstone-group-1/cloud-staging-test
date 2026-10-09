@@ -75,7 +75,7 @@ To guarantee that a fresh agent can execute without asking any blocking question
 
 1. **Cold Dry-Run Card 1: `T-001` (Smart Routing & Lifecycle)**
    * *Q: How does the agent prevent customer cancellation once settlement starts?*
-     * *Ans in Spec:* `T-001 §2` specifies CAS query `UPDATE transaction_master SET status = 'PROCESSING', stage = 'SETTLING' WHERE txn_id = ? AND status = 'AUTHORIZED'`. If 0 rows affected, aborts.
+     * *Ans in Spec:* `T-001 §2` specifies CAS query `UPDATE transaction_master SET txn_status = 'PROCESSING', stage = 'SETTLING' WHERE txn_id = ? AND txn_status = 'AUTHORIZED'`. If 0 rows affected, aborts.
    * *Q: Where are the exact JSON request and response fields?*
      * *Ans in Spec:* Referenced directly in `CONTRACTS.md §2.1` with full sample payloads and status codes.
 2. **Cold Dry-Run Card 2: `T-002` (Core CBS Settlement & Holds)**
@@ -89,5 +89,6 @@ To guarantee that a fresh agent can execute without asking any blocking question
    * *Q: What happens on timeout?*
      * *Ans in Spec:* Resilience4j timeout at $200\text{ms}$ fails closed returning `HTTP 503 SECURITY_CHECK_UNAVAILABLE`. Zero balance changes.
 
-**Defect Check:** **ZERO open questions.** The specification is 100% executable by any fresh agent.
+**Defect Check:** Architecture and contracts fully reconciled; code-level verifications tracked under `HANDOFF_CODEBASE_AGENT.md`.
+
 

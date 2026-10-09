@@ -223,10 +223,10 @@ sequenceDiagram
 
     rect rgb(240, 248, 255)
         Note over Txn: 1. Lifecycle INITIATED -> AUTHORIZED
-        Txn->>Ora: INSERT INTO transaction_master (status: 'INITIATED', stage: 'RISK_PENDING')
+        Txn->>Ora: INSERT INTO transaction_master (txn_status: 'INITIATED', stage: 'RISK_PENDING')
         Txn->>Risk: POST /internal/risk/evaluate (SLA <= 200ms)
         Risk-->>Txn: 200 OK (Score: 0.12, Decision: ALLOW)
-        Txn->>Ora: UPDATE transaction_master SET status = 'AUTHORIZED', stage = 'AUTH_CONFIRMED'
+        Txn->>Ora: UPDATE transaction_master SET txn_status = 'AUTHORIZED', stage = 'AUTH_CONFIRMED'
     end
 
     rect rgb(255, 250, 235)
@@ -239,7 +239,7 @@ sequenceDiagram
 
     rect rgb(230, 255, 240)
         Note over Txn,Ora: 3. CAS Claim: AUTHORIZED -> PROCESSING (ADR-002)
-        Txn->>Ora: UPDATE transaction_master SET status = 'PROCESSING', stage = 'SETTLING'<br/>WHERE txn_id = ? AND status = 'AUTHORIZED'
+        Txn->>Ora: UPDATE transaction_master SET txn_status = 'PROCESSING', stage = 'SETTLING'<br/>WHERE txn_id = ? AND txn_status = 'AUTHORIZED'
         Note over Txn: CAS succeeds (Cancel attempts from here on will fail)
     end
 

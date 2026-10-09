@@ -12,8 +12,8 @@ However, there was an ownership contradiction:
 ## Decision
 1. **Compare-and-Set (CAS) Claim in `transaction-service`:**
    * Before calling settlement in `accounts-service`, `transaction-service` claims the transition:
-     `UPDATE transaction_master SET status = 'PROCESSING', stage = 'SETTLING' WHERE txn_id = ? AND status = 'AUTHORIZED'`
-   * If CAS succeeds: `transaction-service` proceeds to call `accounts-service`. Any concurrent customer cancellation (`UPDATE ... WHERE status IN ('INITIATED', 'AUTHORIZED')`) will fail because the status is already `PROCESSING`.
+     `UPDATE transaction_master SET txn_status = 'PROCESSING', stage = 'SETTLING' WHERE txn_id = ? AND txn_status = 'AUTHORIZED'`
+   * If CAS succeeds: `transaction-service` proceeds to call `accounts-service`. Any concurrent customer cancellation (`UPDATE ... WHERE txn_status IN ('INITIATED', 'AUTHORIZED', 'RESERVED')`) will fail because the status is already `PROCESSING`.
    * If CAS fails: processing aborts (e.g., transaction was already cancelled by the customer).
 2. **Data Ownership Separation:**
    * `transaction-service` strictly owns `transaction_master` and lifecycle state transitions (`txn.lifecycle` events).

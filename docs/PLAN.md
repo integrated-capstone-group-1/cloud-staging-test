@@ -96,7 +96,7 @@ flowchart TD
     subgraph Rohan_Flow["Rohan (Channels & Messaging)"]
         R1["T-007: forex-service (Top Priority)"] --> R2["1. Point JPA datasource to Oracle XE LEDGER_APP.fx_rate<br/>2. Add 60m Redis fallback cache to ForexQuoteService"]
         R3["T-001: transaction-service"] --> R4["1. Allow cancellation when status == RESERVED<br/>2. Trigger CBS hold release (DELETE /internal/accounts/{id}/holds/{holdId})<br/>3. Confirm stage event emission on txn.lifecycle"]
-        R5["T-004: Outbox Relay"] --> R6["1. Verify 1s, 2s, 4s retry backoff<br/>2. Confirm DLQ routing to dead-letter-events"]
+        R5["T-004: Outbox Relay"] --> R6["1. Verify 1s, 2s, 4s retry backoff<br/>2. Confirm DLQ routing to &lt;topic&gt;.dlq"]
     end
 
     subgraph PK_Flow["PK (Auth, Risk & Operations)"]
@@ -134,7 +134,7 @@ flowchart TD
      * **Verification:** `./mvnw test -pl transaction-service -Dtest=PaymentOrchestrationTest`
    * **`T-004` (Outbox Relay & Consumer):**
      * Confirm exponential retry on Postgres connection failure (1s, 2s, 4s).
-     * Verify DLQ routing to `dead-letter-events` topic (`DIG-25`, `DIG-82`).
+     * Verify DLQ routing to `<topic>.dlq` (`DIG-25`, `DIG-82`, `CONTRACTS.md §4`).
 
 3. **PK (`T-003`, `T-006`, `T-011`)**
    * **`T-003` (`risk-service`):**

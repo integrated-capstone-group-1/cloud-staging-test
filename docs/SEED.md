@@ -8,37 +8,38 @@ Aligned directly with [`sql/oracle/02_seed_data_oracle.sql`](file:///c:/Users/RB
 
 | Customer ID | Username / Email | Role | Name | Initial Status |
 | :--- | :--- | :--- | :--- | :--- |
-| `cust-admin-001` | `admin@ledgerbank.com` | `ADMIN` | System Admin | `ACTIVE` |
-| `cust-user-001` | `juan.delacruz@example.com` | `CUSTOMER` | Juan Dela Cruz | `ACTIVE` |
-| `cust-user-002` | `maria.santos@example.com` | `CUSTOMER` | Maria Santos | `ACTIVE` |
+| `2d49c23b-5f65-48da-aa68-28b155dd4022` (`cust-admin-001`) | `admin@ledgerbank.com` | `ADMIN` | System Admin | `ACTIVE` |
+| `7bd20304-dd6a-4e45-850b-58df8b535be4` (`cust-user-001`) | `juan.delacruz@example.com` | `CUSTOMER` | Juan Dela Cruz | `ACTIVE` |
+| `66e07d02-05c9-4deb-87d5-10e23cf5968f` (`cust-user-002`) | `maria.santos@example.com` | `CUSTOMER` | Maria Santos | `ACTIVE` |
 
-*Default password for all seed accounts:* `password123` (BCrypt hash: `$2a$10$yPxSmEaD/2O6lRX.xPlL/OrFxdcv5MGklq.ExJ/IYcmOD.TA2eQB.`)  
-*Admin password:* `admin123` (BCrypt hash: `$2a$10$Wj5Cqd6hjqjppB6IItquHOun3MVKhJZShmIPi0SmAJUDygytdipN6`)
+*Default password for all seed accounts:* `password123` (BCrypt hash)  
+*Admin password:* `admin123` (BCrypt hash)
 
 ---
 
 ## 2. Customer Pockets & Accounts (Oracle XE: `account_master`)
 
-| Account ID | Customer ID | Account Type | Currency | Is Primary | Balance Amount | Status |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| `acct-juan-php-01` | `cust-user-001` | `SAVINGS` | `PHP` | `Y` | `50000.0000` | `ACTIVE` |
-| `acct-juan-usd-01` | `cust-user-001` | `CHECKING` | `USD` | `N` | `1500.0000` | `ACTIVE` |
-| `acct-maria-php-01` | `cust-user-002` | `SAVINGS` | `PHP` | `Y` | `120000.0000` | `ACTIVE` |
-| `acct-maria-eur-01` | `cust-user-002` | `WALLET` | `EUR` | `N` | `800.0000` | `ACTIVE` |
+| Account ID | Customer ID | Account Number | Account Type | Currency | Normal Balance | Is Primary | Balance Amount | Status |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| `3722f77f-3d1b-4d55-8f83-b71bac91d095` (`acct-juan-php-01`) | `7bd20304-dd6a-4e45-850b-58df8b535be4` | `100000000001` | `SAVINGS` | `PHP` | `CR` | `Y` | `17300.0000` | `ACTIVE` |
+| `a86c97cc-1ea5-4767-bd5b-148968354f9c` (`acct-juan-php-02`) | `7bd20304-dd6a-4e45-850b-58df8b535be4` | `100000000001` | `SAVINGS` | `PHP` | `CR` | `N` | `3500.0000` | `ACTIVE` |
+| `acct-juan-eur-01` | `7bd20304-dd6a-4e45-850b-58df8b535be4` | `100000000001` | `WALLET` | `EUR` | `CR` | `N` | `100.0000` | `ACTIVE` |
+| `f95e7e52-3259-4b4d-ac66-b186a893cf66` (`acct-maria-php-01`) | `66e07d02-05c9-4deb-87d5-10e23cf5968f` | `100000000002` | `SAVINGS` | `PHP` | `CR` | `Y` | `9000.0000` | `ACTIVE` |
+| `86cabb96-61d5-462a-b33b-5a6435649eb4` (`acct-maria-php-02`) | `66e07d02-05c9-4deb-87d5-10e23cf5968f` | `100000000002` | `WALLET` | `PHP` | `CR` | `N` | `2950.0000` | `ACTIVE` |
+| `acct-maria-eur-01` | `66e07d02-05c9-4deb-87d5-10e23cf5968f` | `100000000002` | `WALLET` | `EUR` | `CR` | `N` | `50.0000` | `ACTIVE` |
 
 ---
 
 ## 3. Bank Internal FX & Fee Accounts (Oracle XE: `account_master`)
 
-Used for double-entry settlement of cross-currency transfers and FX spread fee bookings:
+Used for double-entry settlement of cross-currency transfers and FX spread fee bookings (customer_id is `NULL`):
 
-| Account ID | Customer ID | Account Type | Currency | Balance Amount | Status |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| `bank-fx-php-01` | `cust-admin-001` | `INTERNAL_BANK_FX` | `PHP` | `10000000.0000` | `ACTIVE` |
-| `bank-fx-usd-01` | `cust-admin-001` | `INTERNAL_BANK_FX` | `USD` | `200000.0000` | `ACTIVE` |
-| `bank-fx-eur-01` | `cust-admin-001` | `INTERNAL_BANK_FX` | `EUR` | `200000.0000` | `ACTIVE` |
-| `bank-fee-income-php-01` | `cust-admin-001` | `INTERNAL_BANK_FX` | `PHP` | `500000.0000` | `ACTIVE` |
-| `bank-cash-clearing-php-01` | `cust-admin-001` | `INTERNAL_BANK_FX` | `PHP` | `10000000.0000` | `ACTIVE` |
+| Account ID | Account Number | Account Type | Currency | Normal Balance | Balance Amount | Status |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| `bank-fx-eur-01` | `BANKFXEUR` | `BANK_FX_POSITION` | `EUR` | `DR` | `1000000.0000` | `ACTIVE` |
+| `bank-fx-php-01` | `BANKFXPHP` | `BANK_FX_POSITION` | `PHP` | `DR` | `50000000.0000` | `ACTIVE` |
+| `bank-fee-income-php-01` | `BANKFEEPHP` | `BANK_FEE_INCOME` | `PHP` | `CR` | `50000.0000` | `ACTIVE` |
+| `bank-cash-clearing-php-01` | `BANKCLEARING` | `BANK_CASH_CLEARING` | `PHP` | `DR` | `100000000.0000` | `ACTIVE` |
 
 ---
 
@@ -46,8 +47,8 @@ Used for double-entry settlement of cross-currency transfers and FX spread fee b
 
 | Card ID | Customer ID | Account ID (Linked) | Masked PAN | Ecom Enabled | Status | Daily Limit |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| `card-juan-01` | `cust-user-001` | `acct-juan-php-01` | `4532-XXXX-XXXX-8821` | `1` | `ACTIVE` | `50000.00` |
-| `card-maria-01` | `cust-user-002` | `acct-maria-php-01` | `4532-XXXX-XXXX-1194` | `1` | `ACTIVE` | `50000.00` |
+| `c4a1b2c3-d4e5-4f6a-8b9c-0d1e2f3a4b5c` (`card-juan-01`) | `7bd20304-dd6a-4e45-850b-58df8b535be4` | `3722f77f-3d1b-4d55-8f83-b71bac91d095` | `4532-XXXX-XXXX-8821` | `1` | `ACTIVE` | `50000.00` |
+| `d5b2c3d4-e5f6-4a7b-9c0d-1e2f3a4b5c6d` (`card-maria-01`) | `66e07d02-05c9-4deb-87d5-10e23cf5968f` | `f95e7e52-3259-4b4d-ac66-b186a893cf66` | `4532-XXXX-XXXX-9932` | `1` | `ACTIVE` | `50000.00` |
 
 ---
 
