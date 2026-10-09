@@ -4,8 +4,12 @@ $token = $login.data.token
 Write-Host "Obtained JWT Token: $($token.Substring(0, 20))..."
 
 Write-Host "`n=== SCENARIO A: Cancel AUTHORIZED transaction within undo window ==="
+$testTxnId = "txn-cas-test-" + [System.Guid]::NewGuid().ToString().Substring(0, 8)
+$sqlSeed = "INSERT INTO TRANSACTION_MASTER (TXN_ID, CUSTOMER_ID, DEBIT_ACCOUNT_ID, CREDIT_ACCOUNT_ID, MUTATION_AMOUNT, CURRENCY_CODE, TXN_STATUS, STAGE, TXN_TYPE, CREATED_BY, IDEMPOTENCY_KEY, CREATED_AT) VALUES ('$testTxnId', '7bd20304-dd6a-4e45-850b-58df8b535be4', '3722f77f-3d1b-4d55-8f83-b71bac91d095', 'f95e7e52-3259-4b4d-ac66-b186a893cf66', 10000, 'PHP', 'AUTHORIZED', 'AUTH_CONFIRMED', 'TRANSFER', 'test-user', '$testTxnId', SYSTIMESTAMP);`nCOMMIT;`nexit;"
+$sqlSeed | docker exec -i oracle-db sqlplus -s ledger_app/LedgerAppPass123@//localhost:1521/XEPDB1 > $null
+
 try {
-    $cancelRes = Invoke-RestMethod -Uri "http://localhost:8080/api/v1/payments/txn-cas-test-02/cancel?reason=User%20requested%20undo" -Method Post -Headers @{
+    $cancelRes = Invoke-RestMethod -Uri "http://localhost:8080/api/v1/payments/$testTxnId/cancel?reason=User%20requested%20undo" -Method Post -Headers @{
         "Authorization" = "Bearer $token"
     } -ContentType "application/json" -Body "{}"
     Write-Host "Cancel Response:"
