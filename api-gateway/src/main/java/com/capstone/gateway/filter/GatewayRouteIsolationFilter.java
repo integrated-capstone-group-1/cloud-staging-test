@@ -67,8 +67,9 @@ public class GatewayRouteIsolationFilter implements GlobalFilter, Ordered {
 
     @Override
     public int getOrder() {
-        // Runs right after header sanitization, before route handler & JWT validation
-        return Ordered.HIGHEST_PRECEDENCE + 10;
+        // Runs at HIGHEST_PRECEDENCE + 1 to block internal routes BEFORE route lookup/matching
+        // This ensures /internal/** is blocked at the gateway edge, never reaching downstream services
+        return Ordered.HIGHEST_PRECEDENCE + 1;
     }
 }
 
