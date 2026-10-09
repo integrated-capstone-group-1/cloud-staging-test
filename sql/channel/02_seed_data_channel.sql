@@ -38,7 +38,7 @@ VALUES ('a40e6a5f-72c4-4c1a-a298-815053f14b23', '66e07d02-05c9-4deb-87d5-10e23cf
 -- ---------------------------------------------------------------------
 INSERT INTO notification_log (notif_id, customer_id, channel, message, status, created_at, read_at)
 VALUES ('e1111111-1111-1111-1111-111111111101', '7bd20304-dd6a-4e45-850b-58df8b535be4',
-        'IN_APP', 'Welcome to Capstone Banking! Your savings and checking pockets are active and funded.',
+        'IN_APP', 'Welcome to Capstone Banking! Your savings and foreign currency pockets are active and funded.',
         'READ', TIMESTAMPTZ '2026-09-20 08:00:00+00', TIMESTAMPTZ '2026-09-20 08:30:00+00');
 
 INSERT INTO notification_log (notif_id, customer_id, channel, message, status, created_at, read_at)
@@ -48,7 +48,7 @@ VALUES ('e1111111-1111-1111-1111-111111111102', '7bd20304-dd6a-4e45-850b-58df8b5
 
 INSERT INTO notification_log (notif_id, customer_id, channel, message, status, created_at, read_at)
 VALUES ('e1111111-1111-1111-1111-111111111103', '66e07d02-05c9-4deb-87d5-10e23cf5968f',
-        'IN_APP', 'Welcome to Capstone Banking! Your primary checking pocket and virtual card are active.',
+        'IN_APP', 'Welcome to Capstone Banking! Your primary savings pocket and virtual card are active.',
         'READ', TIMESTAMPTZ '2026-09-20 08:00:00+00', TIMESTAMPTZ '2026-09-20 09:00:00+00');
 
 INSERT INTO notification_log (notif_id, customer_id, channel, message, status, created_at, read_at)

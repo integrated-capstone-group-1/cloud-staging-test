@@ -61,7 +61,7 @@ VALUES ('3722f77f-3d1b-4d55-8f83-b71bac91d095', '7bd20304-dd6a-4e45-850b-58df8b5
 
 INSERT INTO account_master (account_id, customer_id, account_number, account_type, currency_code, normal_balance, balance_amount, held_amount, customer_locked, admin_frozen, account_status, is_primary, version, created_at, created_by)
 VALUES ('a86c97cc-1ea5-4767-bd5b-148968354f9c', '7bd20304-dd6a-4e45-850b-58df8b535be4',
-        '100000000001', 'CHECKING', 'PHP', 'CR', 3500.0000, 0, 'N', 'N', 'ACTIVE', 'N', 0,
+        '100000000001', 'SAVINGS', 'PHP', 'CR', 3500.0000, 0, 'N', 'N', 'ACTIVE', 'N', 0,
         TIMESTAMP '2026-09-20 00:00:00', 'SYSTEM');
 
 INSERT INTO account_master (account_id, customer_id, account_number, account_type, currency_code, normal_balance, balance_amount, held_amount, customer_locked, admin_frozen, account_status, is_primary, version, created_at, created_by)
@@ -72,7 +72,7 @@ VALUES ('acct-juan-eur-01', '7bd20304-dd6a-4e45-850b-58df8b535be4',
 -- Customer Maria Pockets (account_number: 100000000002)
 INSERT INTO account_master (account_id, customer_id, account_number, account_type, currency_code, normal_balance, balance_amount, held_amount, customer_locked, admin_frozen, account_status, is_primary, version, created_at, created_by)
 VALUES ('f95e7e52-3259-4b4d-ac66-b186a893cf66', '66e07d02-05c9-4deb-87d5-10e23cf5968f',
-        '100000000002', 'CHECKING', 'PHP', 'CR', 9000.0000, 0, 'N', 'N', 'ACTIVE', 'Y', 0,
+        '100000000002', 'SAVINGS', 'PHP', 'CR', 9000.0000, 0, 'N', 'N', 'ACTIVE', 'Y', 0,
         TIMESTAMP '2026-09-20 00:00:00', 'SYSTEM');
 
 INSERT INTO account_master (account_id, customer_id, account_number, account_type, currency_code, normal_balance, balance_amount, held_amount, customer_locked, admin_frozen, account_status, is_primary, version, created_at, created_by)
@@ -139,8 +139,8 @@ VALUES ('USD', 'EUR', 0.92490119, TIMESTAMP '2026-09-27 00:00:00', 'frankfurter'
 -- =====================================================================
 -- 6. TRANSACTION_MASTER (PAYMENT Schema)
 -- T1: DEPOSIT +2000 into Juan Savings
--- T2: WITHDRAWAL -500 from Juan Checking
--- T3: TRANSFER 1000 from Juan Checking -> Maria Checking
+-- T2: WITHDRAWAL -500 from Juan Savings
+-- T3: TRANSFER 1000 from Juan Savings -> Maria Savings
 -- T4: TRANSFER 300 from Maria Wallet -> Juan Savings
 -- T5: DEPOSIT +750 into Maria Wallet
 -- =====================================================================
@@ -207,13 +207,13 @@ VALUES ('7b006281-4871-4dc6-b17f-04aafcd2810a', '05da5006-2cc5-4dd0-87ab-aeca1f0
         '3722f77f-3d1b-4d55-8f83-b71bac91d095', 'CREDIT', 2000.0000, 'PHP', 17000.0000,
         DATE '2026-09-27', DATE '2026-09-27', 'CASH_DEPOSIT', TIMESTAMP '2026-09-27 08:00:03');
 
--- T2: WITHDRAWAL from Juan Checking (1 DEBIT leg)
+-- T2: WITHDRAWAL from Juan Savings (1 DEBIT leg)
 INSERT INTO ledger_entry (entry_id, txn_id, leg_no, account_id, direction, amount, currency_code, running_balance, value_date, business_date, narrative, posted_at)
 VALUES ('ad4a2ffd-df4c-46a8-baee-84652f9c3672', 'b314f899-2fc0-4087-80e6-09e87ece0d49', 1,
         'a86c97cc-1ea5-4767-bd5b-148968354f9c', 'DEBIT', 500.0000, 'PHP', 4500.0000,
         DATE '2026-09-27', DATE '2026-09-27', 'ATM_WITHDRAWAL', TIMESTAMP '2026-09-27 09:15:02');
 
--- T3: TRANSFER Juan Checking -> Maria Checking (2 legs)
+-- T3: TRANSFER Juan Savings -> Maria Savings (2 legs)
 INSERT INTO ledger_entry (entry_id, txn_id, leg_no, account_id, direction, amount, currency_code, running_balance, value_date, business_date, narrative, posted_at)
 VALUES ('0c221483-efea-45be-adfc-4576500866d4', '8a2adc48-4cf1-4478-b317-57d60b9bf0ee', 1,
         'a86c97cc-1ea5-4767-bd5b-148968354f9c', 'DEBIT', 1000.0000, 'PHP', 3500.0000,
