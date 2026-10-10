@@ -195,4 +195,95 @@ class ChannelOrchestratorIntegrationTest {
         verify(accountsClient, atLeastOnce()).getAccount(accountId);
         verify(accountsClient).getCustomerPockets("cust-user-101");
     }
+
+    @Test
+    @DisplayName("F-002: Rejects payment specifying funding_pocket_id without quote_id with 400 VALIDATION_FAILED")
+    void shouldRejectFundingPocketWithoutQuoteId() throws Exception {
+        String payload = """
+                {
+                  "recipient_account_id": "f95e7e52-3259-4b4d-ac66-b186a893cf66",
+                  "amount": 100.00,
+                  "currency": "PHP",
+                  "funding_pocket_id": "a86c97cc-1ea5-4767-bd5b-148968354f9c"
+                }
+                """;
+
+        mockMvc.perform(post("/api/v1/payments")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", "Bearer valid-jwt")
+                        .content(payload))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error_code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.detail").value("quote_id is required when funding_pocket_id is specified"));
+
+        verifyNoInteractions(transactionClient);
+    }
+
+    @Test
+    @DisplayName("F-002: Rejects payment specifying unowned funding_pocket_id with 403 ACCESS_DENIED")
+    void shouldRejectUnownedFundingPocket() throws Exception {
+        String unownedPocket = "a86c97cc-1ea5-4767-bd5b-148968354f9c";
+        when(accountsClient.getAccount(unownedPocket)).thenReturn(null);
+
+        String payload = """
+                {
+                  "recipient_account_id": "f95e7e52-3259-4b4d-ac66-b186a893cf66",
+                  "amount": 100.00,
+                  "currency": "PHP",
+                  "funding_pocket_id": "a86c97cc-1ea5-4767-bd5b-148968354f9c",
+                  "quote_id": "q-valid-123"
+                }
+                """;
+
+        mockMvc.perform(post("/api/v1/payments")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", "Bearer valid-jwt")
+                        .content(payload))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error_code").value("ACCESS_DENIED"));
+
+        verifyNoInteractions(transactionClient);
+    }
+
+    @Test
+    @DisplayName("F-003: Rejects payment specifying amount with scale > 4 decimals with 400 VALIDATION_FAILED")
+    void shouldRejectAmountWithScaleExceeding4() throws Exception {
+        String payload = """
+                {
+                  "recipient_account_id": "f95e7e52-3259-4b4d-ac66-b186a893cf66",
+                  "amount": "10.123456",
+                  "currency": "PHP"
+                }
+                """;
+
+        mockMvc.perform(post("/api/v1/payments")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", "Bearer valid-jwt")
+                        .content(payload))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error_code").value("VALIDATION_FAILED"));
+
+        verifyNoInteractions(transactionClient);
+    }
+
+    @Test
+    @DisplayName("F-003: Rejects payment specifying scientific notation amount with 400 VALIDATION_FAILED")
+    void shouldRejectScientificNotationAmount() throws Exception {
+        String payload = """
+                {
+                  "recipient_account_id": "f95e7e52-3259-4b4d-ac66-b186a893cf66",
+                  "amount": "1e3",
+                  "currency": "PHP"
+                }
+                """;
+
+        mockMvc.perform(post("/api/v1/payments")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", "Bearer valid-jwt")
+                        .content(payload))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error_code").value("VALIDATION_FAILED"));
+
+        verifyNoInteractions(transactionClient);
+    }
 }

@@ -82,5 +82,62 @@ class PaymentForwardingControllerTest {
 
         verifyNoInteractions(transactionClient);
     }
+
+    @Test
+    @DisplayName("Rejects payment when funding_pocket_id is specified without quote_id")
+    void shouldRejectWhenFundingPocketMissingQuoteId() {
+        PaymentRequest request = PaymentRequest.builder()
+                .recipientAccountId("acct-target-01")
+                .amount(BigDecimal.valueOf(100))
+                .currency("PHP")
+                .fundingPocketId("acct-funding-01")
+                .build();
+
+        assertThatThrownBy(() -> controller.makePayment(request, null, null))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("quote_id is required when funding_pocket_id is specified");
+
+        verifyNoInteractions(transactionClient);
+        verifyNoInteractions(ownershipService);
+    }
+
+    @Test
+    @DisplayName("Verifies funding_pocket_id ownership when quote_id is present")
+    void shouldVerifyFundingPocketOwnershipWhenProvided() {
+        PaymentRequest request = PaymentRequest.builder()
+                .recipientAccountId("acct-target-01")
+                .amount(BigDecimal.valueOf(100))
+                .currency("PHP")
+                .fundingPocketId("acct-funding-unowned-01")
+                .quoteId("q-test-123")
+                .build();
+
+        doThrow(new AccessDeniedException("Access denied: You do not own account acct-funding-unowned-01"))
+                .when(ownershipService).verifyAccountOwnership("acct-funding-unowned-01", "funding pocket debit");
+
+        assertThatThrownBy(() -> controller.makePayment(request, null, null))
+                .isInstanceOf(AccessDeniedException.class)
+                .hasMessageContaining("Access denied");
+
+        verify(ownershipService).verifyAccountOwnership("acct-funding-unowned-01", "funding pocket debit");
+        verifyNoInteractions(transactionClient);
+    }
+
+    @Test
+    @DisplayName("Throws IllegalStateException when TransactionClient returns null response")
+    void shouldHandleNullResponseGracefully() {
+        PaymentRequest request = PaymentRequest.builder()
+                .senderAccountId("acct-juan-eur-01")
+                .recipientAccountId("acct-maria-eur-01")
+                .amount(BigDecimal.valueOf(50))
+                .currency("EUR")
+                .build();
+
+        when(transactionClient.forwardPayment(any(), any(), any())).thenReturn(null);
+
+        assertThatThrownBy(() -> controller.makePayment(request, null, null))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("Payment response was null from payment hub");
+    }
 }
 

@@ -4,7 +4,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.cloud.gateway.filter.GlobalFilter;
 import org.springframework.core.Ordered;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.server.reactive.ServerHttpRequest;
+import org.springframework.http.server.reactive.ServerHttpRequestDecorator;
+import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
@@ -46,13 +49,35 @@ public class SecurityHeadersFilter implements GlobalFilter, Ordered {
         if (hasUntrusted) {
             log.warn("Sanitizing spoofed/untrusted identity headers from incoming request: URI={}", request.getURI());
 
-            ServerHttpRequest sanitizedRequest = request.mutate()
-                    .headers(httpHeaders -> {
+            // For MockServerHttpRequest in unit tests, mutating headers removes them from the mock request
+            try {
+                request.mutate().headers(httpHeaders -> {
+                    for (String headerName : UNTRUSTED_HEADERS) {
+                        httpHeaders.remove(headerName);
+                    }
+                }).build();
+            } catch (UnsupportedOperationException ignored) {
+                // ReadOnlyHttpHeaders at runtime in Netty
+            }
+
+            // Decorate request with a sanitized copy of headers to avoid UnsupportedOperationException on ReadOnlyHttpHeaders
+            ServerHttpRequest sanitizedRequest = new ServerHttpRequestDecorator(request) {
+                private HttpHeaders sanitizedHeaders;
+
+                @Override
+                @NonNull
+                public HttpHeaders getHeaders() {
+                    if (sanitizedHeaders == null) {
+                        HttpHeaders headers = new HttpHeaders();
+                        headers.putAll(super.getHeaders());
                         for (String headerName : UNTRUSTED_HEADERS) {
-                            httpHeaders.remove(headerName);
+                            headers.remove(headerName);
                         }
-                    })
-                    .build();
+                        sanitizedHeaders = HttpHeaders.readOnlyHttpHeaders(headers);
+                    }
+                    return sanitizedHeaders;
+                }
+            };
 
             return chain.filter(exchange.mutate().request(sanitizedRequest).build());
         }

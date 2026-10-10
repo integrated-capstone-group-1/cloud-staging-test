@@ -73,10 +73,17 @@ spring:
           filters:
             - JwtAuthentication
 
-        - id: forex-service
+        - id: forex-service-public
           uri: http://forex-service:8087
           predicates:
-            - Path=/api/v1/fx-rate,/api/v1/fx-rate/**,/api/v1/forex/**,/api/v1/fx/**
+            - Path=/api/v1/fx-rate,/api/v1/fx-rate/**,/api/v1/forex/**
+
+        - id: forex-service-secured
+          uri: http://forex-service:8087
+          predicates:
+            - Path=/api/v1/fx/**
+          filters:
+            - JwtAuthentication
 
         - id: notification-service
           uri: http://notification-service:8085

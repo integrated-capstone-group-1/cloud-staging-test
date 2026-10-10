@@ -1,0 +1,23 @@
+{
+  "requests_total": 29,
+  "retest_F001": "PASS",
+  "retest_F002": "PASS",
+  "retest_F003": "PASS",
+  "retest_F004": "PASS",
+  "retest_F005": "PASS",
+  "retest_F006": "PASS",
+  "retest_F007": "PASS",
+  "findings": [
+    {
+      "title": "Cross-customer FX quote hijacking permitted on /api/v1/fx/convert",
+      "sev": "S1",
+      "oracle": "F7"
+    }
+  ],
+  "contract_queries": [],
+  "observations": [
+    "Idempotency key collision between distinct customers (status=409): idempotency key may be globally scoped instead of customer-scoped."
+  ],
+  "final_invariant_exit": 0,
+  "final_invariant_output": "I-1 PASS (0)\nI-2 PASS (0)\nI-3 PASS (0)\nI-6 PASS (0)\nI-8 PASS (0)\nI-9 PASS (0)\nI-10 PASS (0)\nI-11 PASS (0)\nI-12 PASS (0)\nI-13 PASS (0)\nI-4 PASS (0)\nI-5 PASS (0)\nI-7 PASS (0)"
+}

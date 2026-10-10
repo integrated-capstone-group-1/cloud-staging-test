@@ -45,13 +45,35 @@ public class TransactionClient {
                     int status = resp.getStatusCode().value();
                     String body = new String(resp.getBody().readAllBytes());
                     if (status == 409) {
-                        throw new IdempotencyConflictException(body.isBlank() ? "Idempotency conflict" : body);
+                        String msg = body;
+                        if (body.contains("PAYLOAD_MISMATCH")) {
+                            msg = "PAYLOAD_MISMATCH: Idempotency key was previously used with a different request payload";
+                        } else if (body.contains("REQUEST_IN_PROGRESS")) {
+                            msg = "REQUEST_IN_PROGRESS: Request with this idempotency key is already processing";
+                        }
+                        throw new IdempotencyConflictException(msg.isBlank() ? "Idempotency conflict" : msg);
                     } else if (status == 422) {
                         throw new InsufficientBalanceException(body.isBlank() ? "Unprocessable payment" : body);
                     } else if (status == 404) {
                         throw new ResourceNotFoundException("Transaction not found");
                     } else if (status == 503) {
                         throw new SecurityCheckUnavailableException("Security screening unavailable");
+                    } else if (status == 403) {
+                        String msg = "Access Denied";
+                        int idx = body.indexOf("\"detail\":\"");
+                        if (idx != -1) {
+                            int end = body.indexOf("\"", idx + 10);
+                            if (end != -1) {
+                                msg = body.substring(idx + 10, end);
+                            }
+                        } else if (!body.isBlank()) {
+                            msg = body;
+                        }
+                        throw new org.springframework.security.access.AccessDeniedException(msg);
+                    } else if (status == 400) {
+                        throw new IllegalArgumentException(body.isBlank() ? "Bad Request" : body);
+                    } else {
+                        throw new IllegalStateException("Transaction service error [" + status + "]: " + body);
                     }
                 })
                 .build();

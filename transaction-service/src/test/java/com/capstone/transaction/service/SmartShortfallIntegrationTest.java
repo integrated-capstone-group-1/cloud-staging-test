@@ -52,6 +52,9 @@ class SmartShortfallIntegrationTest {
     @Mock
     private RiskScreeningClient riskScreeningClient;
 
+    @Mock
+    private IdempotencyService idempotencyService;
+
     @InjectMocks
     private PaymentOrchestrator paymentOrchestrator;
 
@@ -59,6 +62,8 @@ class SmartShortfallIntegrationTest {
     void setUp() {
         lenient().when(txnMasterRepository.save(any(TransactionMaster.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
+        lenient().when(lifecycleService.markAuthorized(anyString())).thenReturn(true);
+        lenient().when(idempotencyService.tryLock(any(), any())).thenReturn(true);
     }
 
     @Test

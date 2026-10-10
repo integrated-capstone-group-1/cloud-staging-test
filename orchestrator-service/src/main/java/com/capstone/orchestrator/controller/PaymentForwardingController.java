@@ -50,7 +50,14 @@ public class PaymentForwardingController {
         log.info("BFF: Received payment request: recipient={}, amount={} {}",
                 request.getRecipientAccountId(), request.getAmount(), request.getCurrency());
 
-        // Step 1: Enforce customer ownership or resolve default sender account
+        // Step 1: Enforce customer ownership on funding pocket and sender account
+        if (request.getFundingPocketId() != null && !request.getFundingPocketId().isBlank()) {
+            if (request.getQuoteId() == null || request.getQuoteId().isBlank()) {
+                throw new IllegalArgumentException("quote_id is required when funding_pocket_id is specified");
+            }
+            ownershipService.verifyAccountOwnership(request.getFundingPocketId(), "funding pocket debit");
+        }
+
         if (request.getSenderAccountId() != null) {
             ownershipService.verifyAccountOwnership(request.getSenderAccountId(), "debit payment");
         } else {
@@ -64,6 +71,9 @@ public class PaymentForwardingController {
 
         // Step 2: Forward to Tier 4 Payment Hub (:8084)
         PaymentResponse response = transactionClient.forwardPayment(request, idempotencyKey, authHeader);
+        if (response == null) {
+            throw new IllegalStateException("Payment response was null from payment hub");
+        }
 
         // Step 3: Map 202 Accepted for stepped-up verification or risk hold queues
         if ("RESERVED".equals(response.getStatus()) || "STEP_UP_OTP".equals(response.getActionRequired())) {

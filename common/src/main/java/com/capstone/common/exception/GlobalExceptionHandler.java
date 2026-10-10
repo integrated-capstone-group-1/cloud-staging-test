@@ -10,6 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.validation.FieldError;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -23,6 +24,11 @@ import java.util.Map;
 
 /**
  * RFC 7807 problem+json error handler shared by every WebMVC service in the
+ * system. Each service's @SpringBootApplication component-scans
+ * com.capstone.common so this advice is picked up automatically.
+ */
+@RestControllerAdvice
+public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
@@ -70,12 +76,6 @@ import java.util.Map;
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(pd);
     }
 
- * system. Each service's @SpringBootApplication component-scans
- * com.capstone.common so this advice is picked up automatically.
- */
-@RestControllerAdvice
-public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
-
     private ProblemDetail build(HttpStatus status, String type, String title, String detail, WebRequest request) {
         ProblemDetail pd = ProblemDetail.forStatusAndDetail(status, detail);
         pd.setType(URI.create(type));
@@ -117,8 +117,27 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(IdempotencyConflictException.class)
     public ResponseEntity<ProblemDetail> handleIdempotencyConflict(IdempotencyConflictException ex, WebRequest request) {
+        String errorCode = (ex.getMessage() != null && ex.getMessage().contains("PAYLOAD_MISMATCH"))
+                ? "PAYLOAD_MISMATCH"
+                : "REQUEST_IN_PROGRESS";
         ProblemDetail pd = build(HttpStatus.CONFLICT, "https://capstone.bank/errors/idempotency-conflict",
                 "Idempotency Conflict", ex.getMessage(), request);
+        pd.setProperty("error_code", errorCode);
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(pd);
+    }
+
+    @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class)
+    public ResponseEntity<ProblemDetail> handleDataIntegrityViolation(org.springframework.dao.DataIntegrityViolationException ex, WebRequest request) {
+        log.warn("Database integrity violation: {}", ex.getMessage());
+        String msg = ex.getMessage();
+        if (msg != null && (msg.contains("UQ_TXN_CUST_IDEMPOTENCY") || msg.toLowerCase().contains("idempotency"))) {
+            ProblemDetail pd = build(HttpStatus.CONFLICT, "https://capstone.bank/errors/idempotency-conflict",
+                    "Idempotency Conflict", "REQUEST_IN_PROGRESS: Request with this idempotency key is already processing", request);
+            pd.setProperty("error_code", "REQUEST_IN_PROGRESS");
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(pd);
+        }
+        ProblemDetail pd = build(HttpStatus.CONFLICT, "https://capstone.bank/errors/data-integrity",
+                "Conflict", "Data integrity constraint violation", request);
         return ResponseEntity.status(HttpStatus.CONFLICT).body(pd);
     }
 
@@ -162,6 +181,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     public ResponseEntity<ProblemDetail> handleIllegalArgument(IllegalArgumentException ex, WebRequest request) {
         ProblemDetail pd = build(HttpStatus.BAD_REQUEST, "https://capstone.bank/errors/bad-request",
                 "Bad Request", ex.getMessage(), request);
+        pd.setProperty("error_code", "VALIDATION_FAILED");
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(pd);
     }
 
@@ -204,8 +224,9 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ProblemDetail> handleGeneric(Exception ex, WebRequest request) {
+        log.error("Unhandled internal server error: ", ex);
         ProblemDetail pd = build(HttpStatus.INTERNAL_SERVER_ERROR, "https://capstone.bank/errors/internal",
-                "Internal Server Error", "An unexpected error occurred: " + ex.getMessage(), request);
+                "Internal Server Error", "An unexpected error occurred", request);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(pd);
     }
 
@@ -221,6 +242,23 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         ProblemDetail pd = build(HttpStatus.BAD_REQUEST, "https://capstone.bank/errors/validation",
                 "Validation Failed", "One or more fields failed validation", request);
         pd.setProperty("fieldErrors", fieldErrors);
+        pd.setProperty("error_code", "VALIDATION_FAILED");
+        return ResponseEntity.badRequest().body(pd);
+    }
+
+    @Override
+    protected ResponseEntity<Object> handleHttpMessageNotReadable(HttpMessageNotReadableException ex,
+                                                                   HttpHeaders headers,
+                                                                   HttpStatusCode status,
+                                                                   WebRequest request) {
+        String detail = "Malformed request body or invalid field format";
+        Throwable rootCause = ex.getMostSpecificCause();
+        if (rootCause instanceof IllegalArgumentException iae && iae.getMessage() != null) {
+            detail = iae.getMessage();
+        }
+        ProblemDetail pd = build(HttpStatus.BAD_REQUEST, "https://capstone.bank/errors/validation",
+                "Validation Failed", detail, request);
+        pd.setProperty("error_code", "VALIDATION_FAILED");
         return ResponseEntity.badRequest().body(pd);
     }
 }

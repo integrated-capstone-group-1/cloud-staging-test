@@ -1,0 +1,17 @@
+{
+  "requests_total": 13,
+  "retest_F003": "PASS",
+  "retest_F004": "PASS",
+  "findings": [
+    {
+      "title": "IDOR: Customer can view another customer's payment details",
+      "sev": "S1",
+      "oracle": "F7",
+      "status": 200
+    }
+  ],
+  "contract_queries": [],
+  "observations": [],
+  "final_invariant_exit": 0,
+  "final_invariant_output": "I-1 PASS (0)\nI-2 PASS (0)\nI-3 PASS (0)\nI-6 PASS (0)\nI-8 PASS (0)\nI-9 PASS (0)\nI-10 PASS (0)\nI-11 PASS (0)\nI-12 PASS (0)\nI-13 PASS (0)\nI-4 PASS (0)\nI-5 PASS (0)\nI-7 PASS (0)"
+}

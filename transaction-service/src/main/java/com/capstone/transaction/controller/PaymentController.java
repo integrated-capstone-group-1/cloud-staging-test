@@ -52,6 +52,13 @@ public class PaymentController {
             @PathVariable("id") String id,
             @RequestParam(value = "reason", required = false) String reason) {
 
+        TransactionMaster txn = txnMasterRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Payment " + id + " not found"));
+
+        if (txn.getCustomerId() != null) {
+            SecurityUtils.checkCustomerAccess(txn.getCustomerId(), "cancel payment");
+        }
+
         TransactionMaster cancelled = lifecycleService.cancelPayment(id, reason);
 
         return ResponseEntity.ok(CancelPaymentResponse.builder()
@@ -64,6 +71,10 @@ public class PaymentController {
     public ResponseEntity<PaymentResponse> getPaymentStatus(@PathVariable("id") String id) {
         TransactionMaster txn = txnMasterRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Payment " + id + " not found"));
+
+        if (txn.getCustomerId() != null) {
+            SecurityUtils.checkCustomerAccess(txn.getCustomerId(), "view payment status");
+        }
 
         PaymentResponse response = PaymentResponse.builder()
                 .transactionId(txn.getTxnId())
