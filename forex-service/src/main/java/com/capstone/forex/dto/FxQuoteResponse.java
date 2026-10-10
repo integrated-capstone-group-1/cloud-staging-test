@@ -18,6 +18,9 @@ public class FxQuoteResponse {
     @JsonProperty("quote_id")
     private String quoteId;
 
+    @JsonProperty("customer_id")
+    private String customerId;
+
     @JsonProperty("source_currency")
     private String sourceCurrency;
 

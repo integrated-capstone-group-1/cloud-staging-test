@@ -188,4 +188,51 @@ class ForexQuoteAndSchedulerTest {
                 .andExpect(jsonPath("$.expires_in_seconds").value(30))
                 .andExpect(jsonPath("$.quote_id").isNotEmpty());
     }
+
+    @Test
+    @DisplayName("6. F-008: Cross-customer quote conversion is rejected with 403 ACCESS_DENIED")
+    void crossCustomerQuoteConversionRejected() throws Exception {
+        // Customer A generates quote
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+                new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                        "cust-juan-001", null, java.util.List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_CUSTOMER"))
+                )
+        );
+
+        FxRateCache freshRate = FxRateCache.builder()
+                .baseCurrency("EUR")
+                .quoteCurrency("PHP")
+                .rate(new BigDecimal("62.00000000"))
+                .fetchedAt(OffsetDateTime.now())
+                .source("api.frankfurter.dev")
+                .build();
+        when(fxRateCacheRepository.findByBaseCurrencyAndQuoteCurrency("EUR", "PHP"))
+                .thenReturn(Optional.of(freshRate));
+
+        FxQuoteResponse quote = forexQuoteService.generateQuote("PHP", "EUR", new BigDecimal("10.0000"));
+        assertThat(quote.getQuoteId()).isNotNull();
+        assertThat(quote.getCustomerId()).isEqualTo("cust-juan-001");
+
+        // Customer B attempts to convert Customer A's quote
+        org.springframework.security.core.context.SecurityContextHolder.getContext().setAuthentication(
+                new org.springframework.security.authentication.UsernamePasswordAuthenticationToken(
+                        "cust-maria-002", null, java.util.List.of(new org.springframework.security.core.authority.SimpleGrantedAuthority("ROLE_CUSTOMER"))
+                )
+        );
+
+        FxConvertRequest hijackRequest = FxConvertRequest.builder()
+                .quoteId(quote.getQuoteId())
+                .sourcePocketId("pocket-maria-01")
+                .targetPocketId("pocket-maria-02")
+                .build();
+
+        mockMvc.perform(post("/api/v1/fx/convert")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(hijackRequest)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error_code").value("ACCESS_DENIED"));
+
+        org.springframework.security.core.context.SecurityContextHolder.clearContext();
+    }
 }
+

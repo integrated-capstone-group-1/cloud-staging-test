@@ -75,9 +75,11 @@ public class ForexQuoteService {
         OffsetDateTime now = OffsetDateTime.now();
         OffsetDateTime validUntil = now.plusSeconds(QUOTE_VALIDITY_SECONDS);
         String quoteId = "q-" + UUID.randomUUID();
+        String customerId = com.capstone.common.security.SecurityUtils.getCurrentCustomerId().orElse(null);
 
         FxQuoteResponse quote = FxQuoteResponse.builder()
                 .quoteId(quoteId)
+                .customerId(customerId)
                 .sourceCurrency(from)
                 .targetCurrency(to)
                 .targetAmount(targetAmount.setScale(4, RoundingMode.HALF_UP))
@@ -165,6 +167,14 @@ public class ForexQuoteService {
                 activeQuotes.remove(request.getQuoteId());
             }
             throw new FxQuoteExpiredException("The 30-second locked FX quote expired before payment confirmation.");
+        }
+
+        // Enforce quote ownership (CONTRACTS.md § 2.1 line 166: quote_id must belong to the caller)
+        if (quote.getCustomerId() != null) {
+            com.capstone.common.security.SecurityUtils.checkCustomerAccess(
+                    quote.getCustomerId(),
+                    "execute FX conversion with quote " + quote.getQuoteId()
+            );
         }
 
         // Mark quote as consumed
