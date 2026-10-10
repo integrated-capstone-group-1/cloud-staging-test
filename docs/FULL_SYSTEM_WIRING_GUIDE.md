@@ -196,9 +196,10 @@ All requests entering `:8080` map to downstream microservices per `openapi.yaml`
 | `/api/auth/login`, `/api/auth/logout`, `/api/auth/refresh`, `/api/auth/otp/**` | `login-service` | `8082` | None / Public | BCrypt login, JWT issuance, Redis blacklist revocation, Step-up OTP |
 | `/api/accounts`, `/api/accounts/{id}`, `/api/accounts/{id}/balance`, `/api/accounts/customer/{id}` | `accounts-service` | `8083` | `JwtAuthentication` | Account lookup, balance inquiry, multi-currency pockets (`openapi.yaml`) |
 | `/api/v1/accounts/{id}/lock`, `/api/v1/accounts/{id}/unlock` | `accounts-service` | `8083` | `JwtAuthentication` | Customer account self-lock & OTP unlock (`CONTRACTS.md §2.3`) |
-| `/api/v1/payments`, `/api/v1/payments/**` | `transaction-service` | `8084` | `JwtAuthentication` | Direct transfer, Smart shortfall saga, CAS cancel (`CONTRACTS.md §2.1`) |
+| `/api/v1/dashboard/home` | `orchestrator-service` | `8089` | `JwtAuthentication` | BFF customer home screen aggregation (pockets, recent txns, alerts) |
+| `/api/v1/payments`, `/api/v1/payments/**` | `orchestrator-service` / `transaction-service` | `8089` / `8084` | `JwtAuthentication` | BFF ownership verification & 7-status transaction saga settlement |
 | `/api/v1/cards`, `/api/v1/cards/**` | `transaction-service` | `8084` | `JwtAuthentication` | Virtual card controls, e-commerce toggle, status (`CONTRACTS.md §2.3`) |
-| `/api/v1/recipients/lookup` | `transaction-service` | `8084` | `JwtAuthentication` | Masked recipient name lookup before confirmation (`CONTRACTS.md §2.3`) |
+| `/api/v1/recipients/lookup` | `accounts-service` | `8083` | `JwtAuthentication` | Masked recipient name lookup before confirmation (`CONTRACTS.md §2.3`) |
 | `/api/v1/ledger/mutate` | `transaction-service` | `8084` | `JwtAuthentication` | Legacy Sprint 0 adapter route for atomic CBS mutation (`openapi.yaml`) |
 | `/api/v1/ledger/audit/{txnId}` | `transaction-service` | `8084` | `JwtAuthentication` | PostgreSQL append-only audit trail inquiry (`openapi.yaml`) |
 | `/api/v1/fx/quote`, `/api/v1/fx/convert` | `forex-service` | `8087` | `JwtAuthentication` | 30s locked quote & own-pocket FX conversion (`CONTRACTS.md §2.2`) |
@@ -221,44 +222,87 @@ All requests entering `:8080` map to downstream microservices per `openapi.yaml`
 
 ---
 
-## 6. Full-System Startup Runbook
+## 6. Execution & Verification Runbooks
 
-Execute this ordered sequence to bring up the entire stack for E2E testing:
+### 6.1 Manual Local Execution Runbook
 
-### Step 1: Start Backend Infrastructure & Microservices
+Follow these ordered steps to run and interact with the system manually across all channels:
+
+#### Step 1: Start Backend Infrastructure & Microservices
 ```powershell
-cd "banking-backend-monorepo"
+cd "c:\Users\RBS83790\OneDrive - EastWest Banking Corporation\Documents\training\integrated-capstone\banking-backend-monorepo"
 
-# Stop any dangling containers and reset volumes for a clean state
+# Stop existing containers and reset volumes for a clean state
 docker compose down -v
 
-# Start full backend stack
+# Start complete multi-service stack
 docker compose up -d
-```
 
-### Step 2: Health Check & Seam Verification
-Verify all exposed endpoints and core services are healthy before launching frontends:
-
-```powershell
-# 1. Check container health status
-docker compose ps
-
-# 2. Verify API Gateway ingress
+# Verify perimeter ingress
 Invoke-RestMethod -Uri "http://localhost:8080/actuator/health" -Method Get
-
-# 3. Verify Admin Portal ingress
-Invoke-RestMethod -Uri "http://localhost:8090/actuator/health" -Method Get
 ```
 
-### Step 3: Launch Flutter Client
+#### Step 2: Access Thymeleaf Admin Web Portal (:8090)
+Open browser to `http://localhost:8090`:
+- **Credentials:** `admin@ledgerbank.com` / `admin123`.
+- **Operator Verification:** Review Executive Liquidity KPIs, inspect Held Transfers Queue (`/admin/transfers/held`), test Account Freeze/Unfreeze, and inspect Dual-DS Reconciliation runs.
+
+#### Step 3: Run Flutter Web Client (Chrome)
 ```powershell
-cd "banking-client-monorepo"
+cd "c:\Users\RBS83790\OneDrive - EastWest Banking Corporation\Documents\training\integrated-capstone\banking-client-monorepo"
 
-# Run on Android Emulator
+# Run in Chrome targeting API Gateway :8080
+flutter run -d chrome --dart-define=API_BASE_URL=http://localhost:8080
+```
+- **Customer Verification:** Log in as `juan.delacruz@example.com` / `Password123!` (or `maria.santos@example.com`).
+- Verify multi-currency pockets hydrate from `GET /api/v1/dashboard/home`.
+- Submit same-currency transfer or shortfall cross-currency payment.
+
+#### Step 4: Run Emulated Mobile App (Android Emulator)
+```powershell
+cd "c:\Users\RBS83790\OneDrive - EastWest Banking Corporation\Documents\training\integrated-capstone\banking-client-monorepo"
+
+# Run on Android Emulator (resolves to Gateway via http://10.0.2.2:8080 by default)
 flutter run -d emulator-5554
+```
 
-# Or run in Chrome
-flutter run -d chrome
+---
+
+### 6.2 Headless Automated Full-System Verification (Breaker-Fixer)
+
+To execute the entire breaker-fixer regression loop headlessly without launching an emulator window or desktop browser:
+
+#### Phase A: Headless Backend & Gateway Ingress Probe
+Executes live HTTP API functional suites and transaction saga edge cases through API Gateway `:8080`:
+```powershell
+cd "c:\Users\RBS83790\OneDrive - EastWest Banking Corporation\Documents\training\integrated-capstone\banking-backend-monorepo"
+
+# 1. Run live functional probe script across all Gateway endpoints
+powershell -ExecutionPolicy Bypass -File .\scripts\test_api_functional_e2e.ps1
+
+# 2. Run backend Python E2E test suite
+python -m pytest tests/e2e/ -v --html=evidence/e2e_report.html
+```
+
+#### Phase B: Headless Client Layer Seam Verification
+Executes the Flutter client network stack, Dio JWT interceptor, circuit breaker retry loops, RFC 7807 error catalog deserialization, and UI widget flows headlessly:
+```powershell
+cd "c:\Users\RBS83790\OneDrive - EastWest Banking Corporation\Documents\training\integrated-capstone\banking-client-monorepo"
+
+# 1. Run client-gateway integration seams headlessly
+flutter test test/integration/
+
+# 2. Run complete client test suite (90 tests across core, features, and widgets)
+flutter test
+```
+
+#### Phase C: Headless Resilience & Chaos Injection
+Proves system resilience under infrastructure failures (Oracle 800ms latency, risk engine shutdown, PostgreSQL audit outage) with automatic recovery:
+```powershell
+cd "c:\Users\RBS83790\OneDrive - EastWest Banking Corporation\Documents\training\integrated-capstone\banking-backend-monorepo"
+
+# Run graded chaos injection runbook
+bash scripts/chaos/run_all_chaos_tests.sh
 ```
 
 ---
