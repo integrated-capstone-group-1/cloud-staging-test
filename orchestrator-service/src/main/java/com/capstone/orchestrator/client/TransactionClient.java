@@ -45,7 +45,13 @@ public class TransactionClient {
                     int status = resp.getStatusCode().value();
                     String body = new String(resp.getBody().readAllBytes());
                     if (status == 409) {
-                        throw new IdempotencyConflictException(body.isBlank() ? "Idempotency conflict" : body);
+                        String msg = body;
+                        if (body.contains("PAYLOAD_MISMATCH")) {
+                            msg = "PAYLOAD_MISMATCH: Idempotency key was previously used with a different request payload";
+                        } else if (body.contains("REQUEST_IN_PROGRESS")) {
+                            msg = "REQUEST_IN_PROGRESS: Request with this idempotency key is already processing";
+                        }
+                        throw new IdempotencyConflictException(msg.isBlank() ? "Idempotency conflict" : msg);
                     } else if (status == 422) {
                         throw new InsufficientBalanceException(body.isBlank() ? "Unprocessable payment" : body);
                     } else if (status == 404) {

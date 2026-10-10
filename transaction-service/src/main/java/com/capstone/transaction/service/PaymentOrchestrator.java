@@ -43,6 +43,7 @@ public class PaymentOrchestrator {
     private final LifecycleService lifecycleService;
     private final CoreBankingClient coreBankingClient;
     private final RiskScreeningClient riskScreeningClient;
+    private final IdempotencyService idempotencyService;
 
     /**
      * Orchestrates a payment:
@@ -63,7 +64,11 @@ public class PaymentOrchestrator {
             customerId = "cust-user-001";
         }
 
-        // Idempotency replay check
+        String reqHash = (idempotencyService != null && idempotencyKey != null && !idempotencyKey.isBlank())
+                ? idempotencyService.computePayloadHash(request)
+                : null;
+
+        // Idempotency replay check & fast-lock acquisition
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
             Optional<TransactionMaster> existing = txnMasterRepository.findByCustomerIdAndIdempotencyKey(customerId, idempotencyKey);
             if (existing.isPresent()) {
@@ -82,6 +87,18 @@ public class PaymentOrchestrator {
 
                 log.info("Replaying idempotent payment for key {}: status={}", idempotencyKey, txn.getTxnStatus());
                 return mapToResponse(txn);
+            }
+
+            if (idempotencyService != null) {
+                boolean locked = idempotencyService.tryLock(idempotencyKey, reqHash);
+                if (!locked) {
+                    existing = txnMasterRepository.findByCustomerIdAndIdempotencyKey(customerId, idempotencyKey);
+                    if (existing.isPresent()) {
+                        return mapToResponse(existing.get());
+                    }
+                    throw new IdempotencyConflictException(
+                            "REQUEST_IN_PROGRESS: Request with idempotency key '" + idempotencyKey + "' is already being processed");
+                }
             }
         }
 
@@ -106,7 +123,13 @@ public class PaymentOrchestrator {
                 .createdBy(customerId)
                 .build();
 
-        lifecycleService.createInitiatedTransaction(txn);
+        try {
+            lifecycleService.createInitiatedTransaction(txn);
+        } catch (org.springframework.dao.DataIntegrityViolationException ex) {
+            log.warn("Database integrity collision for idempotency key {}: {}", idempotencyKey, ex.getMessage());
+            throw new IdempotencyConflictException(
+                    "REQUEST_IN_PROGRESS: Request with idempotency key '" + idempotencyKey + "' is already being processed");
+        }
 
         // 2. Synchronous Risk Screening (<= 200ms fail-closed SLA)
         RiskEvaluationRequest riskReq = RiskEvaluationRequest.builder()
@@ -122,6 +145,9 @@ public class PaymentOrchestrator {
             riskDecision = riskScreeningClient.evaluate(riskReq);
         } catch (Exception ex) {
             lifecycleService.markFailed(txnId, "Security check unavailable");
+            if (idempotencyService != null && idempotencyKey != null && !idempotencyKey.isBlank()) {
+                idempotencyService.storeResult(idempotencyKey, reqHash, null);
+            }
             throw ex;
         }
 
@@ -140,6 +166,9 @@ public class PaymentOrchestrator {
                     )
             );
             lifecycleService.markReserved(txnId, holdResponse != null ? holdResponse.holdId() : null);
+            if (idempotencyService != null && idempotencyKey != null && !idempotencyKey.isBlank()) {
+                idempotencyService.storeResult(idempotencyKey, reqHash, null);
+            }
             return PaymentResponse.builder()
                     .transactionId(txnId)
                     .status("RESERVED")
@@ -151,6 +180,9 @@ public class PaymentOrchestrator {
         } else if (riskDecision.getScore() >= 0.50) {
             log.info("Medium risk detected (score={}) for txn {}. Requesting STEP_UP_OTP.",
                     riskDecision.getScore(), txnId);
+            if (idempotencyService != null && idempotencyKey != null && !idempotencyKey.isBlank()) {
+                idempotencyService.storeResult(idempotencyKey, reqHash, null);
+            }
             return PaymentResponse.builder()
                     .transactionId(txnId)
                     .status("INITIATED")
@@ -198,12 +230,19 @@ public class PaymentOrchestrator {
         } catch (Exception ex) {
             log.error("Core settlement failed for txn {}. Marking FAILED.", txnId, ex);
             lifecycleService.markFailed(txnId, ex.getMessage());
+            if (idempotencyService != null && idempotencyKey != null && !idempotencyKey.isBlank()) {
+                idempotencyService.storeResult(idempotencyKey, reqHash, null);
+            }
             throw ex;
         }
 
         // 7. Finalize to POSTED
         lifecycleService.markPosted(txnId, cbsResponse.coreReferenceId());
         log.info("Payment txn {} successfully POSTED with coreRef={}", txnId, cbsResponse.coreReferenceId());
+
+        if (idempotencyService != null && idempotencyKey != null && !idempotencyKey.isBlank()) {
+            idempotencyService.storeResult(idempotencyKey, reqHash, null);
+        }
 
         return PaymentResponse.builder()
                 .transactionId(txnId)

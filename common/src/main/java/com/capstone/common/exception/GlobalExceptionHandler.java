@@ -117,8 +117,27 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(IdempotencyConflictException.class)
     public ResponseEntity<ProblemDetail> handleIdempotencyConflict(IdempotencyConflictException ex, WebRequest request) {
+        String errorCode = (ex.getMessage() != null && ex.getMessage().contains("PAYLOAD_MISMATCH"))
+                ? "PAYLOAD_MISMATCH"
+                : "REQUEST_IN_PROGRESS";
         ProblemDetail pd = build(HttpStatus.CONFLICT, "https://capstone.bank/errors/idempotency-conflict",
                 "Idempotency Conflict", ex.getMessage(), request);
+        pd.setProperty("error_code", errorCode);
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(pd);
+    }
+
+    @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class)
+    public ResponseEntity<ProblemDetail> handleDataIntegrityViolation(org.springframework.dao.DataIntegrityViolationException ex, WebRequest request) {
+        log.warn("Database integrity violation: {}", ex.getMessage());
+        String msg = ex.getMessage();
+        if (msg != null && (msg.contains("UQ_TXN_CUST_IDEMPOTENCY") || msg.toLowerCase().contains("idempotency"))) {
+            ProblemDetail pd = build(HttpStatus.CONFLICT, "https://capstone.bank/errors/idempotency-conflict",
+                    "Idempotency Conflict", "REQUEST_IN_PROGRESS: Request with this idempotency key is already processing", request);
+            pd.setProperty("error_code", "REQUEST_IN_PROGRESS");
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(pd);
+        }
+        ProblemDetail pd = build(HttpStatus.CONFLICT, "https://capstone.bank/errors/data-integrity",
+                "Conflict", "Data integrity constraint violation", request);
         return ResponseEntity.status(HttpStatus.CONFLICT).body(pd);
     }
 

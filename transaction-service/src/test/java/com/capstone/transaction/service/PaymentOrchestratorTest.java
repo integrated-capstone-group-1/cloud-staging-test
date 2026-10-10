@@ -47,12 +47,17 @@ class PaymentOrchestratorTest {
     @Mock
     private RiskScreeningClient riskScreeningClient;
 
+    @Mock
+    private IdempotencyService idempotencyService;
+
     @InjectMocks
     private PaymentOrchestrator paymentOrchestrator;
 
     @BeforeEach
     void setUp() {
         lenient().when(txnMasterRepository.save(any(TransactionMaster.class))).thenAnswer(invocation -> invocation.getArgument(0));
+        lenient().when(lifecycleService.markAuthorized(anyString())).thenReturn(true);
+        lenient().when(idempotencyService.tryLock(any(), any())).thenReturn(true);
     }
 
     @Test
@@ -250,5 +255,44 @@ class PaymentOrchestratorTest {
 
         verifyNoInteractions(riskScreeningClient);
         verifyNoInteractions(coreBankingClient);
+    }
+
+    @Test
+    @DisplayName("F-004: In-flight concurrent request with same idempotency key throws REQUEST_IN_PROGRESS")
+    void shouldRejectConcurrentRequestWhenLockCannotBeAcquired() {
+        PaymentRequest request = PaymentRequest.builder()
+                .recipientAccountId("acct-maria-eur-01")
+                .amount(new BigDecimal("50.0000"))
+                .currency("EUR")
+                .senderAccountId("acct-juan-eur-01")
+                .build();
+
+        when(idempotencyService.tryLock(eq("idemp-concurrent"), any()))
+                .thenThrow(new IdempotencyConflictException("REQUEST_IN_PROGRESS: Request with idempotency key 'idemp-concurrent' is already being processed"));
+
+        assertThatThrownBy(() -> paymentOrchestrator.processPayment(request, "idemp-concurrent", "cust-user-001"))
+                .isInstanceOf(IdempotencyConflictException.class)
+                .hasMessageContaining("REQUEST_IN_PROGRESS");
+
+        verifyNoInteractions(riskScreeningClient);
+        verifyNoInteractions(coreBankingClient);
+    }
+
+    @Test
+    @DisplayName("F-004: DataIntegrityViolation on insert maps to IdempotencyConflictException without leaking raw SQL")
+    void shouldCatchDataIntegrityViolationAndThrowIdempotencyConflict() {
+        PaymentRequest request = PaymentRequest.builder()
+                .recipientAccountId("acct-maria-eur-01")
+                .amount(new BigDecimal("50.0000"))
+                .currency("EUR")
+                .senderAccountId("acct-juan-eur-01")
+                .build();
+
+        doThrow(new org.springframework.dao.DataIntegrityViolationException("ORA-00001: unique constraint (LEDGER_APP.UQ_TXN_CUST_IDEMPOTENCY) violated"))
+                .when(lifecycleService).createInitiatedTransaction(any());
+
+        assertThatThrownBy(() -> paymentOrchestrator.processPayment(request, "idemp-collision", "cust-user-001"))
+                .isInstanceOf(IdempotencyConflictException.class)
+                .hasMessageContaining("REQUEST_IN_PROGRESS");
     }
 }

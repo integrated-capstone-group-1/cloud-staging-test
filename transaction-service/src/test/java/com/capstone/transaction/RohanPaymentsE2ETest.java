@@ -16,6 +16,7 @@ import com.capstone.transaction.dto.risk.RiskEvaluationResponse;
 import com.capstone.transaction.entity.oracle.TransactionMaster;
 import com.capstone.transaction.exception.StateConflictException;
 import com.capstone.transaction.repository.oracle.TransactionMasterRepository;
+import com.capstone.transaction.service.IdempotencyService;
 import com.capstone.transaction.service.LifecycleService;
 import com.capstone.transaction.service.PaymentOrchestrator;
 import org.junit.jupiter.api.AfterEach;
@@ -73,6 +74,9 @@ public class RohanPaymentsE2ETest {
     @Mock
     private RiskScreeningClient riskScreeningClient;
 
+    @Mock
+    private IdempotencyService idempotencyService;
+
     @InjectMocks
     private PaymentOrchestrator paymentOrchestrator;
 
@@ -97,6 +101,7 @@ public class RohanPaymentsE2ETest {
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
         lenient().when(lifecycleService.markAuthorized(anyString())).thenReturn(true);
+        lenient().when(idempotencyService.tryLock(any(), any())).thenReturn(true);
 
         // Real instance of LifecycleService for accurate CAS state validation
         realLifecycleService = new LifecycleService(txnMasterRepository, null, null);
