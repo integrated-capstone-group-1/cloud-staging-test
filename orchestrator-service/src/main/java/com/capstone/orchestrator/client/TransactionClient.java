@@ -58,6 +58,18 @@ public class TransactionClient {
                         throw new ResourceNotFoundException("Transaction not found");
                     } else if (status == 503) {
                         throw new SecurityCheckUnavailableException("Security screening unavailable");
+                    } else if (status == 403) {
+                        String msg = "Access Denied";
+                        int idx = body.indexOf("\"detail\":\"");
+                        if (idx != -1) {
+                            int end = body.indexOf("\"", idx + 10);
+                            if (end != -1) {
+                                msg = body.substring(idx + 10, end);
+                            }
+                        } else if (!body.isBlank()) {
+                            msg = body;
+                        }
+                        throw new org.springframework.security.access.AccessDeniedException(msg);
                     } else if (status == 400) {
                         throw new IllegalArgumentException(body.isBlank() ? "Bad Request" : body);
                     } else {
