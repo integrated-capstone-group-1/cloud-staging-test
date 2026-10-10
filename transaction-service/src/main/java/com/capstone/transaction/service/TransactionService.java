@@ -210,8 +210,8 @@ public class TransactionService {
         }
 
         List<LedgerMutationAudit> audits = new java.util.ArrayList<>(auditRepository.findByTxnId(txnId));
+        TransactionMaster master = txnMasterRepository.findById(txnId).orElse(null);
         if (audits.isEmpty()) {
-            TransactionMaster master = txnMasterRepository.findById(txnId).orElse(null);
             if (master != null) {
                 Instant ts = master.getInitiatedAt() != null
                         ? master.getInitiatedAt().atZone(java.time.ZoneId.systemDefault()).toInstant()
@@ -247,18 +247,27 @@ public class TransactionService {
         }
 
         if (!audits.isEmpty() && !SecurityUtils.isPrivileged()) {
-            String currentCustId = SecurityUtils.getCurrentCustomerId().orElse(null);
-            if (currentCustId != null) {
-                boolean ownsLeg = audits.stream().anyMatch(a -> {
-                    try {
-                        AccountDTO acct = accountsServiceClient.getAccount(a.getAccountId());
-                        return acct != null && currentCustId.equalsIgnoreCase(acct.customerId());
-                    } catch (Exception ignored) {
-                        return false;
+            if (master != null && master.getCustomerId() != null) {
+                SecurityUtils.checkCustomerAccess(master.getCustomerId(), "view audit for transaction " + txnId);
+            } else {
+                String currentCustId = SecurityUtils.getCurrentCustomerId().orElse(null);
+                if (currentCustId != null) {
+                    boolean ownsInitiatingLeg = audits.stream()
+                            .filter(a -> "DEBIT".equalsIgnoreCase(a.getMutationType()))
+                            .findFirst()
+                            .or(() -> audits.stream().findFirst())
+                            .map(a -> {
+                                try {
+                                    AccountDTO acct = accountsServiceClient.getAccount(a.getAccountId());
+                                    return acct != null && currentCustId.equalsIgnoreCase(acct.customerId());
+                                } catch (Exception ignored) {
+                                    return false;
+                                }
+                            })
+                            .orElse(false);
+                    if (!ownsInitiatingLeg) {
+                        throw new AccessDeniedException("Access denied: You do not have permission to view audit for transaction " + txnId);
                     }
-                });
-                if (!ownsLeg) {
-                    throw new AccessDeniedException("Access denied: You do not have permission to view audit for transaction " + txnId);
                 }
             }
         }
@@ -278,9 +287,11 @@ public class TransactionService {
         if (!SecurityUtils.isPrivileged()) {
             try {
                 AccountDTO acct = accountsServiceClient.getAccount(accountId);
-                if (acct != null) {
+                if (acct != null && acct.customerId() != null) {
                     SecurityUtils.checkCustomerAccess(acct.customerId(), "view audit for account " + accountId);
                 }
+            } catch (AccessDeniedException ex) {
+                throw ex;
             } catch (Exception ignored) {
             }
         }
