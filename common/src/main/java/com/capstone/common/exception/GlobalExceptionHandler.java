@@ -185,8 +185,22 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(pd);
     }
 
+    @ExceptionHandler(AccountFrozenException.class)
+    public ResponseEntity<ProblemDetail> handleAccountFrozen(AccountFrozenException ex, WebRequest request) {
+        ProblemDetail pd = build(HttpStatus.UNPROCESSABLE_ENTITY, "https://capstone.bank/errors/account-frozen",
+                "Account Frozen", ex.getMessage(), request);
+        pd.setProperty("error_code", "ACCOUNT_FROZEN");
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(pd);
+    }
+
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<ProblemDetail> handleIllegalState(IllegalStateException ex, WebRequest request) {
+        if (ex.getMessage() != null && ex.getMessage().contains("ACCOUNT_FROZEN")) {
+            ProblemDetail pd = build(HttpStatus.UNPROCESSABLE_ENTITY, "https://capstone.bank/errors/account-frozen",
+                    "Account Frozen", ex.getMessage(), request);
+            pd.setProperty("error_code", "ACCOUNT_FROZEN");
+            return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(pd);
+        }
         ProblemDetail pd = build(HttpStatus.BAD_REQUEST, "https://capstone.bank/errors/invalid-state",
                 "Invalid State", ex.getMessage(), request);
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(pd);

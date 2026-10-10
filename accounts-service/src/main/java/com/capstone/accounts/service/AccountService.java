@@ -29,6 +29,7 @@ import com.capstone.common.dto.UnlockAccountRequest;
 import com.capstone.common.event.BalanceUpdatedEvent;
 import com.capstone.common.event.CrossCurrencySettlementCompletedEvent;
 import com.capstone.common.event.ForexConversionCompletedEvent;
+import com.capstone.common.exception.AccountFrozenException;
 import com.capstone.common.exception.InsufficientBalanceException;
 import com.capstone.common.exception.ResourceNotFoundException;
 import com.capstone.common.security.SecurityUtils;
@@ -164,6 +165,7 @@ public class AccountService {
         SecurityUtils.checkCustomerAccess(account.getCustomerId(), "lock account " + accountId);
 
         account.setAccountStatus("FROZEN");
+        account.setCustomerLocked("Y");
         account.setUpdatedAt(LocalDateTime.now());
         account.setUpdatedBy("CUSTOMER");
         AccountMaster saved = accountRepository.save(account);
@@ -179,8 +181,8 @@ public class AccountService {
         SecurityUtils.checkCustomerAccess(account.getCustomerId(), "unlock account " + accountId);
 
         // Strict Admin Freeze Precedence: if frozen by ADMIN, customer cannot self-unlock
-        if ("FROZEN".equalsIgnoreCase(account.getAccountStatus()) && "ADMIN".equalsIgnoreCase(account.getUpdatedBy())) {
-            throw new IllegalStateException("Account is administratively frozen and cannot be unlocked by customer");
+        if ("Y".equalsIgnoreCase(account.getAdminFrozen()) || ("FROZEN".equalsIgnoreCase(account.getAccountStatus()) && "ADMIN".equalsIgnoreCase(account.getUpdatedBy()))) {
+            throw new AccountFrozenException("ACCOUNT_FROZEN: Account is administratively frozen and cannot be unlocked by customer");
         }
 
         if (request == null || request.otpCode() == null || request.otpCode().isBlank()) {
@@ -188,6 +190,7 @@ public class AccountService {
         }
 
         account.setAccountStatus("ACTIVE");
+        account.setCustomerLocked("N");
         account.setUpdatedAt(LocalDateTime.now());
         account.setUpdatedBy("CUSTOMER");
         AccountMaster saved = accountRepository.save(account);
@@ -223,6 +226,11 @@ public class AccountService {
         LocalDateTime now = LocalDateTime.now();
 
         account.setAccountStatus(newStatus);
+        if ("FROZEN".equalsIgnoreCase(newStatus)) {
+            account.setAdminFrozen("Y");
+        } else if ("ACTIVE".equalsIgnoreCase(newStatus)) {
+            account.setAdminFrozen("N");
+        }
         account.setUpdatedAt(now);
         account.setUpdatedBy("ADMIN");
 

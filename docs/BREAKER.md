@@ -226,3 +226,29 @@ Emphasis and constants used; preflight result; step outcomes; seed journeys (exe
 ---
 
 Confirm you understand these rules. If the constants in section 3 are filled, begin at Step 0; otherwise ask once for what is missing.
+
+---
+
+## 13. Extended Non-Functional (NFR), Chaos & Mobile Testing Mode
+
+When the human instructs you to proceed with non-functional tests (`docs/NON_FUNCTIONAL_TEST_PLAN.md`) or mobile journeys (`docs/E2E_TEST_PLAN.md §3.6-§3.7`), the default Section 5 black-box boundaries are conditionally extended under strict **Human-in-the-Loop (HITL)** governance:
+
+### 13.1 Granted Permissions (Scope-Specific)
+1. **Docker & Infrastructure Control:**
+   - Permitted commands: `docker stop`, `docker start`, `docker restart`, and `docker exec` against designated targets (`risk-engine`, `postgres-db`, `oracle-db`, `kafka`, `redis`).
+   - Purpose: Graded fault injection (`CH-01` to `CH-04`, `RS-01` to `RS-07`).
+2. **Direct Database & Harness Operations:**
+   - Permitted commands: Direct SQL execution (`sqlplus`, `psql`, `redis-cli`) strictly for test setup/teardown (e.g. artificial FX rate aging in `NFR-RESIL-01`, inserting in-flight records for sweeper verification in `NFR-RESIL-02`, and asserting raw ledger leg counts in `NFR-CONC-02`).
+3. **Internal Port & Service Access:**
+   - Permitted: Perimeter port scanning (`:8081`–`:8088`, `:1521`, `:5432` for `NFR-SEC-01`) and direct internal probes (`:8088/internal/risk/evaluate` for `NFR-SEC-02`).
+4. **Test Runners & Concurrency Bursts:**
+   - Permitted runners: `mvn test` / `.\mvnw.cmd test` (e.g., `ParallelWithdrawalConcurrencyTest`), `powershell .\tests\nfr\*.ps1`, and `.\scripts\chaos\*.ps1`.
+   - Permitted concurrency: Burst loads of 50–100 threads for race/concurrency scenarios (`NFR-CONC-01`, `NFR-CONC-02`, `NFR-SEC-03`).
+5. **Mobile Journeys:**
+   - Permitted: Running Flutter integration suites (`flutter test integration_test/mobile_network_e2e_test.dart`) and evaluating UI flows against Gateway `:8080`.
+
+### 13.2 Human-in-the-Loop Safeguards (Transparency & Traceability)
+Before executing any disruptive NFR or Chaos action:
+1. **Pre-Execution Notice:** State the exact command, target service/container/database, expected outcome, and blast radius to the human before firing.
+2. **Post-Execution Cleanup & Verification:** Always restore modified state (restart stopped containers, restore aged DB timestamps, remove injected netem latency) and run `python tests/invariants/check_invariants.py --scope global` to verify zero system corruption.
+3. **Traceability:** Record all NFR command outputs, latencies, and exit codes into `evidence/loop/nfr/run-NN/` and link to test plan IDs.
