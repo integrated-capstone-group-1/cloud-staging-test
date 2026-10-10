@@ -7,4 +7,5 @@
 | F-003 | S1 | CODE_BUG | Rohan | PaymentRequest accepted arbitrary decimal scale and scientific notation | f92e401 | MonetaryAmountDeserializerTest (4 scenarios), ChannelOrchestratorIntegrationTest (2 scenarios) | None | VERIFIED |
 | F-004 | S1 | CODE_BUG | Rohan | PaymentOrchestrator bypassed Redis fast-lock, causing DB unique constraint collisions (ORA-00001) and raw SQL schema leakage | 9a36147 | PaymentOrchestratorTest (2 scenarios), Blackbox Concurrency Replay | None | VERIFIED |
 | F-005 | S1 | CODE_BUG | Rohan | PaymentController lacked customer ownership checks on GET /payments/{id} and POST /payments/{id}/cancel | 779ed49 | PaymentControllerSecurityTest (4 scenarios), Blackbox IDOR Replay | None | VERIFIED |
+| F-006 | S2 | CODE_BUG | Russel | SecurityHeadersFilter mutated ReadOnlyHttpHeaders causing UnsupportedOperationException and Gateway HTTP 500 crash on client-supplied X-Cust-Id | e2ac92b | HeaderSanitizationAndCorsTest, SecurityHeadersFilterTest, Blackbox Replay | None | VERIFIED |
 
