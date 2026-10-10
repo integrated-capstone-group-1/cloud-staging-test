@@ -1,0 +1,28 @@
+{
+  "track": "Track 2 - Russel",
+  "timestamp": "2026-10-10T15:49:10Z",
+  "NFR-SEC-01": {
+    "status": "PASS",
+    "description": "Zero-trust perimeter port cloaking verified via scenario3_perimeter_scan.ps1 (0 leaked ports)"
+  },
+  "NFR-CHAOS-02": {
+    "status": "PASS",
+    "http_status": 503,
+    "latency_ms": 584.2020511627197,
+    "balance_before": 29609.3705,
+    "balance_after": 29609.3705,
+    "fail_closed": true
+  },
+  "NFR-CHAOS-03": {
+    "status": "PASS",
+    "fx_quote_status": 200,
+    "payment_status": 503
+  },
+  "NFR-CHAOS-01": {
+    "status": "PASS",
+    "delay_ms": 800,
+    "status_code": 200,
+    "latency_ms": 35.77232360839844
+  },
+  "final_invariants_exit": 0
+}

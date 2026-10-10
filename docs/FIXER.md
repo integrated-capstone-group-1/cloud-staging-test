@@ -177,3 +177,22 @@ The human decides, per domain, using data you report. Typical exit: no open S1 o
 ---
 
 Confirm you understand these rules. If the constants in section 3 are filled, run `status` on the current findings and wait for the human; otherwise ask once for what is missing.
+
+---
+
+## 8. Extended Non-Functional (NFR), Chaos & Mobile Defect Handling
+
+When collaborating on NFR findings from `docs/NON_FUNCTIONAL_TEST_PLAN.md` or mobile integration journeys (`docs/E2E_TEST_PLAN.md §3.6-§3.7`), the FIXER operates under the following extensions:
+
+### 8.1 Expanded Scope & Reproduction Verification
+1. **NFR & Concurrency Regressions:**
+   - Permitted test additions: JUnit concurrency tests (e.g. `ConcurrentWithdrawalsRaceTest`, `ParallelWithdrawalConcurrencyTest`), multi-threaded integration suites, and PowerShell NFR runner assertions.
+   - For race conditions (e.g., CAS transitions, single-writer lock ordering), verify that row-locking is deterministic (`ORDER BY account_id ASC`) and atomic.
+2. **Resilience & Circuit Breaker Fixes:**
+   - If a fault-injection scenario fails (e.g. slow DB not triggering 503 fallback, or risk engine timeout taking $>200\text{ms}$), check Resilience4j annotations and TimeLimiter configurations in Spring Boot.
+3. **Mobile Client Interface & Error Parity:**
+   - Ensure RFC 7807 problem detail representations accurately expose machine-readable details (`shortfall`, `funding_options`, `failure_code`) consumed by the Flutter Dio client.
+
+### 8.2 Human-in-the-Loop Governance
+1. **Explanation & Traceability:** For any proposed NFR fix, explain in the proposal: (a) why the concurrency or resilience mechanism failed, (b) the exact diff, and (c) the regression test verifying it.
+2. **Zero Invariant Drift:** Step G verification must always run `python tests/invariants/check_invariants.py --scope global` with exit code `0`.
