@@ -113,7 +113,7 @@ class GatewayPerimeterSecurityIntegrationTest {
         // Step 3: Run pipeline: SecurityHeadersFilter -> RouteIsolationFilter -> JwtAuthenticationFilter
         StepVerifier.create(
                 securityHeadersFilter.filter(exchange, sanitizedExchange ->
-                        routeIsolationFilter.filter(sanitizedExchange, routeExchange ->
+                        routeIsolationFilter.filter(sanitizedExchange, (GatewayFilterChain) routeExchange ->
                                 jwtFilter.filter(routeExchange, chain)
                         )
                 )

@@ -1,6 +1,7 @@
 package com.capstone.gateway.security;
 
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -20,6 +21,7 @@ import static org.assertj.core.api.Assertions.*;
  * NFR-SEC-01: Zero-Trust Port Cloaking (CH-03)
  * Jira: DIG-8, DIG-25, DIG-118
  */
+@Disabled("NFR CH-03 Live Environment Test: Run via scripts/chaos/scenario3_perimeter_scan.ps1 when Docker stack is active.")
 @ExtendWith(MockitoExtension.class)
 class PortCloakingTest {
 

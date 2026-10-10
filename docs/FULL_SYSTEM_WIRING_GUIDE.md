@@ -172,13 +172,17 @@ banking:
     read-timeout-ms: 5000
 ```
 
+> [!NOTE]
+> **Compilation vs. Runtime Lifecycle:** Packaging the backend (`mvn clean package`) compiles the JAR artifacts into `target/`, but does **not** launch background processes. The Admin Portal only listens on `:8090` once the `frontend-web` container or Spring Boot process is explicitly started.
+
 * **Running inside Docker Compose:**
-  Managed automatically. Environment variables are set to:
+  Managed automatically as the `frontend-web` service. Ensure JARs are pre-compiled first (`./mvnw clean package -DskipTests`), then start via `docker compose up -d frontend-web` (or full stack `docker compose up -d`). Environment variables are set to:
   ```yaml
   BANKING_BACKEND_MODE: gateway
   BANKING_GATEWAY_URL: http://api-gateway:8080
   ```
 * **Running Standalone (Local JVM):**
+  If testing UI components independently without Docker:
   ```powershell
   cd "banking-backend-monorepo"
   ./mvnw spring-boot:run -pl frontend-web -Dspring-boot.run.arguments="--banking.backend.mode=gateway --banking.backend.gateway-url=http://localhost:8080"
@@ -228,22 +232,32 @@ All requests entering `:8080` map to downstream microservices per `openapi.yaml`
 
 Follow these ordered steps to run and interact with the system manually across all channels:
 
-#### Step 1: Start Backend Infrastructure & Microservices
+#### Step 1: Pre-Build Backend Artifacts & Start Microservices Stack
+
+Because all service Dockerfiles (including `frontend-web` and `api-gateway`) use lightweight runtime base images (`eclipse-temurin:21-jre-alpine`) and copy pre-built artifacts via `COPY target/*.jar app.jar`, you **must compile and package the modules prior to building Docker images**:
+
 ```powershell
 cd "c:\Users\RBS83790\OneDrive - EastWest Banking Corporation\Documents\training\integrated-capstone\banking-backend-monorepo"
 
-# Stop existing containers and reset volumes for a clean state
+# 1. Compile and package all 13 modules (produces .jar files in each module's target/ directory)
+./mvnw clean package -DskipTests
+
+# 2. Stop existing containers and reset volumes for a clean state
 docker compose down -v
 
-# Start complete multi-service stack
-docker compose up -d
+# 3. Build and start the complete multi-service stack in detached mode
+docker compose up -d --build
 
-# Verify perimeter ingress
+# 4. Verify API Gateway perimeter ingress (:8080)
 Invoke-RestMethod -Uri "http://localhost:8080/actuator/health" -Method Get
+
+# 5. Verify Thymeleaf Admin Portal (:8090)
+Invoke-RestMethod -Uri "http://localhost:8090/actuator/health" -Method Get
 ```
 
 #### Step 2: Access Thymeleaf Admin Web Portal (:8090)
 Open browser to `http://localhost:8090`:
+- **Service Verification:** Ensure container `frontend-web` is running (`docker compose ps frontend-web`).
 - **Credentials:** `admin@ledgerbank.com` / `admin123`.
 - **Operator Verification:** Review Executive Liquidity KPIs, inspect Held Transfers Queue (`/admin/transfers/held`), test Account Freeze/Unfreeze, and inspect Dual-DS Reconciliation runs.
 
@@ -332,3 +346,5 @@ The following seeded users and credentials from [`docs/SEED.md`](SEED.md) are pr
 | **`409 Conflict (REQUEST_IN_PROGRESS)`** | Duplicate `X-Idempotency-Key` sent while initial transaction is still processing (`SETNX` returned 0). | Await original response or supply a distinct UUID (`Uuid().v4()`). |
 | **`403 Forbidden (ACCESS_DENIED)` on `/internal/**` or balance mutations** | B-06 Boundary rule blocks internal routes (`/internal/core/**`, `/api/accounts/*/credit`) at Gateway. | Route payments through `/api/v1/payments`. |
 | **`422 Unprocessable (FX_RATE_STALE)`** | Cached exchange rate in `fx_rate_cache` is older than 24 hours. | Run Forex rate refresh scheduler or trigger `/api/v1/fx-rate` update. |
+| **`COPY failed: file not found in build context` during `docker compose up`** | Microservices were not compiled into `target/*.jar` before Docker build. | Run `./mvnw clean package -DskipTests` from repository root before `docker compose up --build`. |
+| **`Connection refused` on `http://localhost:8090` (Admin Portal)** | Building with `mvn` only creates JARs and does not start services, or `frontend-web` container failed to start due to missing JAR. | Run `./mvnw clean package -DskipTests`, then run `docker compose up -d frontend-web` (or local JVM `./mvnw spring-boot:run -pl frontend-web`). |
