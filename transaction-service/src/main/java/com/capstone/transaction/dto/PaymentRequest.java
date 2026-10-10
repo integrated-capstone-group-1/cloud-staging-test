@@ -1,7 +1,10 @@
 package com.capstone.transaction.dto;
 
+import com.capstone.common.util.MonetaryAmountDeserializer;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
@@ -23,6 +26,8 @@ public class PaymentRequest {
 
     @NotNull(message = "amount is required")
     @DecimalMin(value = "0.0001", message = "amount must be greater than zero")
+    @Digits(integer = 14, fraction = 4, message = "amount scale cannot exceed 4 decimal places")
+    @JsonDeserialize(using = MonetaryAmountDeserializer.class)
     @JsonProperty("amount")
     private BigDecimal amount;
 

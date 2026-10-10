@@ -10,6 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.validation.FieldError;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -23,6 +24,11 @@ import java.util.Map;
 
 /**
  * RFC 7807 problem+json error handler shared by every WebMVC service in the
+ * system. Each service's @SpringBootApplication component-scans
+ * com.capstone.common so this advice is picked up automatically.
+ */
+@RestControllerAdvice
+public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
@@ -69,12 +75,6 @@ import java.util.Map;
                 "Database Service Unavailable", ex.getMessage(), request);
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(pd);
     }
-
- * system. Each service's @SpringBootApplication component-scans
- * com.capstone.common so this advice is picked up automatically.
- */
-@RestControllerAdvice
-public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     private ProblemDetail build(HttpStatus status, String type, String title, String detail, WebRequest request) {
         ProblemDetail pd = ProblemDetail.forStatusAndDetail(status, detail);
@@ -223,6 +223,23 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         ProblemDetail pd = build(HttpStatus.BAD_REQUEST, "https://capstone.bank/errors/validation",
                 "Validation Failed", "One or more fields failed validation", request);
         pd.setProperty("fieldErrors", fieldErrors);
+        pd.setProperty("error_code", "VALIDATION_FAILED");
+        return ResponseEntity.badRequest().body(pd);
+    }
+
+    @Override
+    protected ResponseEntity<Object> handleHttpMessageNotReadable(HttpMessageNotReadableException ex,
+                                                                   HttpHeaders headers,
+                                                                   HttpStatusCode status,
+                                                                   WebRequest request) {
+        String detail = "Malformed request body or invalid field format";
+        Throwable rootCause = ex.getMostSpecificCause();
+        if (rootCause instanceof IllegalArgumentException iae && iae.getMessage() != null) {
+            detail = iae.getMessage();
+        }
+        ProblemDetail pd = build(HttpStatus.BAD_REQUEST, "https://capstone.bank/errors/validation",
+                "Validation Failed", detail, request);
+        pd.setProperty("error_code", "VALIDATION_FAILED");
         return ResponseEntity.badRequest().body(pd);
     }
 }

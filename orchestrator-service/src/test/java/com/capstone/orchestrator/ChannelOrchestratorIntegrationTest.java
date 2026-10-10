@@ -244,4 +244,46 @@ class ChannelOrchestratorIntegrationTest {
 
         verifyNoInteractions(transactionClient);
     }
+
+    @Test
+    @DisplayName("F-003: Rejects payment specifying amount with scale > 4 decimals with 400 VALIDATION_FAILED")
+    void shouldRejectAmountWithScaleExceeding4() throws Exception {
+        String payload = """
+                {
+                  "recipient_account_id": "f95e7e52-3259-4b4d-ac66-b186a893cf66",
+                  "amount": "10.123456",
+                  "currency": "PHP"
+                }
+                """;
+
+        mockMvc.perform(post("/api/v1/payments")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", "Bearer valid-jwt")
+                        .content(payload))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error_code").value("VALIDATION_FAILED"));
+
+        verifyNoInteractions(transactionClient);
+    }
+
+    @Test
+    @DisplayName("F-003: Rejects payment specifying scientific notation amount with 400 VALIDATION_FAILED")
+    void shouldRejectScientificNotationAmount() throws Exception {
+        String payload = """
+                {
+                  "recipient_account_id": "f95e7e52-3259-4b4d-ac66-b186a893cf66",
+                  "amount": "1e3",
+                  "currency": "PHP"
+                }
+                """;
+
+        mockMvc.perform(post("/api/v1/payments")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Authorization", "Bearer valid-jwt")
+                        .content(payload))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error_code").value("VALIDATION_FAILED"));
+
+        verifyNoInteractions(transactionClient);
+    }
 }
