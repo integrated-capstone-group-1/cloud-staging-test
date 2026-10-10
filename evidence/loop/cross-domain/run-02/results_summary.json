@@ -1,0 +1,30 @@
+{
+  "requests_total": 16,
+  "retest_F001": "PASS",
+  "retest_F002": "PASS",
+  "retest_F003": "PASS",
+  "retest_F004": "PASS",
+  "retest_F005": "PASS",
+  "retest_F006": "PASS",
+  "retest_F007": "PASS",
+  "retest_F008": "PASS",
+  "retest_details": {
+    "f8_cross_status": 403,
+    "f8_cross_body": {
+      "type": "https://capstone.bank/errors/access-denied",
+      "title": "Access Denied",
+      "status": 403,
+      "detail": "Access denied: You do not have permission to execute FX conversion with quote q-5b01035e-7491-4e30-bd30-744aead92c86 for customer 7bd20304-dd6a-4e45-850b-58df8b535be4",
+      "instance": "/api/v1/fx/convert",
+      "timestamp": "2026-10-10T05:58:28.818519112Z",
+      "error_code": "ACCESS_DENIED"
+    },
+    "f8_anon_status": 401,
+    "f8_owner_status": 200
+  },
+  "findings": [],
+  "contract_queries": [],
+  "observations": [],
+  "final_invariant_exit": 0,
+  "final_invariant_output": "I-1 PASS (0)\nI-2 PASS (0)\nI-3 PASS (0)\nI-6 PASS (0)\nI-8 PASS (0)\nI-9 PASS (0)\nI-10 PASS (0)\nI-11 PASS (0)\nI-12 PASS (0)\nI-13 PASS (0)\nI-4 PASS (0)\nI-5 PASS (0)\nI-7 PASS (0)"
+}
