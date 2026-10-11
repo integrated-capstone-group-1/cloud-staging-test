@@ -5,20 +5,24 @@ import static org.mockito.Mockito.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 import com.capstone.accounts.entity.AccountMaster;
 import com.capstone.accounts.repository.AccountRepository;
 import com.capstone.common.dto.AccountLockResponse;
 import com.capstone.common.dto.UnlockAccountRequest;
 import com.capstone.common.exception.ResourceNotFoundException;
-import com.capstone.common.security.SecurityUtils;
 
 /**
  * Regression Test Suite for Account Lock/Freeze Precedence
@@ -55,6 +59,14 @@ class AccountLockPrecedenceTest {
 
     @BeforeEach
     void setUp() {
+        SecurityContextHolder.clearContext();
+        SecurityContextHolder.getContext().setAuthentication(
+            new UsernamePasswordAuthenticationToken(
+                "cust-user-001",
+                null,
+                List.of(new SimpleGrantedAuthority("ROLE_CUSTOMER"))
+            )
+        );
         MockitoAnnotations.openMocks(this);
         objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
         accountService = new AccountService(
@@ -65,6 +77,11 @@ class AccountLockPrecedenceTest {
             outboxMasterRepository,
             objectMapper
         );
+    }
+
+    @AfterEach
+    void clearSecurityContext() {
+        SecurityContextHolder.clearContext();
     }
 
     // ==========================================
