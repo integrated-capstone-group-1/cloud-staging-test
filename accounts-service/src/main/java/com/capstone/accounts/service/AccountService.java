@@ -92,6 +92,13 @@ public class AccountService {
         String accountNumber = "1000" + String.format("%08d", Math.abs(accountId.hashCode() % 100000000));
         LocalDateTime now = LocalDateTime.now();
 
+        // New accounts receive an initial 500.0000 PHP welcome bonus from the bank if primary PHP savings.
+        // Other currencies/types are initialized to 0.00.
+        boolean isPrimarySavings = "SAVINGS".equalsIgnoreCase(request.accountType()) && "PHP".equalsIgnoreCase(request.currencyCode());
+        BigDecimal initialBalance = isPrimarySavings
+                ? new BigDecimal("500.0000")
+                : BigDecimal.ZERO;
+
         AccountMaster account = AccountMaster.builder()
                 .accountId(accountId)
                 .accountNumber(accountNumber)
@@ -99,7 +106,8 @@ public class AccountService {
                 .accountType(request.accountType())
                 .currencyCode(request.currencyCode())
                 .accountStatus("ACTIVE")
-                .balanceAmount(BigDecimal.ZERO)
+                .balanceAmount(initialBalance)
+                .isPrimary(isPrimarySavings ? "Y" : "N")
                 .normalBalance("CR")
                 .customerLocked("N")
                 .adminFrozen("N")

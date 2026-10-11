@@ -188,7 +188,8 @@ public class LoginService {
         }
 
         // Fetch AppUser to get current email and role
-        AppUser appUser = appUserRepository.findById(customerIdFromToken)
+        AppUser appUser = appUserRepository.findByCustomerId(customerIdFromToken)
+                .or(() -> appUserRepository.findById(customerIdFromToken))
                 .orElseThrow(() -> new InvalidTokenException("Customer not found for refresh token"));
 
         if (!"ACTIVE".equals(appUser.getActiveStatus())) {
