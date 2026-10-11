@@ -68,3 +68,14 @@ resilience4j:
         permittedNumberOfCallsInHalfOpenState: 3
         automaticTransitionFromOpenToHalfOpenEnabled: true
 
+---
+spring:
+  config:
+    activate:
+      on-profile: azure
+  data:
+    redis:
+      username: ${REDIS_USERNAME:default}
+      password: ${REDIS_PASSWORD}
+      ssl:
+        enabled: false

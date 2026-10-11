@@ -13,15 +13,13 @@
 --   2. notification_log - Customer push, email, and in-app inbox alert logs
 -- =====================================================================
 
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
 -- ---------------------------------------------------------------------
 -- 1. APP_USER_MASTER (Channel DB)
 -- Owned by login-service / registration-service.
 -- Stores hashed authentication artifacts for retail customer mobile/web apps.
 -- ---------------------------------------------------------------------
 CREATE TABLE app_user_master (
-    user_id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     customer_id      VARCHAR(36),                        -- Logical reference to CBS CUSTOMER_MASTER; NULL for admin/ops staff
     username         VARCHAR(50)   NOT NULL,             -- Unique email or login handle
     password_hash    VARCHAR(255)  NOT NULL,             -- BCrypt password hash ($2a$ / $2b$)
@@ -56,7 +54,7 @@ COMMENT ON TABLE app_user_master IS 'Channel identity credentials, password/PIN 
 -- Stores in-app inbox alerts, push notifications, and email delivery statuses.
 -- ---------------------------------------------------------------------
 CREATE TABLE notification_log (
-    notif_id     UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    notif_id     UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     customer_id  VARCHAR(36)   NOT NULL,                 -- Logical reference to customer
     channel      VARCHAR(20)   DEFAULT 'IN_APP' NOT NULL,-- 'PUSH', 'EMAIL', 'IN_APP'
     message      TEXT          NOT NULL,                 -- User-facing alert message
@@ -74,4 +72,3 @@ CREATE INDEX ix_notification_log_created_at ON notification_log (created_at DESC
 CREATE INDEX ix_notification_log_status ON notification_log (status);
 
 COMMENT ON TABLE notification_log IS 'Customer in-app inbox notifications and omnichannel dispatch logs';
-

@@ -1,0 +1,77 @@
+#cloud-config
+package_update: true
+packages:
+  - ca-certificates
+  - curl
+  - docker.io
+  - jq
+  - util-linux
+
+write_files:
+  - path: /usr/local/bin/start-oracle-xe
+    owner: root:root
+    permissions: "0700"
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+
+      vault="__KEYVAULT_NAME__"
+      sys_secret="__ORACLE_SYS_SECRET__"
+      app_secret="__ORACLE_APP_SECRET__"
+      app_user="__ORACLE_APP_USER__"
+      image="__ORACLE_IMAGE__"
+
+      if [ ! -f /opt/oracle/initdb/01_oracle_main_db.sql ] || [ ! -f /opt/oracle/initdb/02_seed_data_oracle.sql ]; then
+        echo "Oracle init SQL files have not been staged yet." >&2
+        exit 1
+      fi
+
+      token="$(curl --fail --silent --show-error \
+        -H Metadata:true \
+        'http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https%3A%2F%2Fvault.azure.net' \
+        | jq -r '.access_token')"
+      get_secret() {
+        curl --fail --silent --show-error \
+          -H "Authorization: Bearer $token" \
+          "https://${vault}.vault.azure.net/secrets/$1?api-version=7.4" \
+          | jq -r '.value'
+      }
+
+      sys_password="$(get_secret "$sys_secret")"
+      app_password="$(get_secret "$app_secret")"
+
+      if ! mountpoint -q /opt/oracle/oradata; then
+        device=/dev/disk/azure/data/by-lun/0
+        if ! blkid "$device" >/dev/null 2>&1; then
+          mkfs.ext4 "$device"
+        fi
+        mkdir -p /opt/oracle/oradata
+        mount "$device" /opt/oracle/oradata
+        uuid="$(blkid -s UUID -o value "$device")"
+        grep -q "$uuid" /etc/fstab || echo "UUID=$uuid /opt/oracle/oradata ext4 defaults,nofail 0 2" >> /etc/fstab
+      fi
+      chown 54321:54321 /opt/oracle/oradata
+      chmod 0750 /opt/oracle/oradata
+
+      docker pull "$image"
+      if docker container inspect oracle-db >/dev/null 2>&1; then
+        status="$(docker inspect --format '{{.State.Status}}' oracle-db)"
+        health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' oracle-db)"
+        if [ "$status" = running ] && [ "$health" != unhealthy ]; then
+          exit 0
+        fi
+        docker rm -f oracle-db
+      fi
+      docker run -d \
+        --name oracle-db \
+        --restart unless-stopped \
+        --publish 1521:1521 \
+        --volume /opt/oracle/oradata:/opt/oracle/oradata \
+        --volume /opt/oracle/initdb:/container-entrypoint-initdb.d:ro \
+        --env ORACLE_PASSWORD="$sys_password" \
+        --env APP_USER="$app_user" \
+        --env APP_USER_PASSWORD="$app_password" \
+        "$image"
+
+runcmd:
+  - [bash, -lc, "set -e; device=/dev/disk/azure/data/by-lun/0; for i in $(seq 1 30); do [ -b \"$device\" ] && break; sleep 2; done; systemctl enable --now docker; mkdir -p /opt/oracle/oradata /opt/oracle/initdb; cat > /etc/systemd/system/oracle-xe.service <<'UNIT'\n[Unit]\nDescription=Oracle XE container\nAfter=docker.service network-online.target\nRequires=docker.service\n[Service]\nType=oneshot\nRemainAfterExit=yes\nExecStart=/usr/local/bin/start-oracle-xe\nRestart=on-failure\nRestartSec=60\n[Install]\nWantedBy=multi-user.target\nUNIT\nsystemctl daemon-reload; systemctl enable oracle-xe.service; systemctl start oracle-xe.service || logger -t oracle-xe 'Oracle start will retry after SQL files are staged.'"]

@@ -111,3 +111,15 @@ logging:
     org.apache.kafka: WARN
     org.springframework.kafka: WARN
     org.springframework.security: WARN
+
+---
+spring:
+  config:
+    activate:
+      on-profile: azure
+  data:
+    redis:
+      username: ${REDIS_USERNAME:default}
+      password: ${REDIS_PASSWORD}
+      ssl:
+        enabled: false

@@ -1,0 +1,165 @@
+name: Banking services - validate and deploy
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Build and test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Build and run tests
+        run: mvn --batch-mode --no-transfer-progress verify
+
+  publish-images:
+    name: Build and push ${{ matrix.service }}
+    needs: validate
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - service: api-gateway
+            dockerfile: api-gateway/Dockerfile
+          - service: registration-service
+            dockerfile: registration-service/Dockerfile
+          - service: login-service
+            dockerfile: login-service/Dockerfile
+          - service: accounts-service
+            dockerfile: accounts-service/Dockerfile
+          - service: transaction-service
+            dockerfile: transaction-service/Dockerfile
+          - service: notification-service
+            dockerfile: notification-service/Dockerfile
+          - service: orchestrator-service
+            dockerfile: orchestrator-service/Dockerfile
+          - service: forex-service
+            dockerfile: forex-service/Dockerfile
+          - service: risk-engine
+            dockerfile: risk-engine/Dockerfile
+          - service: frontend-web
+            dockerfile: frontend-web/Dockerfile
+          - service: reconciliation-service
+            dockerfile: reconciliation-service/Dockerfile
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/banking-${{ matrix.service }}:${{ github.sha }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/banking-${{ matrix.service }}:latest
+
+  deploy:
+    name: Deploy to AKS
+    needs: publish-images
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+      AKS_CLUSTER_NAME: ${{ vars.AKS_CLUSTER_NAME }}
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      IMAGE_TAG: ${{ github.sha }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Sign in to Azure with GitHub OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Get AKS credentials
+        run: az aks get-credentials --resource-group "$AZURE_RESOURCE_GROUP" --name "$AKS_CLUSTER_NAME" --overwrite-existing
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Set up kubelogin
+        uses: azure/use-kubelogin@v1
+        with:
+          kubelogin-version: 'v0.2.12'
+
+      - name: Update Docker Hub pull secret
+        run: |
+          set -euo pipefail
+          kubectl create secret docker-registry dockerhub-pull \
+            --namespace banking \
+            --docker-server=https://index.docker.io/v1/ \
+            --docker-username="$DOCKERHUB_USERNAME" \
+            --docker-password="$DOCKERHUB_TOKEN" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Apply Kubernetes services and workloads
+        run: kubectl apply -k k8s/base
+
+      - name: Deploy the validated images
+        run: |
+          set -euo pipefail
+          services=(
+            api-gateway
+            registration-service
+            login-service
+            accounts-service
+            transaction-service
+            notification-service
+            orchestrator-service
+            forex-service
+            risk-engine
+            frontend-web
+            reconciliation-service
+          )
+          for service in "${services[@]}"; do
+            kubectl set image "deployment/$service" \
+              "$service=$DOCKERHUB_USERNAME/banking-$service:$IMAGE_TAG" \
+              --namespace banking
+          done
+          for service in "${services[@]}"; do
+            kubectl rollout status "deployment/$service" \
+              --namespace banking \
+              --timeout=15m
+          done
