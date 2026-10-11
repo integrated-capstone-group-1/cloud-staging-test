@@ -7,7 +7,8 @@ package com.capstone.ledger.frontend.model.enums;
 public enum AuditState {
     PENDING("Pending", "warning"),
     COMMITTED("Committed", "success"),
-    ROLLED_BACK("Rolled Back", "danger");
+    ROLLED_BACK("Rolled Back", "danger"),
+    CANCELLED("Cancelled", "secondary");
 
     private final String displayName;
     private final String badgeClass;
