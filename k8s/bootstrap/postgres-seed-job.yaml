@@ -1,0 +1,90 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: postgres-seed
+  namespace: banking
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app: postgres-seed
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: seed
+          image: postgres:17
+          envFrom:
+            - configMapRef:
+                name: banking-config
+          env:
+            - name: PGHOST
+              valueFrom:
+                configMapKeyRef:
+                  name: banking-config
+                  key: POSTGRES_HOST
+            - name: PGPORT
+              value: "5432"
+            - name: PGUSER
+              valueFrom:
+                secretKeyRef:
+                  name: banking-app-secrets
+                  key: POSTGRES_ADMIN_USER
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: banking-app-secrets
+                  key: POSTGRES_ADMIN_PASSWORD
+            - name: PGSSLMODE
+              value: require
+            - name: LEDGER_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: banking-app-secrets
+                  key: POSTGRES_PASSWORD
+            - name: CHANNEL_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: banking-app-secrets
+                  key: CHANNEL_DB_PASSWORD
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              psql --set=ON_ERROR_STOP=1 \
+                --set=ledger_password="$LEDGER_DB_PASSWORD" \
+                --set=channel_password="$CHANNEL_DB_PASSWORD" \
+                --dbname=postgres <<'SQL'
+              SELECT format('CREATE ROLE ledger_audit LOGIN PASSWORD %L', :'ledger_password')
+              WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'ledger_audit') \gexec
+              SELECT format('ALTER ROLE ledger_audit WITH PASSWORD %L', :'ledger_password') \gexec
+              SELECT format('CREATE ROLE channel_user LOGIN PASSWORD %L', :'channel_password')
+              WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'channel_user') \gexec
+              SELECT format('ALTER ROLE channel_user WITH PASSWORD %L', :'channel_password') \gexec
+              SELECT 'CREATE DATABASE ledger_audit OWNER ledger_audit'
+              WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = 'ledger_audit') \gexec
+              SELECT 'CREATE DATABASE channel_db OWNER channel_user'
+              WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = 'channel_db') \gexec
+              SQL
+
+              psql --set=ON_ERROR_STOP=1 --dbname=ledger_audit \
+                --command='GRANT USAGE, CREATE ON SCHEMA public TO ledger_audit'
+              psql --set=ON_ERROR_STOP=1 --dbname=channel_db \
+                --command='GRANT USAGE, CREATE ON SCHEMA public TO channel_user'
+
+              PGPASSWORD="$LEDGER_DB_PASSWORD" PGUSER=ledger_audit psql --set=ON_ERROR_STOP=1 \
+                --dbname=ledger_audit \
+                --file=/seed/01_postgres_audit_db.sql \
+                --file=/seed/02_seed_data_postgres.sql
+              PGPASSWORD="$CHANNEL_DB_PASSWORD" PGUSER=channel_user psql --set=ON_ERROR_STOP=1 \
+                --dbname=channel_db \
+                --file=/seed/01_postgres_channel_db.sql \
+                --file=/seed/02_seed_data_channel.sql
+          volumeMounts:
+            - name: seed-files
+              mountPath: /seed
+              readOnly: true
+      volumes:
+        - name: seed-files
+          configMap:
+            name: postgres-seed-files

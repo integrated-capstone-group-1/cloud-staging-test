@@ -52,3 +52,15 @@ management:
     distribution:
       percentiles-histogram:
         http.server.requests: true
+
+---
+spring:
+  config:
+    activate:
+      on-profile: azure
+  data:
+    redis:
+      username: ${REDIS_USERNAME:default}
+      password: ${REDIS_PASSWORD}
+      ssl:
+        enabled: false

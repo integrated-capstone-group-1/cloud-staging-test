@@ -18,15 +18,13 @@
 --     5. recon_result_audit    - Reconciled legs, drift breaks and discrepancies
 -- =====================================================================
 
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
 -- ---------------------------------------------------------------------
 -- 1. LEDGER_MUTATION_AUDIT (Audit Schema)
 -- Immutable double-entry leg journal.
 -- Enforced as strictly append-only: database trigger blocks UPDATE & DELETE.
 -- ---------------------------------------------------------------------
 CREATE TABLE ledger_mutation_audit (
-    mutation_uuid    UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    mutation_uuid    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     txn_id           VARCHAR(36)    NOT NULL,
     leg_no           INTEGER        DEFAULT 1 NOT NULL,
     account_id       VARCHAR(36)    NOT NULL,
@@ -76,7 +74,7 @@ CREATE TRIGGER trg_ledger_mutation_audit_append_only
 -- Audit trail for synchronous Risk Engine fraud evaluations.
 -- ---------------------------------------------------------------------
 CREATE TABLE risk_screening_audit (
-    screening_id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    screening_id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     txn_id                VARCHAR(36)    NOT NULL,
     customer_id           VARCHAR(36)    NOT NULL,
     risk_score            NUMERIC(4,2)   NOT NULL, -- 0.00 to 1.00
@@ -117,7 +115,7 @@ CREATE TRIGGER trg_risk_screening_audit_append_only
 -- Audit log of currency conversions executed with 30s locked quotes.
 -- ---------------------------------------------------------------------
 CREATE TABLE fx_conversion_audit (
-    conversion_id      UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    conversion_id      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     txn_id             VARCHAR(36)    NOT NULL,
     source_currency    CHAR(3)        NOT NULL,
     dest_currency      CHAR(3)        NOT NULL,
@@ -156,7 +154,7 @@ CREATE TRIGGER trg_fx_conversion_audit_append_only
 -- Metadata header for batch reconciliation runs.
 -- ---------------------------------------------------------------------
 CREATE TABLE recon_run_audit (
-    run_id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    run_id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     business_date       DATE          DEFAULT CURRENT_DATE NOT NULL,
     scope               VARCHAR(30)   DEFAULT 'AUDIT_PARITY' NOT NULL, -- 'AUDIT_PARITY', 'HUB_TO_LEDGER'
     run_started_at      TIMESTAMPTZ   NOT NULL DEFAULT now(),
@@ -186,7 +184,7 @@ COMMENT ON TABLE recon_run_audit IS 'Audit record of reconciliation batch runs c
 -- Granular reconciliation break records and matched parity legs.
 -- ---------------------------------------------------------------------
 CREATE TABLE recon_result_audit (
-    result_id                UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    result_id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     run_id                   UUID           NOT NULL,
     txn_id                   VARCHAR(36)    NOT NULL,
     account_id               VARCHAR(36),
