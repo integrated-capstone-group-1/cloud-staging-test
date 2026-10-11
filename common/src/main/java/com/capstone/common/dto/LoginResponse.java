@@ -8,11 +8,23 @@ public record LoginResponse(
         String token,
         String tokenType,
         long expiresInSeconds,
+        String refreshToken,
+        long refreshExpiresInSeconds,
         String customerId,
-        String email
+        String email,
+        String role
 ) {
     public static LoginResponse of(String token, long expiresInSeconds, String customerId, String email) {
-        return new LoginResponse(token, "Bearer", expiresInSeconds, customerId, email);
+        return new LoginResponse(token, "Bearer", expiresInSeconds, null, 0, customerId, email, "ROLE_CUSTOMER");
+    }
+
+    public static LoginResponse of(String token, long expiresInSeconds, String customerId, String email, String role) {
+        return new LoginResponse(token, "Bearer", expiresInSeconds, null, 0, customerId, email, role);
+    }
+
+    public static LoginResponse withRefreshToken(String token, long expiresInSeconds, String refreshToken, 
+                                                  long refreshExpiresInSeconds, String customerId, String email, String role) {
+        return new LoginResponse(token, "Bearer", expiresInSeconds, refreshToken, refreshExpiresInSeconds, customerId, email, role);
     }
 }
 

@@ -11,7 +11,6 @@ import org.springframework.http.server.reactive.ServerHttpRequest;
 import org.springframework.http.server.reactive.ServerHttpRequestDecorator;
 import org.springframework.lang.NonNull;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
 
 import com.capstone.gateway.security.ReactiveJwtValidator;
 
@@ -53,7 +52,8 @@ public class JwtAuthenticationGatewayFilterFactory
             String authorizationHeader =
                     request.getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
 
-            if (!StringUtils.hasText(authorizationHeader)
+            if (authorizationHeader == null
+                    || authorizationHeader.isBlank()
                     || !authorizationHeader.startsWith("Bearer ")) {
 
                 return unauthorized(
@@ -67,13 +67,11 @@ public class JwtAuthenticationGatewayFilterFactory
             return redisTemplate.opsForValue()
                     .get("token:" + token)
                     .defaultIfEmpty("")
-                    .onErrorReturn("")
                     .flatMap(value -> {
-
                         if ("BLACKLISTED".equals(value)) {
                             return unauthorized(
                                     exchange,
-                                    "Token has been revoked"
+                                    "TOKEN_REVOKED"
                             );
                         }
 
@@ -92,7 +90,11 @@ public class JwtAuthenticationGatewayFilterFactory
                                 chain,
                                 claims.get()
                         );
-                    });
+                    })
+                    .onErrorResume(ex -> unauthorized(
+                            exchange,
+                            "TOKEN_BLACKLIST_UNAVAILABLE: Fail-closed security policy"
+                    ));
         };
     }
 

@@ -17,11 +17,17 @@ spring:
   jpa:
     database-platform: org.hibernate.dialect.OracleDialect
     hibernate:
-      ddl-auto: validate
+      ddl-auto: update
     open-in-view: false
     properties:
       hibernate:
         format_sql: true
+
+  # Redis — used by JwtAuthenticationFilter for token blacklist checks on admin endpoints
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
 
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
@@ -29,12 +35,35 @@ spring:
 jwt:
   secret: ${JWT_SECRET:CapstoneBankingSuperSecretSigningKeyMustBe256BitsLong!}
 
+accounts:
+  service:
+    url: ${ACCOUNTS_SERVICE_URL:http://localhost:8083}
+
 management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      show-details: always
+    prometheus:
+      enabled: true
+  metrics:
+    tags:
+      service: registration-service
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
 
-logging:
-  level:
-    com.capstone: INFO
+---
+spring:
+  config:
+    activate:
+      on-profile: azure
+  data:
+    redis:
+      username: ${REDIS_USERNAME:default}
+      password: ${REDIS_PASSWORD}
+      ssl:
+        enabled: false

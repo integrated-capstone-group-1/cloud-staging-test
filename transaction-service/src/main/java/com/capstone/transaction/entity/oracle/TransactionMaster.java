@@ -59,6 +59,22 @@ public class TransactionMaster {
     @Column(name = "mutation_amount", nullable = false, precision = 18, scale = 4)
     private BigDecimal mutationAmount;
 
+    @Column(name = "currency_code", nullable = false, length = 3)
+    private String currencyCode;
+
+    @Builder.Default
+    @Column(name = "is_cross_currency", length = 1, nullable = false)
+    private String isCrossCurrency = "N";
+
+    @Column(name = "fx_rate", precision = 18, scale = 8)
+    private BigDecimal fxRate;
+
+    @Column(name = "dest_amount", precision = 18, scale = 4)
+    private BigDecimal destAmount;
+
+    @Column(name = "dest_currency_code", length = 3)
+    private String destCurrencyCode;
+
     // DEFAULT 'PENDING' in DDL; set to COMMITTED after dual-write succeeds
     @Column(name = "txn_status", nullable = false, length = 20)
     private String txnStatus;
@@ -80,5 +96,55 @@ public class TransactionMaster {
 
     @Column(name = "updated_by", length = 50)
     private String updatedBy;
+
+    @Column(name = "customer_id", length = 36)
+    private String customerId;
+
+    @Builder.Default
+    @Column(name = "stage", length = 30)
+    private String stage = "INITIATED";
+
+    @Column(name = "core_reference_id", length = 50)
+    private String coreReferenceId;
+
+    @Column(name = "cancel_reason", length = 100)
+    private String cancelReason;
+
+    @Column(name = "reversal_of_txn_id", length = 36)
+    private String reversalOfTxnId;
+
+    @Column(name = "reversed_by_txn_id", length = 36)
+    private String reversedByTxnId;
+
+    @Column(name = "idempotency_key", length = 64)
+    private String idempotencyKey;
+
+    @Column(name = "hold_id", length = 36)
+    private String holdId;
+
+    @Column(name = "original_txn_id", length = 36)
+    private String originalTxnId;
+
+    @Builder.Default
+    @Column(name = "reversed", columnDefinition = "CHAR(1)", nullable = false)
+    private String reversed = "N";
+
+    @Column(name = "reversal_txn_id", length = 36)
+    private String reversalTxnId;
+
+    @Column(name = "business_date")
+    private java.time.LocalDate businessDate;
+
+    @Column(name = "failure_code", length = 50)
+    private String failureCode;
+
+    @Column(name = "risk_score", precision = 5, scale = 2)
+    private BigDecimal riskScore;
+
+    @Column(name = "risk_decision", length = 20)
+    private String riskDecision;
+
+    @Column(name = "risk_rules", length = 500)
+    private String riskRules;
 }
 

@@ -6,21 +6,97 @@ spring:
         - id: registration-service
           uri: http://registration-service:8081
           predicates:
-            - Path=/api/auth/register/**
+            - Path=/api/auth/register/**,/v1/auth/register/**,/api/v1/auth/register/**
+
         - id: login-service
           uri: http://login-service:8082
           predicates:
-            - Path=/api/auth/login/**,/api/auth/logout/**
+            - Path=/api/auth/**,/v1/auth/**,/api/v1/auth/**
+
+        # Orchestrator Routes (Channel Layer / BFF)
+        - id: orchestrator-payments
+          uri: http://orchestrator-service:8089
+          predicates:
+            - Path=/api/v1/payments,/api/v1/payments/**
+          filters:
+            - JwtAuthentication
+
+        - id: orchestrator-dashboard
+          uri: http://orchestrator-service:8089
+          predicates:
+            - Path=/api/v1/dashboard/**
+          filters:
+            - JwtAuthentication
+
+        - id: orchestrator-pockets
+          uri: http://orchestrator-service:8089
+          predicates:
+            - Path=/api/v1/accounts/*/pockets,/api/v1/accounts/*/pockets/**
+          filters:
+            - JwtAuthentication
+
         - id: accounts-service
           uri: http://accounts-service:8083
           predicates:
-            - Path=/api/accounts/**
+            - Path=/api/accounts/**,/api/v1/accounts/**,/api/recipients/**,/api/v1/recipients/**
           filters:
             - JwtAuthentication
+
+        # Admin account governance (freeze/unfreeze/list) — routed to accounts-service
+        - id: admin-accounts-service
+          uri: http://accounts-service:8083
+          predicates:
+            - Path=/api/admin/accounts/**
+          filters:
+            - JwtAuthentication
+
+        # Admin customer directory — routed to registration-service
+        - id: admin-customers-service
+          uri: http://registration-service:8081
+          predicates:
+            - Path=/api/admin/customers/**
+          filters:
+            - JwtAuthentication
+
+        # Customer profile directory — routed to registration-service
+        - id: customer-profile-service
+          uri: http://registration-service:8081
+          predicates:
+            - Path=/api/customers/**
+          filters:
+            - JwtAuthentication
+
         - id: transaction-service
           uri: http://transaction-service:8084
           predicates:
-            - Path=/api/transactions/**
+            - Path=/api/v1/ledger/**,/api/v1/cards/**,/api/v1/transactions/**,/v1/transactions/**,/api/v1/statements/**,/v1/statements/**,/api/v1/admin/**
           filters:
             - JwtAuthentication
+
+        - id: forex-service-public
+          uri: http://forex-service:8087
+          predicates:
+            - Path=/api/v1/fx-rate,/api/v1/fx-rate/**,/api/v1/forex/**
+
+        - id: forex-service-secured
+          uri: http://forex-service:8087
+          predicates:
+            - Path=/api/v1/fx/**
+          filters:
+            - JwtAuthentication
+
+        - id: notification-service
+          uri: http://notification-service:8085
+          predicates:
+            - Path=/api/notifications/**
+          filters:
+            - JwtAuthentication
+
+        - id: reconciliation-service
+          uri: http://reconciliation-service:8086
+          predicates:
+            - Path=/api/recon/**,/api/v1/recon/**
+          filters:
+            - JwtAuthentication
+
 

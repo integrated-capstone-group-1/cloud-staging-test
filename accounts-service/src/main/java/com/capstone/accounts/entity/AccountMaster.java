@@ -31,9 +31,16 @@ public class AccountMaster {
     private String accountId;
 
     @Column(
+        name = "account_number",
+        length = 20,
+        nullable = false,
+        unique = true
+    )
+    private String accountNumber;
+
+    @Column(
         name = "customer_id",
-        length = 36,
-        nullable = false
+        length = 36
     )
     private String customerId;
 
@@ -73,6 +80,23 @@ public class AccountMaster {
     )
     private BigDecimal balanceAmount;
 
+    @Builder.Default
+    @Column(
+        name = "is_primary",
+        columnDefinition = "CHAR(1)",
+        nullable = false
+    )
+    private String isPrimary = "N";
+
+    @Builder.Default
+    @Column(
+        name = "held_amount",
+        precision = 18,
+        scale = 4,
+        nullable = false
+    )
+    private BigDecimal heldAmount = BigDecimal.ZERO;
+
     @Column(
         name = "created_at",
         nullable = false,
@@ -92,9 +116,32 @@ public class AccountMaster {
     )
     private LocalDateTime updatedAt;
 
+    @Builder.Default
+    @Column(name = "normal_balance", columnDefinition = "CHAR(2)", nullable = false)
+    private String normalBalance = "CR";
+
+    @Builder.Default
+    @Column(name = "customer_locked", columnDefinition = "CHAR(1)", nullable = false)
+    private String customerLocked = "N";
+
+    @Builder.Default
+    @Column(name = "admin_frozen", columnDefinition = "CHAR(1)", nullable = false)
+    private String adminFrozen = "N";
+
+    @jakarta.persistence.Version
+    @Column(name = "version")
+    private Long version;
+
+
     @Column(
         name = "updated_by",
         length = 50
     )
     private String updatedBy;
+
+    public BigDecimal getAvailableBalance() {
+        BigDecimal held = heldAmount != null ? heldAmount : BigDecimal.ZERO;
+        BigDecimal balance = balanceAmount != null ? balanceAmount : BigDecimal.ZERO;
+        return balance.subtract(held);
+    }
 }

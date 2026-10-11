@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('System Accounts Registry')}"></head>
+<body>
+<div th:replace="~{fragments/layout :: demoBar}"></div>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div th:replace="~{fragments/layout :: alerts}"></div>
+
+<main class="container py-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+        <div>
+            <h4 class="fw-bold mb-1"><i class="bi bi-wallet2 text-primary me-2"></i>Master Accounts Registry</h4>
+            <p class="text-muted small mb-0">System-wide ACCOUNT_MASTER management and account freeze/unfreeze controls</p>
+        </div>
+        <div>
+            <input type="text" id="acctSearch" class="form-control form-control-sm" placeholder="Filter accounts, customers..." onkeyup="filterAccounts()">
+        </div>
+    </div>
+
+    <div class="card p-3">
+        <div class="table-responsive">
+            <table class="table table-sm table-hover align-middle" id="acctTable">
+                <thead>
+                    <tr>
+                        <th>Account / Pocket</th>
+                        <th>Owner Customer</th>
+                        <th>Type</th>
+                        <th>Currency</th>
+                        <th>Current Balance</th>
+                        <th>Status</th>
+                        <th>Provisioned (PHT)</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr th:each="a : ${accounts}">
+                        <td>
+                            <div class="d-flex flex-column">
+                                <div class="d-flex align-items-center gap-1">
+                                    <a th:href="@{/accounts/{id}(id=${a.accountId})}" class="font-monospace fw-bold text-decoration-none" th:text="${a.formattedAccountNumber}">1000-0000-0001</a>
+                                    <span class="badge bg-primary-subtle text-primary border py-0 px-1" style="font-size: 0.72rem;" th:text="${a.pocketName}">PHP Pocket</span>
+                                </div>
+                                <div class="d-flex align-items-center gap-1 mt-1 text-muted" style="font-size: 0.75rem;">
+                                    <span class="text-secondary font-monospace" th:text="${a.shortAccountId}" th:title="${a.accountId}">3722f77f...</span>
+                                    <button type="button" class="btn btn-sm btn-link p-0 text-muted copy-btn" th:data-copy="${a.accountId}" title="Copy UUID">
+                                        <i class="bi bi-clipboard" style="font-size: 0.72rem;"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </td>
+                        <td>
+                            <div th:if="${a.customerId != null}">
+                                <a th:href="@{/admin/customers/{id}(id=${a.customerId})}" class="font-monospace fw-semibold text-decoration-none" th:text="${a.cifNumber}">CIF-8000-0001</a>
+                                <div class="d-flex align-items-center gap-1 text-muted mt-1" style="font-size: 0.72rem;">
+                                    <span class="text-secondary font-monospace" th:text="${a.shortCustomerId}">7bd20304...</span>
+                                    <button type="button" class="btn btn-sm btn-link p-0 text-muted copy-btn" th:data-copy="${a.customerId}" title="Copy Customer UUID">
+                                        <i class="bi bi-clipboard" style="font-size: 0.72rem;"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <span th:unless="${a.customerId != null}" class="badge bg-secondary-subtle text-secondary border">Internal Bank Pool</span>
+                        </td>
+                        <td th:text="${a.accountType.displayName}">Savings</td>
+                        <td><span class="currency-badge" th:text="${a.currencyCode}">PHP</span></td>
+                        <td class="fw-bold fs-6" th:text="${a.formattedBalance}">₱0.00</td>
+                        <td>
+                            <span class="badge" th:classappend="${a.accountStatus.name() == 'ACTIVE'} ? 'bg-success' : 'bg-warning'"
+                                  th:text="${a.accountStatus.displayName}">ACTIVE</span>
+                        </td>
+                        <td class="small text-muted" th:text="${#temporals.format(a.createdAt, 'dd MMM yyyy')}"></td>
+                        <td>
+                            <div class="d-flex gap-1">
+                                <a th:href="@{/accounts/{id}(id=${a.accountId})}" class="btn btn-sm btn-outline-secondary py-0 px-2" title="View Ledger">
+                                    <i class="bi bi-journal-text"></i>
+                                </a>
+
+                                <!-- Freeze / Unfreeze toggle buttons triggering confirmation modal -->
+                                <button th:if="${a.accountStatus.name() == 'ACTIVE'}" type="button"
+                                        class="btn btn-sm btn-outline-warning py-0 px-2"
+                                        th:data-account-id="${a.accountId}"
+                                        th:data-account-number="${a.formattedAccountNumber}"
+                                        th:data-pocket="${a.pocketName}"
+                                        th:data-balance="${a.formattedBalance}"
+                                        onclick="openAdminFreezeModal(this.getAttribute('data-account-id'), this.getAttribute('data-account-number'), this.getAttribute('data-pocket'), this.getAttribute('data-balance'))"
+                                        title="Freeze account">
+                                    <i class="bi bi-pause-circle"></i> Freeze
+                                </button>
+
+                                <button th:if="${a.accountStatus.name() == 'FROZEN'}" type="button"
+                                        class="btn btn-sm btn-outline-success py-0 px-2"
+                                        th:data-account-id="${a.accountId}"
+                                        th:data-account-number="${a.formattedAccountNumber}"
+                                        th:data-pocket="${a.pocketName}"
+                                        th:data-balance="${a.formattedBalance}"
+                                        onclick="openAdminUnfreezeModal(this.getAttribute('data-account-id'), this.getAttribute('data-account-number'), this.getAttribute('data-pocket'), this.getAttribute('data-balance'))"
+                                        title="Unfreeze account">
+                                    <i class="bi bi-play-circle"></i> Unfreeze
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</main>
+
+<button
+    type="button"
+    class="app-theme-toggle"
+    id="appThemeToggle"
+    aria-label="Toggle dark mode"
+    title="Toggle dark mode">
+
+    <i class="bi bi-moon-fill" id="appThemeIcon"></i>
+
+</button>
+
+<script>
+(function () {
+
+    const body = document.body;
+    const toggle = document.getElementById("appThemeToggle");
+    const icon = document.getElementById("appThemeIcon");
+
+    if (!toggle || !icon) {
+        return;
+    }
+
+    const savedTheme = localStorage.getItem("banking-theme");
+
+    if (savedTheme === "dark") {
+        body.classList.add("dark-mode");
+    }
+
+    function updateIcon() {
+
+        if (body.classList.contains("dark-mode")) {
+
+            icon.className = "bi bi-sun-fill";
+
+            toggle.setAttribute(
+                "aria-label",
+                "Switch to light mode"
+            );
+
+            toggle.setAttribute(
+                "title",
+                "Switch to light mode"
+            );
+
+        } else {
+
+            icon.className = "bi bi-moon-fill";
+
+            toggle.setAttribute(
+                "aria-label",
+                "Switch to dark mode"
+            );
+
+            toggle.setAttribute(
+                "title",
+                "Switch to dark mode"
+            );
+        }
+    }
+
+    updateIcon();
+
+    toggle.addEventListener("click", function () {
+
+        body.classList.toggle("dark-mode");
+
+        const isDark =
+            body.classList.contains("dark-mode");
+
+        localStorage.setItem(
+            "banking-theme",
+            isDark ? "dark" : "light"
+        );
+
+        updateIcon();
+    });
+
+})();
+</script>
+
+<!-- Admin Freeze Account Confirmation Modal -->
+<div class="modal fade" id="adminFreezeAccountModal" tabindex="-1" aria-labelledby="adminFreezeModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-warning shadow">
+            <form id="adminFreezeForm" method="post" action="">
+                <input type="hidden" name="status" value="FROZEN"/>
+                <div class="modal-header bg-warning-subtle text-warning-emphasis">
+                    <h5 class="modal-title fw-bold" id="adminFreezeModalLabel">
+                        <i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>Confirm Account Freeze
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-warning d-flex align-items-start gap-2 mb-3">
+                        <i class="bi bi-shield-slash-fill fs-4 mt-1"></i>
+                        <div>
+                            <strong>Critical Governance Action:</strong> Freezing this account will immediately halt all outbound payments, debit mutations, transfers, and card authorizations for this account.
+                        </div>
+                    </div>
+                    <div class="bg-light p-3 rounded mb-3 border">
+                        <div class="d-flex justify-content-between mb-1 small">
+                            <span class="text-muted">Target Account:</span>
+                            <span class="font-monospace fw-bold" id="adminFreezeModalAcctDisplay"></span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-1 small align-items-center">
+                            <span class="text-muted">System UUID:</span>
+                            <div class="d-inline-flex align-items-center gap-1">
+                                <code class="font-monospace text-secondary small" id="adminFreezeModalAcctId"></code>
+                                <button type="button" class="btn btn-sm btn-link p-0 text-muted copy-btn" id="adminFreezeModalCopyBtn" data-copy="" title="Copy UUID">
+                                    <i class="bi bi-clipboard"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="d-flex justify-content-between small">
+                            <span class="text-muted">Current Ledger Balance:</span>
+                            <span class="font-monospace fw-bold" id="adminFreezeModalBalance"></span>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="adminFreezeStandardReason" class="form-label small fw-semibold">Administrative Reason Category</label>
+                        <select class="form-select form-select-sm" id="adminFreezeStandardReason" onchange="document.getElementById('adminFreezeReasonInput').value = this.value">
+                            <option value="Suspected Fraud / AML Risk Hold" selected>Suspected Fraud / AML Risk Hold</option>
+                            <option value="AMLA Regulatory / Court Hold Order">AMLA Regulatory / Court Hold Order</option>
+                            <option value="Customer Security / Stolen Device Report">Customer Security / Stolen Device Report</option>
+                            <option value="Administrative Risk &amp; Reconciliation Review">Administrative Risk &amp; Reconciliation Review</option>
+                            <option value="Account Owner KYC Discrepancy">Account Owner KYC Discrepancy</option>
+                        </select>
+                    </div>
+                    <div class="mb-2">
+                        <label for="adminFreezeReasonInput" class="form-label small fw-semibold">Audit Justification Notes</label>
+                        <textarea class="form-control form-control-sm" id="adminFreezeReasonInput" name="reason" rows="2" required>Suspected Fraud / AML Risk Hold</textarea>
+                        <div class="form-text small">This reason will be recorded in the immutable audit ledger.</div>
+                    </div>
+                </div>
+                <div class="modal-footer py-2 bg-light">
+                    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-sm btn-danger px-3">
+                        <i class="bi bi-snow me-1"></i> Confirm &amp; Freeze Account
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Admin Unfreeze Account Confirmation Modal -->
+<div class="modal fade" id="adminUnfreezeAccountModal" tabindex="-1" aria-labelledby="adminUnfreezeModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-success shadow">
+            <form id="adminUnfreezeForm" method="post" action="">
+                <input type="hidden" name="status" value="ACTIVE"/>
+                <div class="modal-header bg-success-subtle text-success-emphasis">
+                    <h5 class="modal-title fw-bold" id="adminUnfreezeModalLabel">
+                        <i class="bi bi-check-circle-fill text-success me-2"></i>Confirm Account Unfreeze
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info d-flex align-items-start gap-2 mb-3">
+                        <i class="bi bi-info-circle-fill fs-4 mt-1"></i>
+                        <div>
+                            Unfreezing will restore full transactional capabilities. Outbound transfers, debit mutations, and card payments will be permitted immediately.
+                        </div>
+                    </div>
+                    <div class="bg-light p-3 rounded mb-2 border">
+                        <div class="d-flex justify-content-between mb-1 small">
+                            <span class="text-muted">Target Account:</span>
+                            <span class="font-monospace fw-bold" id="adminUnfreezeModalAcctDisplay"></span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-1 small align-items-center">
+                            <span class="text-muted">System UUID:</span>
+                            <div class="d-inline-flex align-items-center gap-1">
+                                <code class="font-monospace text-secondary small" id="adminUnfreezeModalAcctId"></code>
+                                <button type="button" class="btn btn-sm btn-link p-0 text-muted copy-btn" id="adminUnfreezeModalCopyBtn" data-copy="" title="Copy UUID">
+                                    <i class="bi bi-clipboard"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="d-flex justify-content-between small">
+                            <span class="text-muted">Current Ledger Balance:</span>
+                            <span class="font-monospace fw-bold" id="adminUnfreezeModalBalance"></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer py-2 bg-light">
+                    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-sm btn-success px-3">
+                        <i class="bi bi-sun me-1"></i> Confirm &amp; Restore to Active
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div th:replace="~{fragments/layout :: footer}"></div>
+
+<script>
+function openAdminFreezeModal(acctId, acctNum, pocket, balance) {
+    document.getElementById("adminFreezeForm").action = "/admin/accounts/" + encodeURIComponent(acctId) + "/status";
+    document.getElementById("adminFreezeModalAcctDisplay").textContent = (acctNum || acctId) + (pocket ? " (" + pocket + ")" : "");
+    document.getElementById("adminFreezeModalAcctId").textContent = acctId;
+    document.getElementById("adminFreezeModalCopyBtn").setAttribute("data-copy", acctId);
+    document.getElementById("adminFreezeModalBalance").textContent = balance || "₱0.00";
+    document.getElementById("adminFreezeStandardReason").value = "Suspected Fraud / AML Risk Hold";
+    document.getElementById("adminFreezeReasonInput").value = "Suspected Fraud / AML Risk Hold";
+    new bootstrap.Modal(document.getElementById("adminFreezeAccountModal")).show();
+}
+
+function openAdminUnfreezeModal(acctId, acctNum, pocket, balance) {
+    document.getElementById("adminUnfreezeForm").action = "/admin/accounts/" + encodeURIComponent(acctId) + "/status";
+    document.getElementById("adminUnfreezeModalAcctDisplay").textContent = (acctNum || acctId) + (pocket ? " (" + pocket + ")" : "");
+    document.getElementById("adminUnfreezeModalAcctId").textContent = acctId;
+    document.getElementById("adminUnfreezeModalCopyBtn").setAttribute("data-copy", acctId);
+    document.getElementById("adminUnfreezeModalBalance").textContent = balance || "₱0.00";
+    new bootstrap.Modal(document.getElementById("adminUnfreezeAccountModal")).show();
+}
+
+function filterAccounts() {
+    const query = document.getElementById('acctSearch').value.toLowerCase();
+    const rows = document.querySelectorAll('#acctTable tbody tr');
+    rows.forEach(r => {
+        const text = r.textContent.toLowerCase();
+        r.style.display = text.includes(query) ? '' : 'none';
+    });
+}
+</script>
+</body>
+</html>
+

@@ -1,0 +1,27 @@
+{
+  "track": "Track 1 - Gym",
+  "timestamp": "2026-10-10T15:30:26Z",
+  "NFR-CONC-01": {
+    "status": "PASS",
+    "threads": 10,
+    "elapsed_ms": 160.60662269592285,
+    "success_count": 0,
+    "initial_balance": 388.4295,
+    "final_balance": 388.4295,
+    "expected_deduction": 0.0,
+    "actual_deduction": 0.0
+  },
+  "NFR-CONC-02": {
+    "status": "PASS",
+    "flood_key": "UUID-FLOOD-B1F73C2C",
+    "threads": 100,
+    "elapsed_ms": 606.5373420715332,
+    "status_distribution": {
+      "200": 99,
+      "409": 1
+    },
+    "transaction_master_count": 1,
+    "ledger_legs_count": 2
+  },
+  "final_invariants_exit": 0
+}

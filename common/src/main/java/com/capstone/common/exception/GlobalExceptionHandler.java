@@ -10,6 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.validation.FieldError;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -28,6 +29,52 @@ import java.util.Map;
  */
 @RestControllerAdvice
 public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
+
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    @ExceptionHandler(org.springframework.dao.CannotAcquireLockException.class)
+    public ResponseEntity<ProblemDetail> handleDeadlock(org.springframework.dao.CannotAcquireLockException ex, WebRequest request) {
+        org.slf4j.MDC.put("component", "database");
+        org.slf4j.MDC.put("event_type", "DB_DEADLOCK");
+        log.error("Database deadlock or lock wait timeout detected", ex);
+        org.slf4j.MDC.clear();
+
+        ProblemDetail pd = build(HttpStatus.CONFLICT, "https://capstone.bank/errors/deadlock",
+                "Database Lock Conflict", ex.getMessage(), request);
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(pd);
+    }
+
+    @ExceptionHandler({
+        org.springframework.data.redis.RedisConnectionFailureException.class,
+        org.springframework.data.redis.RedisSystemException.class,
+        io.lettuce.core.RedisCommandTimeoutException.class
+    })
+    public ResponseEntity<ProblemDetail> handleRedisConnectionFailure(Exception ex, WebRequest request) {
+        org.slf4j.MDC.put("component", "redis");
+        org.slf4j.MDC.put("event_type", "REDIS_CONNECTION_TIMEOUT");
+        log.error("Redis connection or command timeout", ex);
+        org.slf4j.MDC.clear();
+
+        ProblemDetail pd = build(HttpStatus.SERVICE_UNAVAILABLE, "https://capstone.bank/errors/redis-unavailable",
+                "Cache Service Unavailable", ex.getMessage(), request);
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(pd);
+    }
+
+    @ExceptionHandler({
+        org.springframework.dao.DataAccessResourceFailureException.class,
+        org.springframework.transaction.CannotCreateTransactionException.class,
+        java.sql.SQLTransientConnectionException.class
+    })
+    public ResponseEntity<ProblemDetail> handleDatabaseConnectionFailure(Exception ex, WebRequest request) {
+        org.slf4j.MDC.put("component", "database");
+        org.slf4j.MDC.put("event_type", "DB_CONNECTION_TIMEOUT");
+        log.error("Database connection pool exhaustion or timeout", ex);
+        org.slf4j.MDC.clear();
+
+        ProblemDetail pd = build(HttpStatus.SERVICE_UNAVAILABLE, "https://capstone.bank/errors/db-unavailable",
+                "Database Service Unavailable", ex.getMessage(), request);
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(pd);
+    }
 
     private ProblemDetail build(HttpStatus status, String type, String title, String detail, WebRequest request) {
         ProblemDetail pd = ProblemDetail.forStatusAndDetail(status, detail);
@@ -70,8 +117,27 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(IdempotencyConflictException.class)
     public ResponseEntity<ProblemDetail> handleIdempotencyConflict(IdempotencyConflictException ex, WebRequest request) {
+        String errorCode = (ex.getMessage() != null && ex.getMessage().contains("PAYLOAD_MISMATCH"))
+                ? "PAYLOAD_MISMATCH"
+                : "REQUEST_IN_PROGRESS";
         ProblemDetail pd = build(HttpStatus.CONFLICT, "https://capstone.bank/errors/idempotency-conflict",
                 "Idempotency Conflict", ex.getMessage(), request);
+        pd.setProperty("error_code", errorCode);
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(pd);
+    }
+
+    @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class)
+    public ResponseEntity<ProblemDetail> handleDataIntegrityViolation(org.springframework.dao.DataIntegrityViolationException ex, WebRequest request) {
+        log.warn("Database integrity violation: {}", ex.getMessage());
+        String msg = ex.getMessage();
+        if (msg != null && (msg.contains("UQ_TXN_CUST_IDEMPOTENCY") || msg.toLowerCase().contains("idempotency"))) {
+            ProblemDetail pd = build(HttpStatus.CONFLICT, "https://capstone.bank/errors/idempotency-conflict",
+                    "Idempotency Conflict", "REQUEST_IN_PROGRESS: Request with this idempotency key is already processing", request);
+            pd.setProperty("error_code", "REQUEST_IN_PROGRESS");
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(pd);
+        }
+        ProblemDetail pd = build(HttpStatus.CONFLICT, "https://capstone.bank/errors/data-integrity",
+                "Conflict", "Data integrity constraint violation", request);
         return ResponseEntity.status(HttpStatus.CONFLICT).body(pd);
     }
 
@@ -93,6 +159,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     public ResponseEntity<ProblemDetail> handleAccessDenied(AccessDeniedException ex, WebRequest request) {
         ProblemDetail pd = build(HttpStatus.FORBIDDEN, "https://capstone.bank/errors/access-denied",
                 "Access Denied", ex.getMessage(), request);
+        pd.setProperty("error_code", "ACCESS_DENIED");
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(pd);
     }
 
@@ -114,13 +181,66 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     public ResponseEntity<ProblemDetail> handleIllegalArgument(IllegalArgumentException ex, WebRequest request) {
         ProblemDetail pd = build(HttpStatus.BAD_REQUEST, "https://capstone.bank/errors/bad-request",
                 "Bad Request", ex.getMessage(), request);
+        pd.setProperty("error_code", "VALIDATION_FAILED");
         return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(pd);
+    }
+
+    @ExceptionHandler(AccountFrozenException.class)
+    public ResponseEntity<ProblemDetail> handleAccountFrozen(AccountFrozenException ex, WebRequest request) {
+        ProblemDetail pd = build(HttpStatus.UNPROCESSABLE_ENTITY, "https://capstone.bank/errors/account-frozen",
+                "Account Frozen", ex.getMessage(), request);
+        pd.setProperty("error_code", "ACCOUNT_FROZEN");
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(pd);
+    }
+
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<ProblemDetail> handleIllegalState(IllegalStateException ex, WebRequest request) {
+        if (ex.getMessage() != null && ex.getMessage().contains("ACCOUNT_FROZEN")) {
+            ProblemDetail pd = build(HttpStatus.UNPROCESSABLE_ENTITY, "https://capstone.bank/errors/account-frozen",
+                    "Account Frozen", ex.getMessage(), request);
+            pd.setProperty("error_code", "ACCOUNT_FROZEN");
+            return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(pd);
+        }
+        ProblemDetail pd = build(HttpStatus.BAD_REQUEST, "https://capstone.bank/errors/invalid-state",
+                "Invalid State", ex.getMessage(), request);
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(pd);
+    }
+
+    @ExceptionHandler(CardNotFoundException.class)
+    public ResponseEntity<ProblemDetail> handleCardNotFound(CardNotFoundException ex, WebRequest request) {
+        ProblemDetail pd = build(HttpStatus.NOT_FOUND, "https://capstone.bank/errors/card-not-found",
+                "Card Not Found", ex.getMessage(), request);
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(pd);
+    }
+
+    @ExceptionHandler(InvalidCardOperationException.class)
+    public ResponseEntity<ProblemDetail> handleInvalidCardOperation(InvalidCardOperationException ex, WebRequest request) {
+        HttpStatus status = "ECOM_TRANSACTIONS_DISABLED".equals(ex.getMessage()) 
+                ? HttpStatus.UNPROCESSABLE_ENTITY 
+                : HttpStatus.BAD_REQUEST;
+        String errorCode = "ECOM_TRANSACTIONS_DISABLED".equals(ex.getMessage()) 
+                ? "ECOM_TRANSACTIONS_DISABLED" 
+                : "INVALID_CARD_OPERATION";
+        
+        ProblemDetail pd = build(status, "https://capstone.bank/errors/card-operation",
+                "Invalid Card Operation", ex.getMessage(), request);
+        pd.setProperty("error_code", errorCode);
+        return ResponseEntity.status(status).body(pd);
+    }
+
+    @ExceptionHandler(SecurityCheckUnavailableException.class)
+    public ResponseEntity<ProblemDetail> handleSecurityCheckUnavailable(SecurityCheckUnavailableException ex, WebRequest request) {
+        ProblemDetail pd = build(HttpStatus.SERVICE_UNAVAILABLE, "https://capstone.bank/errors/security-check-unavailable",
+                "Security Check Unavailable", ex.getMessage(), request);
+        pd.setProperty("error_code", "SECURITY_CHECK_UNAVAILABLE");
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(pd);
     }
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ProblemDetail> handleGeneric(Exception ex, WebRequest request) {
+        log.error("Unhandled internal server error: ", ex);
         ProblemDetail pd = build(HttpStatus.INTERNAL_SERVER_ERROR, "https://capstone.bank/errors/internal",
-                "Internal Server Error", "An unexpected error occurred: " + ex.getMessage(), request);
+                "Internal Server Error", "An unexpected error occurred", request);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(pd);
     }
 
@@ -136,6 +256,23 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         ProblemDetail pd = build(HttpStatus.BAD_REQUEST, "https://capstone.bank/errors/validation",
                 "Validation Failed", "One or more fields failed validation", request);
         pd.setProperty("fieldErrors", fieldErrors);
+        pd.setProperty("error_code", "VALIDATION_FAILED");
+        return ResponseEntity.badRequest().body(pd);
+    }
+
+    @Override
+    protected ResponseEntity<Object> handleHttpMessageNotReadable(HttpMessageNotReadableException ex,
+                                                                   HttpHeaders headers,
+                                                                   HttpStatusCode status,
+                                                                   WebRequest request) {
+        String detail = "Malformed request body or invalid field format";
+        Throwable rootCause = ex.getMostSpecificCause();
+        if (rootCause instanceof IllegalArgumentException iae && iae.getMessage() != null) {
+            detail = iae.getMessage();
+        }
+        ProblemDetail pd = build(HttpStatus.BAD_REQUEST, "https://capstone.bank/errors/validation",
+                "Validation Failed", detail, request);
+        pd.setProperty("error_code", "VALIDATION_FAILED");
         return ResponseEntity.badRequest().body(pd);
     }
 }

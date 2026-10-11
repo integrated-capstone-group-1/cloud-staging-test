@@ -1,0 +1,3924 @@
+openapi: 3.0.3
+
+info:
+  title: Core Retail Ledger & Balance Mutation Engine API
+  description: |
+    Comprehensive OpenAPI specification for the Capstone Banking System.
+
+    This multi-service banking platform provides:
+
+    - Customer onboarding
+    - BCrypt credential verification
+    - JWT-based authentication
+    - JWT-based authentication
+    - JWT revocation through Redis
+    - Multi-currency bank account management
+    - Atomic balance mutations
+    - DEPOSIT, WITHDRAWAL, and TRANSFER transactions
+    - Cross-currency transfers using Foreign Exchange rates
+    - Pessimistic row locking for balance mutations
+    - Idempotent transaction processing
+    - Append-only PostgreSQL ledger audit trail
+    - Kafka event publishing through the outbox pattern
+    - Admin account governance
+    - Admin customer lookup
+    - Transaction and ledger reconciliation
+    - Reconciliation break detection
+
+    Main request flow:
+
+      Client
+        |
+        v
+      API Gateway :8080
+        |
+        +--> Authentication Services
+        |
+        +--> Accounts Service
+        |
+        +--> Transaction Service
+        |
+        +--> FX Service
+        |
+        +--> Reconciliation Service
+
+    The API Gateway is the primary external entry point. Direct service
+    servers are documented for development, troubleshooting, and internal
+    service testing.
+
+  version: 1.0.0
+
+  contact:
+    name: Capstone Banking Engineering Team
+    email: dev@capstone.bank
+
+servers:
+  - url: http://localhost:8080
+    description: |
+      API Gateway - primary API entry point.
+      Performs JWT validation, Redis token blacklist checking, and routing.
+
+  - url: http://localhost:8081
+    description: Registration Service - direct development access.
+
+  - url: http://localhost:8082
+    description: Login Service - direct development access.
+
+  - url: http://localhost:8083
+    description: Accounts Service - direct development access.
+
+  - url: http://localhost:8084
+    description: Transaction Service - direct development access.
+
+  - url: http://localhost:8086
+    description: Reconciliation Service - direct development access.
+
+  - url: http://localhost:8087
+    description: Foreign Exchange Service - direct development access.
+
+tags:
+  - name: Authentication
+    description: |
+      Customer registration, credential verification, JWT issuance,
+      and JWT revocation.
+
+  - name: Accounts
+    description: |
+      Customer account provisioning, account lookup, balance inquiry,
+      and internal debit/credit balance mutations.
+
+  - name: Ledger & Transactions
+    description: |
+      Core banking transaction processing and immutable ledger audit.
+      Supports DEPOSIT, WITHDRAWAL, TRANSFER, idempotency, pessimistic
+      locking, and cross-currency transaction processing.
+
+  - name: Foreign Exchange
+    description: |
+      Foreign exchange rate lookup and cached FX-rate listing.
+
+  - name: Admin — Accounts
+    description: |
+      Administrative account governance including account listing,
+      freezing, unfreezing, and closing.
+
+  - name: Admin — Customers
+    description: |
+      Administrative customer directory and individual customer lookup.
+
+  - name: Reconciliation
+    description: |
+      Transaction-to-ledger consistency checking, reconciliation runs,
+      reconciliation results, and open break monitoring.
+
+paths:
+  # =====================================================================
+  # AUTHENTICATION
+  # =====================================================================
+
+  /api/auth/register:
+    post:
+      tags:
+        - Authentication
+
+      summary: Register a new customer
+
+      description: |
+        Creates a new customer and corresponding application credentials.
+
+        Processing:
+
+        1. Validates the registration request.
+        2. Creates a CUSTOMER_MASTER record.
+        3. Creates an APP_USER_MASTER record.
+        4. Stores the password using BCrypt hashing.
+        5. Commits customer and credential creation atomically.
+        6. Publishes a customer.registered event through Kafka.
+
+        This endpoint does not require authentication.
+
+        Example request:
+
+          POST /api/auth/register
+
+        Example payload:
+
+          {
+            "firstName": "Alice",
+            "lastName": "Reyes",
+            "email": "alice.reyes@example.com",
+            "contactNo": "+63-917-555-0100",
+            "birthDate": "1990-04-12",
+            "password": "StrongPass123!"
+          }
+
+        After successful registration, the customer can authenticate
+        using POST /api/auth/login.
+
+      operationId: registerCustomer
+
+      security: []
+
+      requestBody:
+        required: true
+        description: Customer registration information.
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+            example:
+              firstName: "Alice"
+              lastName: "Reyes"
+              email: "alice.reyes@example.com"
+              contactNo: "+63-917-555-0100"
+              birthDate: "1990-04-12"
+              password: "StrongPass123!"
+              role: "ROLE_CUSTOMER"
+
+      responses:
+        "201":
+          description: Customer registered successfully.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RegisterApiResponse"
+              example:
+                success: true
+                message: "Customer registered successfully"
+                data:
+                  customerId: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+                  firstName: "Alice"
+                  lastName: "Reyes"
+                  email: "alice.reyes@example.com"
+                timestamp: "2026-09-28T15:00:00+08:00"
+
+        "400":
+          description: Validation error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+              example:
+                type: "about:blank"
+                title: "Bad Request"
+                status: 400
+                detail: "Validation failed for field 'email'"
+                instance: "/api/auth/register"
+                timestamp: "2026-09-28T15:00:00+08:00"
+                fieldErrors:
+                  email: "Email must be a valid address"
+
+        "409":
+          description: Email already registered.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+              example:
+                type: "about:blank"
+                title: "Conflict"
+                status: 409
+                detail: "Email is already registered"
+                instance: "/api/auth/register"
+                timestamp: "2026-09-28T15:00:00+08:00"
+
+        "500":
+          description: Internal server error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+  /api/auth/login:
+    post:
+      tags:
+        - Authentication
+
+      summary: Authenticate a customer and receive a JWT
+
+      description: |
+        Authenticates a registered customer.
+
+        Processing:
+
+        1. Looks up the application user by email.
+        2. Verifies the supplied password against the BCrypt hash.
+        3. Verifies that the customer is active.
+        4. Generates a signed HMAC-SHA256 JWT.
+        5. Registers the active token in Redis.
+        6. Returns the JWT and customer information.
+
+        This endpoint does not require authentication.
+
+        Example request:
+
+          POST /api/auth/login
+
+          {
+            "email": "alice.reyes@example.com",
+            "password": "StrongPass123!"
+          }
+
+        The returned JWT must be sent with protected endpoints:
+
+          Authorization: Bearer <JWT>
+
+      operationId: login
+
+      security: []
+
+      requestBody:
+        required: true
+        description: Customer login credentials.
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+            example:
+              email: "alice.reyes@example.com"
+              password: "StrongPass123!"
+
+      responses:
+        "200":
+          description: Login successful.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoginApiResponse"
+              example:
+                success: true
+                message: "Login successful"
+                data:
+                  token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                  tokenType: "Bearer"
+                  expiresInSeconds: 3600
+                  customerId: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+                  email: "alice.reyes@example.com"
+                  role: "ROLE_CUSTOMER"
+                timestamp: "2026-09-28T15:01:00+08:00"
+
+        "400":
+          description: Invalid request.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+              example:
+                type: "about:blank"
+                title: "Bad Request"
+                status: 400
+                detail: "Email and password are required"
+                instance: "/api/auth/login"
+                timestamp: "2026-09-28T15:01:00+08:00"
+
+        "401":
+          description: Invalid credentials or inactive customer.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+              example:
+                type: "about:blank"
+                title: "Unauthorized"
+                status: 401
+                detail: "Invalid email or password"
+                instance: "/api/auth/login"
+                timestamp: "2026-09-28T15:01:00+08:00"
+
+  /api/auth/logout:
+    post:
+      tags:
+        - Authentication
+
+      summary: Invalidate the current JWT
+
+      description: |
+        Revokes the currently authenticated JWT.
+
+        The JWT is added to the Redis token blacklist. Subsequent requests
+        using the same token are rejected by the API Gateway.
+
+        Example:
+
+          POST /api/auth/logout
+
+          Authorization: Bearer eyJhbGciOiJIUzI1NiIs...
+
+      operationId: logout
+
+      security:
+        - BearerAuth: []
+
+      parameters:
+        - name: Authorization
+          in: header
+          required: true
+          description: |
+            JWT to revoke.
+
+            Format:
+              Bearer <JWT>
+          schema:
+            type: string
+            example: "Bearer eyJhbGciOiJIUzI1NiJ9..."
+
+      responses:
+        "200":
+          description: Logout successful.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VoidApiResponse"
+              example:
+                success: true
+                message: "Logout successful"
+                data: null
+                timestamp: "2026-09-28T15:05:00+08:00"
+
+        "400":
+          description: Authorization header is missing or malformed.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+        "401":
+          description: Token is missing or expired.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+  # =====================================================================
+  # ACCOUNTS
+  # =====================================================================
+
+  /api/accounts:
+    post:
+      tags:
+        - Accounts
+
+      summary: Create a new bank account
+
+      description: |
+        Creates a new customer bank account in CUSTOMER_BALANCE_MASTER.
+
+        The customer must already exist.
+
+        New accounts are initialized with:
+
+        - Balance: 0.0000
+        - Status: ACTIVE
+        - Account type: SAVINGS, CHECKING, or WALLET
+        - Currency: ISO 4217 three-letter code
+
+        An account.created event is published through the configured
+        outbox/Kafka flow.
+
+        Example:
+
+          POST /api/accounts
+
+          {
+            "customerId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+            "accountType": "SAVINGS",
+            "currencyCode": "PHP"
+          }
+
+      operationId: createAccount
+
+      security:
+        - BearerAuth: []
+
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAccountRequest"
+            example:
+              customerId: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+              accountType: "SAVINGS"
+              currencyCode: "PHP"
+
+      responses:
+        "201":
+          description: Account created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountApiResponse"
+              example:
+                success: true
+                message: "Account created"
+                data:
+                  accountId: "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d"
+                  customerId: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+                  accountType: "SAVINGS"
+                  accountStatus: "ACTIVE"
+                  balanceAmount: 0.0000
+                  currencyCode: "PHP"
+                  createdAt: "2026-09-28T15:10:00+08:00"
+                timestamp: "2026-09-28T15:10:00+08:00"
+
+        "400":
+          description: Validation error.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+        "401":
+          description: Unauthorized.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+        "404":
+          description: Customer does not exist.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+  /api/accounts/{accountId}:
+    get:
+      tags:
+        - Accounts
+
+      summary: Get account details
+
+      description: |
+        Retrieves complete information for one bank account.
+
+        Example:
+
+          GET /api/accounts/a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d
+
+      operationId: getAccountById
+
+      security:
+        - BearerAuth: []
+
+      parameters:
+        - $ref: "#/components/parameters/AccountId"
+
+      responses:
+        "200":
+          description: Account details.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountApiResponse"
+              example:
+                success: true
+                message: "OK"
+                data:
+                  accountId: "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d"
+                  customerId: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+                  accountType: "SAVINGS"
+                  accountStatus: "ACTIVE"
+                  balanceAmount: 10000.0000
+                  currencyCode: "PHP"
+                  createdAt: "2026-09-28T15:10:00+08:00"
+                timestamp: "2026-09-28T15:15:00+08:00"
+
+        "401":
+          description: Unauthorized.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+        "404":
+          description: Account not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+  /api/accounts/{accountId}/balance:
+    get:
+      tags:
+        - Accounts
+
+      summary: Get current account balance
+
+      description: |
+        Retrieves the current account balance.
+
+        The service attempts to read the balance from Redis first.
+        If no cached value exists, the service reads the balance from
+        CUSTOMER_BALANCE_MASTER.
+
+        Example:
+
+          GET /api/accounts/a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d/balance
+
+        Example result:
+
+          {
+            "success": true,
+            "message": "OK",
+            "data": 10000.0000
+          }
+
+      operationId: getAccountBalance
+
+      security:
+        - BearerAuth: []
+
+      parameters:
+        - $ref: "#/components/parameters/AccountId"
+
+      responses:
+        "200":
+          description: Current balance.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BalanceApiResponse"
+              example:
+                success: true
+                message: "OK"
+                data: 10000.0000
+                timestamp: "2026-09-28T15:16:00+08:00"
+
+        "401":
+          description: Unauthorized.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+        "404":
+          description: Account not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+  /api/accounts/customer/{customerId}:
+    get:
+      tags:
+        - Accounts
+
+      summary: List all accounts for a customer
+
+      description: |
+        Returns every account belonging to a specific customer.
+
+        Example:
+
+          GET /api/accounts/customer/3fa85f64-5717-4562-b3fc-2c963f66afa6
+
+        The response can contain multiple accounts with different account
+        types and currencies.
+
+      operationId: getAccountsForCustomer
+
+      security:
+        - BearerAuth: []
+
+      parameters:
+        - $ref: "#/components/parameters/CustomerId"
+
+      responses:
+        "200":
+          description: Customer account list.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountListApiResponse"
+              example:
+                success: true
+                message: "OK"
+                data:
+                  - accountId: "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d"
+                    customerId: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+                    accountType: "SAVINGS"
+                    accountStatus: "ACTIVE"
+                    balanceAmount: 10000.0000
+                    currencyCode: "PHP"
+                    createdAt: "2026-09-28T15:10:00+08:00"
+                  - accountId: "b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e"
+                    customerId: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+                    accountType: "WALLET"
+                    accountStatus: "ACTIVE"
+                    balanceAmount: 2500.0000
+                    currencyCode: "USD"
+                    createdAt: "2026-09-28T15:12:00+08:00"
+                timestamp: "2026-09-28T15:16:00+08:00"
+
+        "401":
+          description: Unauthorized.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+  /api/accounts/{accountId}/debit:
+    post:
+      tags:
+        - Accounts
+
+      summary: Debit an account
+
+      description: |
+        Internal account mutation endpoint used primarily by Transaction Service.
+
+        Processing:
+
+        1. Acquires a pessimistic write lock on CUSTOMER_BALANCE_MASTER.
+        2. Validates that the account exists.
+        3. Validates that the account status is ACTIVE.
+        4. Validates that sufficient balance exists.
+        5. Debits the requested amount.
+        6. Invalidates the Redis balance cache.
+
+        This endpoint is normally invoked as part of a WITHDRAWAL or
+        TRANSFER transaction.
+
+        Example:
+
+          POST /api/accounts/a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d/debit
+
+          {
+            "amount": 500.0000,
+            "txnId": "c2a85f64-5717-4562-b3fc-2c963f66afa7",
+            "txnType": "WITHDRAWAL"
+          }
+
+      operationId: debitAccount
+
+      security:
+        - BearerAuth: []
+
+      parameters:
+        - $ref: "#/components/parameters/AccountId"
+
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccountMutationRequest"
+            example:
+              amount: 500.0000
+              txnId: "c2a85f64-5717-4562-b3fc-2c963f66afa7"
+              txnType: "WITHDRAWAL"
+
+      responses:
+        "200":
+          description: Account debited successfully.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountMutationApiResponse"
+              example:
+                success: true
+                message: "Debit processed"
+                data:
+                  accountId: "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d"
+                  balanceBefore: 10000.0000
+                  balanceAfter: 9500.0000
+                  appliedDelta: -500.0000
+                  currencyCode: "PHP"
+                timestamp: "2026-09-28T15:20:00+08:00"
+
+        "400":
+          description: Invalid mutation request.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+        "401":
+          description: Unauthorized.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+        "404":
+          description: Account not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+        "409":
+          description: Account is FROZEN or CLOSED.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+        "422":
+          description: Insufficient account balance.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+  /api/accounts/{accountId}/credit:
+    post:
+      tags:
+        - Accounts
+
+      summary: Credit an account
+
+      description: |
+        Internal account mutation endpoint used primarily by Transaction Service.
+
+        Processing:
+
+        1. Acquires a pessimistic write lock.
+        2. Validates that the account exists.
+        3. Validates that the account status is ACTIVE.
+        4. Adds the requested amount to the account balance.
+        5. Invalidates the Redis balance cache.
+
+        This endpoint is normally invoked for DEPOSIT or TRANSFER operations.
+
+        Example:
+
+          POST /api/accounts/{accountId}/credit
+
+          {
+            "amount": 1000.0000,
+            "txnId": "c2a85f64-5717-4562-b3fc-2c963f66afa7",
+            "txnType": "DEPOSIT"
+          }
+
+      operationId: creditAccount
+
+      security:
+        - BearerAuth: []
+
+      parameters:
+        - $ref: "#/components/parameters/AccountId"
+
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccountMutationRequest"
+            example:
+              amount: 1000.0000
+              txnId: "c2a85f64-5717-4562-b3fc-2c963f66afa7"
+              txnType: "DEPOSIT"
+
+      responses:
+        "200":
+          description: Account credited successfully.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountMutationApiResponse"
+              example:
+                success: true
+                message: "Credit processed"
+                data:
+                  accountId: "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d"
+                  balanceBefore: 9000.0000
+                  balanceAfter: 10000.0000
+                  appliedDelta: 1000.0000
+                  currencyCode: "PHP"
+                timestamp: "2026-09-28T15:20:00+08:00"
+
+        "400":
+          description: Invalid mutation request.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+        "401":
+          description: Unauthorized.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+        "404":
+          description: Account not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+        "409":
+          description: Account is FROZEN or CLOSED.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+  # =====================================================================
+  # LEDGER AND TRANSACTIONS
+  # =====================================================================
+
+  /api/v1/ledger/mutate:
+    post:
+      tags:
+        - Ledger & Transactions
+
+      summary: Execute a DEPOSIT, WITHDRAWAL, or TRANSFER
+
+      description: |
+        Main banking transaction endpoint.
+
+        Supported transaction types:
+
+        DEPOSIT:
+          Credits the specified account.
+
+          Accounts affected:
+            - accountId: CREDIT
+
+          Ledger entries:
+            - 1 CREDIT entry
+
+        WITHDRAWAL:
+          Debits the specified account.
+
+          Accounts affected:
+            - accountId: DEBIT
+
+          Ledger entries:
+            - 1 DEBIT entry
+
+        TRANSFER:
+          Debits the source account and credits the counterparty account.
+
+          Accounts affected:
+            - accountId: DEBIT
+            - counterpartyAccountId: CREDIT
+
+          Ledger entries:
+            - 1 DEBIT entry
+            - 1 CREDIT entry
+
+        Processing flow:
+
+        1. TransactionIdInterceptor generates a transaction UUID.
+        2. Idempotency key is checked in Redis.
+        3. Source and destination accounts are validated.
+        4. Oracle balance rows are pessimistically locked.
+        5. Balance validation is performed.
+        6. CUSTOMER_BALANCE_MASTER is updated.
+        7. TRANSACTION_MASTER is created with PENDING status.
+        8. PostgreSQL LEDGER_MUTATION_AUDIT entries are written.
+        9. Transaction is marked COMMITTED.
+        10. Redis balance cache is invalidated.
+        11. transaction.completed is published through the outbox/Kafka flow.
+
+        If the PostgreSQL ledger phase fails, the Oracle mutation is compensated
+        and the transaction is marked ROLLED_BACK.
+
+        IMPORTANT:
+        The client must NOT send txnId in the request body.
+        TransactionIdInterceptor generates it automatically.
+
+        Idempotency example:
+
+          First request:
+            idempotencyKey = "deposit-acct1-5000-001"
+
+          Repeated request with the same key:
+            The existing transaction result is returned instead of applying
+            the balance mutation again.
+
+      operationId: mutateBalance
+
+      security:
+        - BearerAuth: []
+
+      requestBody:
+        required: true
+        description: Transaction request. txnId is generated server-side.
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransactionRequest"
+
+            examples:
+              deposit:
+                summary: Deposit PHP 5,000
+                value:
+                  accountId: "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d"
+                  txnType: "DEPOSIT"
+                  amount: 5000.0000
+                  idempotencyKey: "deposit-acct1-5000-001"
+
+              withdrawal:
+                summary: Withdraw PHP 1,000
+                value:
+                  accountId: "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d"
+                  txnType: "WITHDRAWAL"
+                  amount: 1000.0000
+                  idempotencyKey: "withdraw-acct1-1000-001"
+
+              transfer:
+                summary: Transfer PHP 2,500
+                value:
+                  accountId: "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d"
+                  counterpartyAccountId: "b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e"
+                  txnType: "TRANSFER"
+                  amount: 2500.0000
+                  idempotencyKey: "transfer-acct1-acct2-2500-001"
+
+              crossCurrencyTransfer:
+                summary: Cross-currency PHP to USD transfer
+                value:
+                  accountId: "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d"
+                  counterpartyAccountId: "b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e"
+                  txnType: "TRANSFER"
+                  amount: 5850.0000
+                  idempotencyKey: "xfer-fx-php-usd-001"
+                  targetCurrency: "USD"
+                  exchangeRate: 0.01709402
+                  targetAmount: 100.00
+                  feeAmount: 0.00
+                  isCrossCurrency: true
+
+      responses:
+        "201":
+          description: Transaction committed successfully.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransactionApiResponse"
+              examples:
+                deposit:
+                  summary: Successful deposit
+                  value:
+                    success: true
+                    message: "DEPOSIT processed"
+                    data:
+                      txnId: "7c9e6679-7425-40de-944b-e07fc1f90ae7"
+                      accountId: "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d"
+                      txnType: "DEPOSIT"
+                      amount: 5000.0000
+                      balanceAfter: 15000.0000
+                      txnStatus: "COMMITTED"
+                      timestamp: "2026-09-28T15:25:00+08:00"
+                      targetCurrency: null
+                      exchangeRate: null
+                      targetAmount: null
+                      feeAmount: null
+                      isCrossCurrency: false
+                    timestamp: "2026-09-28T15:25:00+08:00"
+
+                transfer:
+                  summary: Successful transfer
+                  value:
+                    success: true
+                    message: "TRANSFER processed"
+                    data:
+                      txnId: "7c9e6679-7425-40de-944b-e07fc1f90ae7"
+                      accountId: "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d"
+                      txnType: "TRANSFER"
+                      amount: 2500.0000
+                      balanceAfter: 7500.0000
+                      txnStatus: "COMMITTED"
+                      timestamp: "2026-09-28T15:25:00+08:00"
+                      targetCurrency: null
+                      exchangeRate: null
+                      targetAmount: null
+                      feeAmount: null
+                      isCrossCurrency: false
+                    timestamp: "2026-09-28T15:25:00+08:00"
+
+                crossCurrency:
+                  summary: Successful PHP to USD transfer
+                  value:
+                    success: true
+                    message: "TRANSFER processed"
+                    data:
+                      txnId: "7c9e6679-7425-40de-944b-e07fc1f90ae7"
+                      accountId: "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d"
+                      txnType: "TRANSFER"
+                      amount: 5850.0000
+                      balanceAfter: 4150.0000
+                      txnStatus: "COMMITTED"
+                      timestamp: "2026-09-28T15:25:00+08:00"
+                      targetCurrency: "USD"
+                      exchangeRate: 0.01709402
+                      targetAmount: 100.00
+                      feeAmount: 0.00
+                      isCrossCurrency: true
+                    timestamp: "2026-09-28T15:25:00+08:00"
+
+        "400":
+          description: Validation error or unsupported transaction type.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+              example:
+                type: "about:blank"
+                title: "Bad Request"
+                status: 400
+                detail: "Unsupported transaction type"
+                instance: "/api/v1/ledger/mutate"
+                timestamp: "2026-09-28T15:25:00+08:00"
+
+        "401":
+          description: Missing or expired JWT.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+        "404":
+          description: Source or destination account does not exist.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+        "409":
+          description: Idempotency conflict or transaction already processed.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+              example:
+                type: "about:blank"
+                title: "Conflict"
+                status: 409
+                detail: "Transaction has already been processed for this idempotency key"
+                instance: "/api/v1/ledger/mutate"
+                timestamp: "2026-09-28T15:25:00+08:00"
+
+        "422":
+          description: Insufficient balance or business validation failure.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+              example:
+                type: "about:blank"
+                title: "Unprocessable Entity"
+                status: 422
+                detail: "Insufficient account balance"
+                instance: "/api/v1/ledger/mutate"
+                timestamp: "2026-09-28T15:25:00+08:00"
+
+        "500":
+          description: Ledger persistence failure and compensated Oracle transaction.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+  /api/v1/ledger/audit/{txnId}:
+    get:
+      tags:
+        - Ledger & Transactions
+
+      summary: Retrieve the ledger audit trail for a transaction
+
+      description: |
+        Retrieves the immutable ledger audit entries stored in
+        LEDGER_MUTATION_AUDIT for a transaction.
+
+        Expected entries:
+
+        DEPOSIT:
+          1 CREDIT entry
+
+        WITHDRAWAL:
+          1 DEBIT entry
+
+        TRANSFER:
+          1 DEBIT entry for the source account
+          1 CREDIT entry for the destination account
+
+        Example:
+
+          GET /api/v1/ledger/audit/7c9e6679-7425-40de-944b-e07fc1f90ae7
+
+      operationId: getAuditByTxnId
+
+      security:
+        - BearerAuth: []
+
+      parameters:
+        - name: txnId
+          in: path
+          required: true
+          description: UUID generated for the transaction.
+          schema:
+            type: string
+            format: uuid
+            example: "7c9e6679-7425-40de-944b-e07fc1f90ae7"
+
+      responses:
+        "200":
+          description: Ledger audit entries.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuditListApiResponse"
+              example:
+                success: true
+                message: "OK"
+                data:
+                  - mutationUuid: "9d4e8c3a-1f2b-4567-89ab-cdef01234567"
+                    txnId: "7c9e6679-7425-40de-944b-e07fc1f90ae7"
+                    accountId: "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d"
+                    mutationAmount: 2500.0000
+                    mutationType: "DEBIT"
+                    txnType: "TRANSFER"
+                    auditState: "COMMITTED"
+                    createdAt: "2026-09-28T15:25:00+08:00"
+                  - mutationUuid: "8e5f9d4b-2a3c-5678-90bc-def123456789"
+                    txnId: "7c9e6679-7425-40de-944b-e07fc1f90ae7"
+                    accountId: "b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e"
+                    mutationAmount: 2500.0000
+                    mutationType: "CREDIT"
+                    txnType: "TRANSFER"
+                    auditState: "COMMITTED"
+                    createdAt: "2026-09-28T15:25:00+08:00"
+                timestamp: "2026-09-28T15:26:00+08:00"
+
+        "401":
+          description: Unauthorized.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+        "404":
+          description: No audit records found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+  # =====================================================================
+  # FOREIGN EXCHANGE
+  # =====================================================================
+
+  /api/v1/fx-rate:
+    get:
+      tags:
+        - Foreign Exchange
+
+      summary: Get an exchange rate between two currencies
+
+      description: |
+        Resolves the exchange rate between sourceCurrency and targetCurrency.
+
+        The service can use a cached direct rate or calculate a cross-currency
+        rate through the configured USD pivot.
+
+        Example:
+
+          GET /api/v1/fx-rate?sourceCurrency=PHP&targetCurrency=USD
+
+        Example result:
+
+          PHP -> USD
+          1 PHP = 0.01709402 USD
+
+        This rate can subsequently be used for a cross-currency transfer.
+
+      operationId: getFxRate
+
+      security:
+        - BearerAuth: []
+
+      parameters:
+        - name: sourceCurrency
+          in: query
+          required: true
+          description: ISO 4217 source currency code.
+          schema:
+            type: string
+            pattern: "^[A-Z]{3}$"
+            example: "PHP"
+
+        - name: targetCurrency
+          in: query
+          required: true
+          description: ISO 4217 destination currency code.
+          schema:
+            type: string
+            pattern: "^[A-Z]{3}$"
+            example: "USD"
+
+      responses:
+        "200":
+          description: Exchange rate resolved successfully.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FxRateResponse"
+              example:
+                sourceCurrency: "PHP"
+                targetCurrency: "USD"
+                exchangeRate: 0.01709402
+                isCrossCurrency: true
+
+        "400":
+          description: Missing, unsupported, or malformed currency code.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+        "401":
+          description: Unauthorized.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+  /api/v1/forex/rates:
+    get:
+      tags:
+        - Foreign Exchange
+
+      summary: List all cached exchange rates
+
+      description: |
+        Returns the exchange rates currently stored in the FX rate cache.
+
+        Example:
+
+          GET /api/v1/forex/rates
+
+        This endpoint is useful for frontend currency selectors,
+        exchange-rate displays, and diagnostic purposes.
+
+      operationId: getAllRates
+
+      security:
+        - BearerAuth: []
+
+      responses:
+        "200":
+          description: Cached FX rate list.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FxRateCache"
+              example:
+                - id: 1
+                  baseCurrency: "USD"
+                  targetCurrency: "PHP"
+                  rate: 58.5200000000000000
+                  fetchedAt: "2026-09-28T15:00:00+08:00"
+                - id: 2
+                  baseCurrency: "USD"
+                  targetCurrency: "EUR"
+                  rate: 0.8520000000000000
+                  fetchedAt: "2026-09-28T15:00:00+08:00"
+
+        "401":
+          description: Unauthorized.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+  # =====================================================================
+  # ADMIN - ACCOUNTS
+  # =====================================================================
+
+  /api/admin/accounts:
+    get:
+      tags:
+        - Admin — Accounts
+
+      summary: List all accounts
+
+      description: |
+        Returns all customer accounts.
+
+        An optional customerId query parameter can be supplied to filter
+        accounts belonging to a specific customer.
+
+        All accounts:
+
+          GET /api/admin/accounts
+
+        Accounts for one customer:
+
+          GET /api/admin/accounts?customerId=3fa85f64-5717-4562-b3fc-2c963f66afa6
+
+        Requires ROLE_ADMIN.
+
+      operationId: adminListAllAccounts
+
+      security:
+        - BearerAuth: []
+
+      parameters:
+        - name: customerId
+          in: query
+          required: false
+          description: Optional customer UUID filter.
+          schema:
+            type: string
+            format: uuid
+            example: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+
+      responses:
+        "200":
+          description: Account list.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountListApiResponse"
+              example:
+                success: true
+                message: "OK"
+                data:
+                  - accountId: "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d"
+                    customerId: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+                    accountType: "SAVINGS"
+                    accountStatus: "ACTIVE"
+                    balanceAmount: 10000.0000
+                    currencyCode: "PHP"
+                    createdAt: "2026-09-28T15:10:00+08:00"
+                timestamp: "2026-09-28T15:30:00+08:00"
+
+        "401":
+          description: Unauthorized.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+        "403":
+          description: Caller does not have ROLE_ADMIN.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+  /api/admin/accounts/{accountId}/status:
+    patch:
+      tags:
+        - Admin — Accounts
+
+      summary: Update account status
+
+      description: |
+        Changes the administrative status of an account.
+
+        Supported states:
+
+        ACTIVE:
+          Account can perform normal mutations.
+
+        FROZEN:
+          Account remains available for inquiry but balance mutations
+          are rejected.
+
+        CLOSED:
+          Account is permanently closed and cannot be reopened through
+          this endpoint.
+
+        Example:
+
+          PATCH /api/admin/accounts/a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d/status?status=FROZEN
+
+        Requires ROLE_ADMIN.
+
+      operationId: adminUpdateAccountStatus
+
+      security:
+        - BearerAuth: []
+
+      parameters:
+        - $ref: "#/components/parameters/AccountId"
+
+        - name: status
+          in: query
+          required: true
+          description: New account status.
+          schema:
+            type: string
+            enum:
+              - ACTIVE
+              - FROZEN
+              - CLOSED
+            example: "FROZEN"
+
+      responses:
+        "200":
+          description: Account status updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountApiResponse"
+              example:
+                success: true
+                message: "Account status updated"
+                data:
+                  accountId: "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d"
+                  customerId: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+                  accountType: "SAVINGS"
+                  accountStatus: "FROZEN"
+                  balanceAmount: 10000.0000
+                  currencyCode: "PHP"
+                  createdAt: "2026-09-28T15:10:00+08:00"
+                timestamp: "2026-09-28T15:31:00+08:00"
+
+        "400":
+          description: Invalid account status.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+        "401":
+          description: Unauthorized.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+        "403":
+          description: Caller does not have ROLE_ADMIN.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+        "404":
+          description: Account not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+  # =====================================================================
+  # ADMIN - CUSTOMERS
+  # =====================================================================
+
+  /api/admin/customers:
+    get:
+      tags:
+        - Admin — Customers
+
+      summary: List all registered customers
+
+      description: |
+        Returns the customer directory from CUSTOMER_MASTER.
+
+        Intended for administrative customer lookup, KYC review,
+        and onboarding oversight.
+
+        Example:
+
+          GET /api/admin/customers
+
+        Requires ROLE_ADMIN.
+
+      operationId: adminListAllCustomers
+
+      security:
+        - BearerAuth: []
+
+      responses:
+        "200":
+          description: Customer directory.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerListApiResponse"
+              example:
+                success: true
+                message: "OK"
+                data:
+                  - customerId: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+                    firstName: "Alice"
+                    lastName: "Reyes"
+                    email: "alice.reyes@example.com"
+                    contactNo: "+63-917-555-0100"
+                    birthDate: "1990-04-12"
+                timestamp: "2026-09-28T15:35:00+08:00"
+
+        "401":
+          description: Unauthorized.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+        "403":
+          description: Caller does not have ROLE_ADMIN.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+  /api/admin/customers/{customerId}:
+    get:
+      tags:
+        - Admin — Customers
+
+      summary: Get a customer by ID
+
+      description: |
+        Retrieves one customer from CUSTOMER_MASTER.
+
+        Example:
+
+          GET /api/admin/customers/3fa85f64-5717-4562-b3fc-2c963f66afa6
+
+        Requires ROLE_ADMIN.
+
+      operationId: adminGetCustomer
+
+      security:
+        - BearerAuth: []
+
+      parameters:
+        - $ref: "#/components/parameters/CustomerId"
+
+      responses:
+        "200":
+          description: Customer record.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerApiResponse"
+              example:
+                success: true
+                message: "OK"
+                data:
+                  customerId: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+                  firstName: "Alice"
+                  lastName: "Reyes"
+                  email: "alice.reyes@example.com"
+                  contactNo: "+63-917-555-0100"
+                  birthDate: "1990-04-12"
+                timestamp: "2026-09-28T15:36:00+08:00"
+
+        "401":
+          description: Unauthorized.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+        "403":
+          description: Caller does not have ROLE_ADMIN.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+        "404":
+          description: Customer not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+  # =====================================================================
+  # RECONCILIATION
+  # =====================================================================
+
+  /api/recon/runs:
+    post:
+      tags:
+        - Reconciliation
+
+      summary: Trigger a reconciliation run
+
+      description: |
+        Starts a reconciliation run for a specified time window.
+
+        The reconciliation engine compares transaction records in
+        TRANSACTION_MASTER against corresponding ledger entries in
+        LEDGER_MUTATION_AUDIT.
+
+        The resulting reconciliation information is stored in
+        RECON_RESULT_AUDIT.
+
+        The window is inclusive.
+
+        Example:
+
+          POST /api/recon/runs
+
+          {
+            "windowStart": "2026-09-28T00:00:00Z",
+            "windowEnd": "2026-09-28T23:59:59Z"
+          }
+
+        The response contains:
+
+        - Number of transactions checked
+        - Number of matching transactions
+        - Number of exceptions
+        - Run status
+        - Run identifier
+
+      operationId: triggerReconRun
+
+      security:
+        - BearerAuth: []
+
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RunReconciliationRequest"
+            example:
+              windowStart: "2026-09-28T00:00:00Z"
+              windowEnd: "2026-09-28T23:59:59Z"
+
+      responses:
+        "200":
+          description: Reconciliation run completed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunSummaryResponse"
+              example:
+                runId: "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+                status: "COMPLETED"
+                windowStart: "2026-09-28T00:00:00Z"
+                windowEnd: "2026-09-28T23:59:59Z"
+                startedAt: "2026-09-28T23:59:00Z"
+                completedAt: "2026-09-29T00:00:03Z"
+                totalChecked: 150
+                totalMatched: 148
+                totalExceptions: 2
+
+        "400":
+          description: Invalid reconciliation window.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+              example:
+                type: "about:blank"
+                title: "Bad Request"
+                status: 400
+                detail: "windowStart must be before windowEnd"
+                instance: "/api/recon/runs"
+                timestamp: "2026-09-28T23:59:00Z"
+
+        "401":
+          description: Unauthorized.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+    get:
+      tags:
+        - Reconciliation
+
+      summary: List the 20 most recent reconciliation runs
+
+      description: |
+        Returns the 20 most recent reconciliation runs in descending
+        order of creation/completion time.
+
+        Example:
+
+          GET /api/recon/runs
+
+      operationId: getRecentReconRuns
+
+      security:
+        - BearerAuth: []
+
+      responses:
+        "200":
+          description: Recent reconciliation runs.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RunSummaryResponse"
+              example:
+                - runId: "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+                  status: "COMPLETED"
+                  windowStart: "2026-09-28T00:00:00Z"
+                  windowEnd: "2026-09-28T23:59:59Z"
+                  startedAt: "2026-09-28T23:59:00Z"
+                  completedAt: "2026-09-29T00:00:03Z"
+                  totalChecked: 150
+                  totalMatched: 148
+                  totalExceptions: 2
+
+        "401":
+          description: Unauthorized.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+  /api/recon/runs/{runId}:
+    get:
+      tags:
+        - Reconciliation
+
+      summary: Get a reconciliation run by ID
+
+      description: |
+        Retrieves the summary of one reconciliation run.
+
+        Example:
+
+          GET /api/recon/runs/f47ac10b-58cc-4372-a567-0e02b2c3d479
+
+      operationId: getReconRunById
+
+      security:
+        - BearerAuth: []
+
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+
+      responses:
+        "200":
+          description: Reconciliation run summary.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunSummaryResponse"
+              example:
+                runId: "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+                status: "COMPLETED"
+                windowStart: "2026-09-28T00:00:00Z"
+                windowEnd: "2026-09-28T23:59:59Z"
+                startedAt: "2026-09-28T23:59:00Z"
+                completedAt: "2026-09-29T00:00:03Z"
+                totalChecked: 150
+                totalMatched: 148
+                totalExceptions: 2
+
+        "401":
+          description: Unauthorized.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+        "404":
+          description: Reconciliation run not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+  /api/recon/runs/{runId}/results:
+    get:
+      tags:
+        - Reconciliation
+
+      summary: Get reconciliation results for a run
+
+      description: |
+        Returns every reconciliation result generated by a specific run.
+
+        Results can have:
+
+        MATCHED:
+          Transaction and ledger information agree.
+
+        EXCEPTION:
+          Transaction and ledger information contain a reconciliation break.
+
+        Example:
+
+          GET /api/recon/runs/f47ac10b-58cc-4372-a567-0e02b2c3d479/results
+
+      operationId: getReconRunResults
+
+      security:
+        - BearerAuth: []
+
+      parameters:
+        - $ref: "#/components/parameters/RunId"
+
+      responses:
+        "200":
+          description: Reconciliation result entries.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ReconResultAudit"
+              example:
+                - resultId: "11111111-1111-1111-1111-111111111111"
+                  runId: "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+                  txnId: "7c9e6679-7425-40de-944b-e07fc1f90ae7"
+                  accountId: "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d"
+                  mutationUuid: "9d4e8c3a-1f2b-4567-89ab-cdef01234567"
+                  duplicateMutationUuid: null
+                  reconStatus: "MATCHED"
+                  exceptionType: null
+                  expectedAmount: 2500.0000
+                  actualAmount: 2500.0000
+                  varianceAmount: 0.0000
+                  txnStatus: "COMMITTED"
+                  ledgerAuditState: "COMMITTED"
+                  txnCompletedAt: "2026-09-28T15:25:00+08:00"
+                  ledgerPostedAt: "2026-09-28T15:25:01+08:00"
+                  postingLagSeconds: 1
+                  severity: "LOW"
+                  createdAt: "2026-09-29T00:00:01Z"
+
+                - resultId: "22222222-2222-2222-2222-222222222222"
+                  runId: "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+                  txnId: "8d9e6679-7425-40de-944b-e07fc1f90ae8"
+                  accountId: "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d"
+                  mutationUuid: "9d4e8c3a-1f2b-4567-89ab-cdef01234568"
+                  duplicateMutationUuid: null
+                  reconStatus: "EXCEPTION"
+                  exceptionType: "AMOUNT_MISMATCH"
+                  expectedAmount: 1000.0000
+                  actualAmount: 999.9999
+                  varianceAmount: 0.0001
+                  txnStatus: "COMMITTED"
+                  ledgerAuditState: "COMMITTED"
+                  txnCompletedAt: "2026-09-28T15:27:00+08:00"
+                  ledgerPostedAt: "2026-09-28T15:27:03+08:00"
+                  postingLagSeconds: 3
+                  severity: "HIGH"
+                  createdAt: "2026-09-29T00:00:02Z"
+
+        "401":
+          description: Unauthorized.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+        "404":
+          description: Reconciliation run not found.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+  /api/recon/breaks:
+    get:
+      tags:
+        - Reconciliation
+
+      summary: List open reconciliation breaks
+
+      description: |
+        Returns reconciliation results whose status is EXCEPTION.
+
+        These entries represent reconciliation breaks that require
+        operational investigation.
+
+        Possible exception types include:
+
+        - MISSING_LEDGER_ENTRY
+        - ORPHAN_LEDGER_ENTRY
+        - AMOUNT_MISMATCH
+        - ACCOUNT_MISMATCH
+        - STATUS_MISMATCH
+        - DUPLICATE_ENTRY
+        - LATE_POSTING
+
+        Example:
+
+          GET /api/recon/breaks
+
+      operationId: getOpenReconBreaks
+
+      security:
+        - BearerAuth: []
+
+      responses:
+        "200":
+          description: Open reconciliation breaks.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ReconResultAudit"
+              example:
+                - resultId: "22222222-2222-2222-2222-222222222222"
+                  runId: "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+                  txnId: "8d9e6679-7425-40de-944b-e07fc1f90ae8"
+                  accountId: "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d"
+                  mutationUuid: "9d4e8c3a-1f2b-4567-89ab-cdef01234568"
+                  duplicateMutationUuid: null
+                  reconStatus: "EXCEPTION"
+                  exceptionType: "AMOUNT_MISMATCH"
+                  expectedAmount: 1000.0000
+                  actualAmount: 999.9999
+                  varianceAmount: 0.0001
+                  txnStatus: "COMMITTED"
+                  ledgerAuditState: "COMMITTED"
+                  txnCompletedAt: "2026-09-28T15:27:00+08:00"
+                  ledgerPostedAt: "2026-09-28T15:27:03+08:00"
+                  postingLagSeconds: 3
+                  severity: "HIGH"
+                  createdAt: "2026-09-29T00:00:02Z"
+
+        "401":
+          description: Unauthorized.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+# ===========================================================================
+# COMPONENTS
+# ===========================================================================
+
+components:
+  # -------------------------------------------------------------------------
+  # SECURITY
+  # -------------------------------------------------------------------------
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        JWT authentication.
+
+        Obtain the token from:
+
+          POST /api/auth/login
+
+        Then include it in protected requests:
+
+          Authorization: Bearer <JWT>
+
+  # -------------------------------------------------------------------------
+  # PARAMETERS
+  # -------------------------------------------------------------------------
+
+  parameters:
+    AccountId:
+      name: accountId
+      in: path
+      required: true
+      description: UUID of the target bank account.
+      schema:
+        type: string
+        format: uuid
+        example: "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d"
+
+    CustomerId:
+      name: customerId
+      in: path
+      required: true
+      description: UUID of the target customer.
+      schema:
+        type: string
+        format: uuid
+        example: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+
+    RunId:
+      name: runId
+      in: path
+      required: true
+      description: UUID of the reconciliation run.
+      schema:
+        type: string
+        format: uuid
+        example: "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+
+  # -------------------------------------------------------------------------
+  # SCHEMAS
+  # -------------------------------------------------------------------------
+
+  schemas:
+    # =======================================================================
+    # REQUEST SCHEMAS
+    # =======================================================================
+
+    RegisterRequest:
+      type: object
+
+      description: |
+        Customer registration payload.
+
+        Creates a CUSTOMER_MASTER record and corresponding APP_USER_MASTER
+        credentials.
+
+      required:
+        - firstName
+        - lastName
+        - email
+        - birthDate
+        - password
+
+      properties:
+        firstName:
+          type: string
+          maxLength: 100
+          example: "Alice"
+
+        lastName:
+          type: string
+          maxLength: 100
+          example: "Reyes"
+
+        email:
+          type: string
+          format: email
+          example: "alice.reyes@example.com"
+
+        contactNo:
+          type: string
+          nullable: true
+          pattern: '^[0-9+()\-\s]{7,20}$'
+          example: "+63-917-555-0100"
+
+        birthDate:
+          type: string
+          format: date
+          example: "1990-04-12"
+
+        password:
+          type: string
+          format: password
+          minLength: 8
+          maxLength: 100
+          example: "StrongPass123!"
+
+        role:
+          type: string
+          nullable: true
+          description: |
+            Optional role value.
+
+            Standard customer registration should normally omit this
+            property or use ROLE_CUSTOMER.
+
+          enum:
+            - ROLE_CUSTOMER
+            - ROLE_ADMIN
+
+          example: "ROLE_CUSTOMER"
+
+    LoginRequest:
+      type: object
+
+      description: Customer login credentials.
+
+      required:
+        - email
+        - password
+
+      properties:
+        email:
+          type: string
+          format: email
+          example: "alice.reyes@example.com"
+
+        password:
+          type: string
+          format: password
+          example: "StrongPass123!"
+
+    CreateAccountRequest:
+      type: object
+
+      description: |
+        Creates a new account in CUSTOMER_BALANCE_MASTER.
+
+        New accounts start with zero balance and ACTIVE status.
+
+      required:
+        - customerId
+        - accountType
+        - currencyCode
+
+      properties:
+        customerId:
+          type: string
+          format: uuid
+          maxLength: 36
+          example: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+
+        accountType:
+          type: string
+          enum:
+            - SAVINGS
+            - CHECKING
+            - WALLET
+          example: "SAVINGS"
+
+        currencyCode:
+          type: string
+          pattern: "^[A-Z]{3}$"
+          example: "PHP"
+
+    AccountMutationRequest:
+      type: object
+
+      description: |
+        Internal account balance mutation request.
+
+        Used by the Transaction Service to perform a debit or credit.
+
+      required:
+        - amount
+
+      properties:
+        amount:
+          type: number
+          format: double
+          minimum: 0.0001
+          example: 500.0000
+          description: |
+            Amount to debit or credit.
+
+            Maximum precision:
+            14 integer digits and 4 fractional digits.
+
+        txnId:
+          type: string
+          format: uuid
+          nullable: true
+          description: |
+            Transaction UUID.
+
+            This is supplied by the transaction flow when this internal
+            endpoint is invoked directly.
+
+          example: "c2a85f64-5717-4562-b3fc-2c963f66afa7"
+
+        txnType:
+          type: string
+          nullable: true
+          enum:
+            - WITHDRAWAL
+            - DEPOSIT
+            - TRANSFER
+          example: "WITHDRAWAL"
+
+    TransactionRequest:
+      type: object
+
+      description: |
+        Main banking transaction request.
+
+        txnId is intentionally NOT part of this request because the
+        TransactionIdInterceptor generates it server-side.
+
+      required:
+        - accountId
+        - txnType
+        - amount
+        - idempotencyKey
+
+      properties:
+        accountId:
+          type: string
+          format: uuid
+          maxLength: 36
+          description: |
+            Source account.
+
+            For DEPOSIT and WITHDRAWAL this is the account being mutated.
+            For TRANSFER this is the account being debited.
+
+          example: "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d"
+
+        counterpartyAccountId:
+          type: string
+          format: uuid
+          nullable: true
+          maxLength: 36
+          description: |
+            Destination account for TRANSFER.
+
+            Required for TRANSFER.
+            Not required for DEPOSIT or WITHDRAWAL.
+
+          example: "b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e"
+
+        txnType:
+          type: string
+          enum:
+            - WITHDRAWAL
+            - DEPOSIT
+            - TRANSFER
+          example: "TRANSFER"
+
+        amount:
+          type: number
+          format: double
+          minimum: 0.0001
+          example: 2500.0000
+          description: |
+            Source account debit amount.
+
+            Maximum precision:
+            14 integer digits and 4 fractional digits.
+
+        idempotencyKey:
+          type: string
+          minLength: 1
+          description: |
+            Client-generated unique key used to prevent duplicate processing.
+
+            Example:
+
+              transfer-acct1-acct2-2500-001
+
+            If the same key is submitted again, the service must not
+            apply the balance mutation a second time.
+
+          example: "transfer-acct1-acct2-2500-001"
+
+        targetCurrency:
+          type: string
+          nullable: true
+          pattern: "^[A-Z]{3}$"
+          description: |
+            Destination currency.
+
+            Required for cross-currency transfers.
+
+          example: "USD"
+
+        exchangeRate:
+          type: number
+          format: double
+          nullable: true
+          description: Rate applied to convert the source amount.
+          example: 0.01709402
+
+        targetAmount:
+          type: number
+          format: double
+          nullable: true
+          description: Converted amount credited to the destination account.
+          example: 100.00
+
+        feeAmount:
+          type: number
+          format: double
+          nullable: true
+          description: Transaction or FX fee.
+          example: 0.00
+
+        isCrossCurrency:
+          type: boolean
+          default: false
+          description: Indicates whether the transfer crosses currencies.
+          example: false
+
+    RunReconciliationRequest:
+      type: object
+
+      description: Reconciliation time window.
+
+      required:
+        - windowStart
+        - windowEnd
+
+      properties:
+        windowStart:
+          type: string
+          format: date-time
+          description: Inclusive start of the reconciliation window.
+          example: "2026-09-28T00:00:00Z"
+
+        windowEnd:
+          type: string
+          format: date-time
+          description: Inclusive end of the reconciliation window.
+          example: "2026-09-28T23:59:59Z"
+
+    # =======================================================================
+    # RESPONSE DATA SCHEMAS
+    # =======================================================================
+
+    RegisterResponse:
+      type: object
+
+      properties:
+        customerId:
+          type: string
+          format: uuid
+          example: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+
+        firstName:
+          type: string
+          example: "Alice"
+
+        lastName:
+          type: string
+          example: "Reyes"
+
+        email:
+          type: string
+          format: email
+          example: "alice.reyes@example.com"
+
+    LoginResponse:
+      type: object
+
+      properties:
+        token:
+          type: string
+          description: Signed JWT.
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+
+        tokenType:
+          type: string
+          example: "Bearer"
+
+        expiresInSeconds:
+          type: integer
+          format: int64
+          example: 3600
+
+        customerId:
+          type: string
+          format: uuid
+          example: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+
+        email:
+          type: string
+          format: email
+          example: "alice.reyes@example.com"
+
+        role:
+          type: string
+          enum:
+            - ROLE_CUSTOMER
+            - ROLE_ADMIN
+          example: "ROLE_CUSTOMER"
+
+    AccountDTO:
+      type: object
+
+      properties:
+        accountId:
+          type: string
+          format: uuid
+          example: "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d"
+        currencyCode:
+          type: string
+          minLength: 3
+          maxLength: 3
+          example: "PHP"
+        customerId:
+          type: string
+          format: uuid
+          example: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+
+        accountType:
+          type: string
+          enum:
+            - SAVINGS
+            - CHECKING
+            - WALLET
+          example: "SAVINGS"
+
+        accountStatus:
+          type: string
+          enum:
+            - ACTIVE
+            - FROZEN
+            - CLOSED
+          example: "ACTIVE"
+
+        balanceAmount:
+          type: number
+          format: double
+          example: 10000.0000
+
+        currencyCode:
+          type: string
+          pattern: "^[A-Z]{3}$"
+          example: "PHP"
+
+        createdAt:
+          type: string
+          format: date-time
+          example: "2026-09-28T15:10:00+08:00"
+
+    AccountMutationResponse:
+      type: object
+
+      properties:
+        accountId:
+          type: string
+          format: uuid
+          example: "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d"
+
+        balanceBefore:
+          type: number
+          format: double
+          example: 10000.0000
+
+        balanceAfter:
+          type: number
+          format: double
+          example: 9500.0000
+
+        appliedDelta:
+          type: number
+          format: double
+          description: Positive for credit and negative for debit.
+          example: -500.0000
+
+        currencyCode:
+          type: string
+          pattern: "^[A-Z]{3}$"
+          example: "PHP"
+
+    TransactionResponse:
+      type: object
+
+      properties:
+        txnId:
+          type: string
+          format: uuid
+          description: Server-generated transaction UUID.
+          example: "7c9e6679-7425-40de-944b-e07fc1f90ae7"
+
+        accountId:
+          type: string
+          format: uuid
+          example: "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d"
+
+        txnType:
+          type: string
+          enum:
+            - WITHDRAWAL
+            - DEPOSIT
+            - TRANSFER
+          example: "TRANSFER"
+
+        amount:
+          type: number
+          format: double
+          example: 2500.0000
+
+        balanceAfter:
+          type: number
+          format: double
+          example: 7500.0000
+
+        txnStatus:
+          type: string
+          enum:
+            - PENDING
+            - COMMITTED
+            - ROLLED_BACK
+          example: "COMMITTED"
+
+        timestamp:
+          type: string
+          format: date-time
+          example: "2026-09-28T15:25:00+08:00"
+
+        targetCurrency:
+          type: string
+          nullable: true
+          pattern: "^[A-Z]{3}$"
+          example: "USD"
+
+        exchangeRate:
+          type: number
+          format: double
+          nullable: true
+          example: 0.01709402
+
+        targetAmount:
+          type: number
+          format: double
+          nullable: true
+          example: 100.00
+
+        feeAmount:
+          type: number
+          format: double
+          nullable: true
+          example: 0.00
+
+        isCrossCurrency:
+          type: boolean
+          example: false
+
+    LedgerMutationAudit:
+      type: object
+
+      description: |
+        Immutable ledger audit entry stored in PostgreSQL.
+
+      properties:
+        mutationUuid:
+          type: string
+          format: uuid
+          example: "9d4e8c3a-1f2b-4567-89ab-cdef01234567"
+
+        txnId:
+          type: string
+          format: uuid
+          example: "7c9e6679-7425-40de-944b-e07fc1f90ae7"
+
+        accountId:
+          type: string
+          format: uuid
+          example: "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d"
+
+        mutationAmount:
+          type: number
+          format: decimal
+        currencyCode:
+          type: string
+          minLength: 3
+          maxLength: 3
+        mutationType:
+          type: string
+          enum:
+            - DEBIT
+            - CREDIT
+          example: "DEBIT"
+
+        txnType:
+          type: string
+          enum:
+            - WITHDRAWAL
+            - DEPOSIT
+            - TRANSFER
+          example: "TRANSFER"
+
+        auditState:
+          type: string
+          enum:
+            - PENDING
+            - COMMITTED
+            - ROLLED_BACK
+          example: "COMMITTED"
+
+        createdAt:
+          type: string
+          format: date-time
+          example: "2026-09-28T15:25:00+08:00"
+
+    CustomerDTO:
+      type: object
+
+      properties:
+        customerId:
+          type: string
+          format: uuid
+          example: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+
+        firstName:
+          type: string
+          example: "Alice"
+
+        lastName:
+          type: string
+          example: "Reyes"
+
+        email:
+          type: string
+          format: email
+          example: "alice.reyes@example.com"
+
+        contactNo:
+          type: string
+          nullable: true
+          example: "+63-917-555-0100"
+
+        birthDate:
+          type: string
+          format: date
+          example: "1990-04-12"
+
+    FxRateResponse:
+      type: object
+
+      properties:
+        sourceCurrency:
+          type: string
+          pattern: "^[A-Z]{3}$"
+          example: "PHP"
+
+        targetCurrency:
+          type: string
+          pattern: "^[A-Z]{3}$"
+          example: "USD"
+
+        exchangeRate:
+          type: number
+          format: double
+          example: 0.01709402
+
+        isCrossCurrency:
+          type: boolean
+          example: true
+
+    FxRateCache:
+      type: object
+
+      description: A cached exchange-rate entry.
+
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 1
+
+        baseCurrency:
+          type: string
+          pattern: "^[A-Z]{3}$"
+          example: "USD"
+
+        targetCurrency:
+          type: string
+          pattern: "^[A-Z]{3}$"
+          example: "PHP"
+
+        rate:
+          type: number
+          format: double
+          example: 58.5200000000000000
+
+        fetchedAt:
+          type: string
+          format: date-time
+          example: "2026-09-28T15:00:00+08:00"
+
+    RunSummaryResponse:
+      type: object
+
+      description: High-level summary of a reconciliation run.
+
+      properties:
+        runId:
+          type: string
+          format: uuid
+          example: "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+
+        status:
+          type: string
+          enum:
+            - RUNNING
+            - COMPLETED
+            - FAILED
+          example: "COMPLETED"
+
+        windowStart:
+          type: string
+          format: date-time
+          example: "2026-09-28T00:00:00Z"
+
+        windowEnd:
+          type: string
+          format: date-time
+          example: "2026-09-28T23:59:59Z"
+
+        startedAt:
+          type: string
+          format: date-time
+          example: "2026-09-28T23:59:00Z"
+
+        completedAt:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2026-09-29T00:00:03Z"
+
+        totalChecked:
+          type: integer
+          example: 150
+
+        totalMatched:
+          type: integer
+          example: 148
+
+        totalExceptions:
+          type: integer
+          example: 2
+
+    ReconResultAudit:
+      type: object
+
+      description: |
+        Individual reconciliation result.
+
+        MATCHED means the transaction and ledger records agree.
+
+        EXCEPTION means a reconciliation break was detected.
+
+      properties:
+        resultId:
+          type: string
+          format: uuid
+          example: "22222222-2222-2222-2222-222222222222"
+
+        runId:
+          type: string
+          format: uuid
+          example: "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+
+        txnId:
+          type: string
+          format: uuid
+          example: "8d9e6679-7425-40de-944b-e07fc1f90ae8"
+
+        accountId:
+          type: string
+          format: uuid
+          nullable: true
+          example: "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d"
+
+        mutationUuid:
+          type: string
+          format: uuid
+          nullable: true
+          example: "9d4e8c3a-1f2b-4567-89ab-cdef01234568"
+
+        duplicateMutationUuid:
+          type: string
+          format: uuid
+          nullable: true
+          example: null
+
+        reconStatus:
+          type: string
+          enum:
+            - MATCHED
+            - EXCEPTION
+          example: "EXCEPTION"
+
+        exceptionType:
+          type: string
+          nullable: true
+          enum:
+            - MISSING_LEDGER_ENTRY
+            - ORPHAN_LEDGER_ENTRY
+            - AMOUNT_MISMATCH
+            - ACCOUNT_MISMATCH
+            - STATUS_MISMATCH
+            - DUPLICATE_ENTRY
+            - LATE_POSTING
+          example: "AMOUNT_MISMATCH"
+
+        expectedAmount:
+          type: number
+          format: double
+          nullable: true
+          example: 1000.0000
+
+        actualAmount:
+          type: number
+          format: double
+          nullable: true
+          example: 999.9999
+
+        varianceAmount:
+          type: number
+          format: double
+          nullable: true
+          description: Absolute difference between expected and actual amounts.
+          example: 0.0001
+
+        txnStatus:
+          type: string
+          nullable: true
+          enum:
+            - PENDING
+            - COMMITTED
+            - ROLLED_BACK
+          example: "COMMITTED"
+
+        ledgerAuditState:
+          type: string
+          nullable: true
+          enum:
+            - PENDING
+            - COMMITTED
+            - ROLLED_BACK
+          example: "COMMITTED"
+
+        txnCompletedAt:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2026-09-28T15:27:00+08:00"
+
+        ledgerPostedAt:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2026-09-28T15:27:03+08:00"
+
+        postingLagSeconds:
+          type: integer
+          nullable: true
+          example: 3
+
+        severity:
+          type: string
+          enum:
+            - LOW
+            - MEDIUM
+            - HIGH
+            - CRITICAL
+          example: "HIGH"
+
+        createdAt:
+          type: string
+          format: date-time
+          example: "2026-09-29T00:00:02Z"
+
+    # =======================================================================
+    # API RESPONSE WRAPPERS
+    # =======================================================================
+
+    ProblemDetail:
+      type: object
+
+      description: |
+        RFC 7807-compatible problem detail response.
+
+      properties:
+        type:
+          type: string
+          format: uri
+          example: "about:blank"
+
+        title:
+          type: string
+          example: "Bad Request"
+
+        status:
+          type: integer
+          example: 400
+
+        detail:
+          type: string
+          example: "Validation failed for field 'email'"
+
+        instance:
+          type: string
+          example: "/api/auth/register"
+
+        timestamp:
+          type: string
+          format: date-time
+          example: "2026-09-28T15:00:00+08:00"
+
+        fieldErrors:
+          type: object
+          additionalProperties:
+            type: string
+          example:
+            email: "Email must be a valid address"
+            password: "Password must be at least 8 characters"
+
+    RegisterApiResponse:
+      type: object
+
+      properties:
+        success:
+          type: boolean
+          example: true
+
+        message:
+          type: string
+          example: "Customer registered successfully"
+
+        data:
+          $ref: "#/components/schemas/RegisterResponse"
+
+        timestamp:
+          type: string
+          format: date-time
+          example: "2026-09-28T15:00:00+08:00"
+
+    LoginApiResponse:
+      type: object
+
+      properties:
+        success:
+          type: boolean
+          example: true
+
+        message:
+          type: string
+          example: "Login successful"
+
+        data:
+          $ref: "#/components/schemas/LoginResponse"
+
+        timestamp:
+          type: string
+          format: date-time
+          example: "2026-09-28T15:01:00+08:00"
+
+    VoidApiResponse:
+      type: object
+
+      properties:
+        success:
+          type: boolean
+          example: true
+
+        message:
+          type: string
+          example: "Logout successful"
+
+        data:
+          type: object
+          nullable: true
+          example: null
+
+        timestamp:
+          type: string
+          format: date-time
+          example: "2026-09-28T15:05:00+08:00"
+
+    AccountApiResponse:
+      type: object
+
+      properties:
+        success:
+          type: boolean
+          example: true
+
+        message:
+          type: string
+          example: "Account created"
+
+        data:
+          $ref: "#/components/schemas/AccountDTO"
+
+        timestamp:
+          type: string
+          format: date-time
+          example: "2026-09-28T15:10:00+08:00"
+
+    AccountListApiResponse:
+      type: object
+
+      properties:
+        success:
+          type: boolean
+          example: true
+
+        message:
+          type: string
+          example: "OK"
+
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/AccountDTO"
+
+        timestamp:
+          type: string
+          format: date-time
+          example: "2026-09-28T15:16:00+08:00"
+
+    BalanceApiResponse:
+      type: object
+
+      properties:
+        success:
+          type: boolean
+          example: true
+
+        message:
+          type: string
+          example: "OK"
+
+        data:
+          type: number
+          format: double
+          example: 10000.0000
+
+        timestamp:
+          type: string
+          format: date-time
+          example: "2026-09-28T15:16:00+08:00"
+
+    AccountMutationApiResponse:
+      type: object
+
+      properties:
+        success:
+          type: boolean
+          example: true
+
+        message:
+          type: string
+          example: "Debit processed"
+
+        data:
+          $ref: "#/components/schemas/AccountMutationResponse"
+
+        timestamp:
+          type: string
+          format: date-time
+          example: "2026-09-28T15:20:00+08:00"
+
+    TransactionApiResponse:
+      type: object
+
+      properties:
+        success:
+          type: boolean
+          example: true
+
+        message:
+          type: string
+          example: "TRANSFER processed"
+
+        data:
+          $ref: "#/components/schemas/TransactionResponse"
+
+        timestamp:
+          type: string
+          format: date-time
+          example: "2026-09-28T15:25:00+08:00"
+
+    AuditListApiResponse:
+      type: object
+
+      properties:
+        success:
+          type: boolean
+          example: true
+
+        message:
+          type: string
+          example: "OK"
+
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/LedgerMutationAudit"
+
+        timestamp:
+          type: string
+          format: date-time
+          example: "2026-09-28T15:26:00+08:00"
+
+    CustomerApiResponse:
+      type: object
+
+      properties:
+        success:
+          type: boolean
+          example: true
+
+        message:
+          type: string
+          example: "OK"
+
+        data:
+          $ref: "#/components/schemas/CustomerDTO"
+
+        timestamp:
+          type: string
+          format: date-time
+          example: "2026-09-28T15:36:00+08:00"
+
+    CustomerListApiResponse:
+      type: object
+
+      properties:
+        success:
+          type: boolean
+          example: true
+
+        message:
+          type: string
+          example: "OK"
+
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/CustomerDTO"
+
+        timestamp:
+          type: string
+          format: date-time
+          example: "2026-09-28T15:35:00+08:00"
+
+  # ==========================================================================
+  # RISK ENGINE ENDPOINTS
+  # ==========================================================================
+
+  /api/risk/evaluate:
+    post:
+      tags:
+        - Risk Assessment
+      
+      summary: Evaluate transaction risk
+      
+      description: |
+        Evaluates a transaction for fraud and risk indicators before processing.
+        
+        Risk scoring considers:
+        - Transaction amount relative to account history
+        - Transaction frequency and velocity
+        - Geographic and device fingerprinting
+        - Account age and behavior patterns
+        - Known fraud patterns
+        
+        Returns a risk score (0-100) and recommendation (APPROVE, REVIEW, DECLINE).
+        
+        Example:
+        
+          POST /api/risk/evaluate
+          
+          {
+            "customerId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+            "accountId": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
+            "transactionType": "TRANSFER",
+            "amount": 50000.00,
+            "currency": "PHP",
+            "ipAddress": "203.0.113.42",
+            "deviceFingerprint": "d8f3a4b5c6d7e8f9"
+          }
+      
+      operationId: evaluateRisk
+      
+      security:
+        - BearerAuth: []
+      
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RiskEvaluationRequest"
+            example:
+              customerId: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+              accountId: "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d"
+              transactionType: "TRANSFER"
+              amount: 50000.00
+              currency: "PHP"
+              ipAddress: "203.0.113.42"
+              deviceFingerprint: "d8f3a4b5c6d7e8f9"
+      
+      responses:
+        "200":
+          description: Risk evaluation completed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RiskEvaluationResponse"
+              example:
+                riskScore: 35
+                riskLevel: "MEDIUM"
+                recommendation: "REVIEW"
+                factors:
+                  - "Unusually large transaction amount"
+                  - "New device detected"
+                requiresManualReview: true
+                approvalRequired: true
+        
+        "400":
+          description: Invalid request
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        
+        "401":
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+  /api/risk/history/{customerId}:
+    get:
+      tags:
+        - Risk Assessment
+      
+      summary: Get customer risk history
+      
+      description: |
+        Retrieves risk assessment history for a customer.
+        
+        Useful for reviewing past risk decisions and patterns.
+      
+      operationId: getRiskHistory
+      
+      security:
+        - BearerAuth: []
+      
+      parameters:
+        - $ref: "#/components/parameters/CustomerId"
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+          description: Maximum number of records to return
+      
+      responses:
+        "200":
+          description: Risk history retrieved
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RiskAssessment"
+        
+        "401":
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        
+        "404":
+          description: Customer not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+  # ==========================================================================
+  # NOTIFICATION SERVICE ENDPOINTS
+  # ==========================================================================
+
+  /api/notifications/send:
+    post:
+      tags:
+        - Notifications
+      
+      summary: Send a notification
+      
+      description: |
+        Sends a notification to a customer via specified channel (EMAIL, SMS, PUSH).
+        
+        Supported notification types:
+        - TRANSACTION_COMPLETED
+        - TRANSACTION_FAILED
+        - ACCOUNT_CREATED
+        - ACCOUNT_FROZEN
+        - PASSWORD_RESET
+        - SECURITY_ALERT
+        
+        Example:
+        
+          POST /api/notifications/send
+          
+          {
+            "customerId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+            "notificationType": "TRANSACTION_COMPLETED",
+            "channel": "EMAIL",
+            "subject": "Transaction Completed",
+            "message": "Your transfer of PHP 5,000 was successful",
+            "metadata": {
+              "transactionId": "7c9e6679-7425-40de-944b-e07fc1f90ae7",
+              "amount": "5000.00",
+              "currency": "PHP"
+            }
+          }
+      
+      operationId: sendNotification
+      
+      security:
+        - BearerAuth: []
+      
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NotificationRequest"
+            example:
+              customerId: "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+              notificationType: "TRANSACTION_COMPLETED"
+              channel: "EMAIL"
+              subject: "Transaction Completed"
+              message: "Your transfer of PHP 5,000 was successful"
+              metadata:
+                transactionId: "7c9e6679-7425-40de-944b-e07fc1f90ae7"
+                amount: "5000.00"
+                currency: "PHP"
+      
+      responses:
+        "202":
+          description: Notification queued for delivery
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationResponse"
+              example:
+                notificationId: "n1a2b3c4-d5e6-7f8g-9h0i-1j2k3l4m5n6o"
+                status: "QUEUED"
+                message: "Notification queued for delivery"
+        
+        "400":
+          description: Invalid request
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        
+        "401":
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+  /api/notifications/{notificationId}/status:
+    get:
+      tags:
+        - Notifications
+      
+      summary: Get notification delivery status
+      
+      description: |
+        Retrieves the delivery status of a notification.
+        
+        Possible statuses:
+        - QUEUED: Notification is queued for delivery
+        - SENT: Notification was sent to provider
+        - DELIVERED: Confirmation of delivery received
+        - FAILED: Delivery failed
+        - BOUNCED: Email bounced or SMS rejected
+      
+      operationId: getNotificationStatus
+      
+      security:
+        - BearerAuth: []
+      
+      parameters:
+        - name: notificationId
+          in: path
+          required: true
+          description: UUID of the notification
+          schema:
+            type: string
+            format: uuid
+            example: "n1a2b3c4-d5e6-7f8g-9h0i-1j2k3l4m5n6o"
+      
+      responses:
+        "200":
+          description: Notification status retrieved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationStatusResponse"
+              example:
+                notificationId: "n1a2b3c4-d5e6-7f8g-9h0i-1j2k3l4m5n6o"
+                status: "DELIVERED"
+                channel: "EMAIL"
+                sentAt: "2026-09-28T15:30:00+08:00"
+                deliveredAt: "2026-09-28T15:30:05+08:00"
+        
+        "401":
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        
+        "404":
+          description: Notification not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+  /api/notifications/customer/{customerId}:
+    get:
+      tags:
+        - Notifications
+      
+      summary: Get customer notification history
+      
+      description: |
+        Retrieves notification history for a customer.
+      
+      operationId: getCustomerNotifications
+      
+      security:
+        - BearerAuth: []
+      
+      parameters:
+        - $ref: "#/components/parameters/CustomerId"
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 50
+            maximum: 200
+          description: Maximum number of notifications to return
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [QUEUED, SENT, DELIVERED, FAILED, BOUNCED]
+          description: Filter by notification status
+      
+      responses:
+        "200":
+          description: Notification history retrieved
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/NotificationRecord"
+        
+        "401":
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        
+        "404":
+          description: Customer not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+  # ==========================================================================
+  # ACCOUNT HOLDS ENDPOINTS
+  # ==========================================================================
+
+  /api/accounts/{accountId}/holds:
+    get:
+      tags:
+        - Accounts
+      
+      summary: Get active holds on an account
+      
+      description: |
+        Retrieves all active holds (fund reservations) on an account.
+        
+        Holds temporarily reduce available balance without debiting the account.
+        Common use cases include pending card authorizations and compliance reviews.
+      
+      operationId: getAccountHolds
+      
+      security:
+        - BearerAuth: []
+      
+      parameters:
+        - $ref: "#/components/parameters/AccountId"
+      
+      responses:
+        "200":
+          description: Account holds retrieved
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AccountHold"
+        
+        "401":
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        
+        "404":
+          description: Account not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+    post:
+      tags:
+        - Accounts
+      
+      summary: Place a hold on an account
+      
+      description: |
+        Places a temporary hold (fund reservation) on an account.
+        
+        The hold amount is deducted from available balance but not from actual balance.
+      
+      operationId: createAccountHold
+      
+      security:
+        - BearerAuth: []
+      
+      parameters:
+        - $ref: "#/components/parameters/AccountId"
+      
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateHoldRequest"
+            example:
+              amount: 1000.00
+              reason: "PENDING_AUTHORIZATION"
+              expiresAt: "2026-09-29T15:00:00+08:00"
+      
+      responses:
+        "201":
+          description: Hold created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountHold"
+        
+        "400":
+          description: Invalid request
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        
+        "401":
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        
+        "422":
+          description: Insufficient available balance
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+  /api/accounts/{accountId}/holds/{holdId}:
+    delete:
+      tags:
+        - Accounts
+      
+      summary: Release a hold
+      
+      description: |
+        Releases a hold, making the funds available again.
+      
+      operationId: releaseAccountHold
+      
+      security:
+        - BearerAuth: []
+      
+      parameters:
+        - $ref: "#/components/parameters/AccountId"
+        - name: holdId
+          in: path
+          required: true
+          description: UUID of the hold
+          schema:
+            type: string
+            format: uuid
+      
+      responses:
+        "204":
+          description: Hold released successfully
+        
+        "401":
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+        
+        "404":
+          description: Hold not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetail"
+
+  # ==========================================================================
+  # ADDITIONAL SCHEMA DEFINITIONS
+  # ==========================================================================
+
+components:
+  schemas:
+    # Risk Engine Schemas
+    RiskEvaluationRequest:
+      type: object
+      required:
+        - customerId
+        - accountId
+        - transactionType
+        - amount
+        - currency
+      properties:
+        customerId:
+          type: string
+          format: uuid
+        accountId:
+          type: string
+          format: uuid
+        transactionType:
+          type: string
+          enum: [DEPOSIT, WITHDRAWAL, TRANSFER]
+        amount:
+          type: number
+          format: double
+          minimum: 0.01
+        currency:
+          type: string
+          pattern: "^[A-Z]{3}$"
+        counterpartyAccountId:
+          type: string
+          format: uuid
+          nullable: true
+        ipAddress:
+          type: string
+          nullable: true
+        deviceFingerprint:
+          type: string
+          nullable: true
+        geolocation:
+          type: object
+          nullable: true
+          properties:
+            latitude:
+              type: number
+            longitude:
+              type: number
+
+    RiskEvaluationResponse:
+      type: object
+      properties:
+        riskScore:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: Risk score from 0 (lowest risk) to 100 (highest risk)
+        riskLevel:
+          type: string
+          enum: [LOW, MEDIUM, HIGH, CRITICAL]
+        recommendation:
+          type: string
+          enum: [APPROVE, REVIEW, DECLINE]
+        factors:
+          type: array
+          items:
+            type: string
+          description: Risk factors that contributed to the score
+        requiresManualReview:
+          type: boolean
+        approvalRequired:
+          type: boolean
+        evaluatedAt:
+          type: string
+          format: date-time
+
+    RiskAssessment:
+      type: object
+      properties:
+        assessmentId:
+          type: string
+          format: uuid
+        customerId:
+          type: string
+          format: uuid
+        transactionId:
+          type: string
+          format: uuid
+          nullable: true
+        riskScore:
+          type: integer
+        riskLevel:
+          type: string
+          enum: [LOW, MEDIUM, HIGH, CRITICAL]
+        recommendation:
+          type: string
+          enum: [APPROVE, REVIEW, DECLINE]
+        finalDecision:
+          type: string
+          enum: [APPROVED, REJECTED, PENDING]
+          nullable: true
+        evaluatedAt:
+          type: string
+          format: date-time
+
+    # Notification Service Schemas
+    NotificationRequest:
+      type: object
+      required:
+        - customerId
+        - notificationType
+        - channel
+        - message
+      properties:
+        customerId:
+          type: string
+          format: uuid
+        notificationType:
+          type: string
+          enum:
+            - TRANSACTION_COMPLETED
+            - TRANSACTION_FAILED
+            - ACCOUNT_CREATED
+            - ACCOUNT_FROZEN
+            - PASSWORD_RESET
+            - SECURITY_ALERT
+            - BALANCE_LOW
+            - STATEMENT_READY
+        channel:
+          type: string
+          enum: [EMAIL, SMS, PUSH]
+        subject:
+          type: string
+          nullable: true
+          description: Required for EMAIL channel
+        message:
+          type: string
+          maxLength: 1000
+        metadata:
+          type: object
+          additionalProperties: true
+          nullable: true
+          description: Additional context data for template rendering
+
+    NotificationResponse:
+      type: object
+      properties:
+        notificationId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [QUEUED, SENT, DELIVERED, FAILED, BOUNCED]
+        message:
+          type: string
+
+    NotificationStatusResponse:
+      type: object
+      properties:
+        notificationId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [QUEUED, SENT, DELIVERED, FAILED, BOUNCED]
+        channel:
+          type: string
+          enum: [EMAIL, SMS, PUSH]
+        queuedAt:
+          type: string
+          format: date-time
+        sentAt:
+          type: string
+          format: date-time
+          nullable: true
+        deliveredAt:
+          type: string
+          format: date-time
+          nullable: true
+        failureReason:
+          type: string
+          nullable: true
+
+    NotificationRecord:
+      type: object
+      properties:
+        notificationId:
+          type: string
+          format: uuid
+        customerId:
+          type: string
+          format: uuid
+        notificationType:
+          type: string
+        channel:
+          type: string
+          enum: [EMAIL, SMS, PUSH]
+        status:
+          type: string
+          enum: [QUEUED, SENT, DELIVERED, FAILED, BOUNCED]
+        subject:
+          type: string
+          nullable: true
+        message:
+          type: string
+        queuedAt:
+          type: string
+          format: date-time
+        deliveredAt:
+          type: string
+          format: date-time
+          nullable: true
+
+    # Account Hold Schemas
+    AccountHold:
+      type: object
+      properties:
+        holdId:
+          type: string
+          format: uuid
+        accountId:
+          type: string
+          format: uuid
+        amount:
+          type: number
+          format: double
+        reason:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+        releasedAt:
+          type: string
+          format: date-time
+          nullable: true
+        status:
+          type: string
+          enum: [ACTIVE, RELEASED, EXPIRED]
+
+    CreateHoldRequest:
+      type: object
+      required:
+        - amount
+        - reason
+      properties:
+        amount:
+          type: number
+          format: double
+          minimum: 0.01
+        reason:
+          type: string
+          maxLength: 255
+        expiresAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: Optional expiration time for the hold

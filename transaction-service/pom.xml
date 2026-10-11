@@ -7,7 +7,7 @@
 
 <parent>
     <groupId>com.capstone</groupId>
-    <artifactId>capstone-banking-system</artifactId>
+    <artifactId>banking-backend-monorepo</artifactId>
     <version>1.0.0</version>
 </parent>
 
@@ -24,6 +24,11 @@
     <dependency>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-actuator</artifactId>
     </dependency>
 
     <dependency>
@@ -79,7 +84,24 @@
         <artifactId>spring-kafka-test</artifactId>
         <scope>test</scope>
     </dependency>
-</dependencies>
+
+        <!-- Micrometer Prometheus registry — exposes /actuator/prometheus for Grafana -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+        </dependency>
+
+        <!--
+          Logstash Logback Encoder — provides the LogstashEncoder used in
+          logback-spring.xml to emit structured JSON logs.  Version is pinned
+          to stay compatible with Logback 1.4.x bundled in Spring Boot 3.3.x.
+        -->
+        <dependency>
+            <groupId>net.logstash.logback</groupId>
+            <artifactId>logstash-logback-encoder</artifactId>
+            <version>7.4</version>
+        </dependency>
+    </dependencies>
 
 <build>
     <plugins>

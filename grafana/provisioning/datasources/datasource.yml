@@ -1,0 +1,140 @@
+# ============================================================================
+# Grafana Datasource Configuration for Banking Backend Monorepo
+# ============================================================================
+# Defines datasource connections to Prometheus (metrics) and Loki (logs)
+# with optimized query settings and connection pooling.
+# ============================================================================
+
+apiVersion: 1
+
+datasources:
+  # ==========================================================================
+  # PROMETHEUS — Primary Metrics Datasource
+  # ==========================================================================
+  - name: Prometheus
+    type: prometheus
+    uid: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: true
+    
+    # JSON configuration for Prometheus-specific settings
+    jsonData:
+      # Minimum scrape interval - prevents queries from requesting data
+      # at a higher resolution than Prometheus collects it
+      timeInterval: "15s"
+      
+      # Use POST for queries (better for large queries, no URL length limits)
+      httpMethod: POST
+      
+      # Query timeout (in seconds)
+      queryTimeout: "60s"
+      
+      # Custom query parameters (for advanced Prometheus features)
+      customQueryParameters: ""
+      
+      # Enable incremental queries for better performance on large time ranges
+      incrementalQuerying: true
+      incrementalQueryOverlapWindow: "10m"
+      
+      # Cache duration for Prometheus metadata queries
+      cacheLevel: "High"
+      
+      # Disable metrics lookup (improves performance for large Prometheus instances)
+      disableMetricsLookup: false
+      
+      # Exemplars configuration (for trace correlation if available)
+      exemplarTraceIdDestinations: []
+      
+      # HTTP keep-alive settings for better connection reuse
+      keepCookies: []
+      
+    # Connection timeout and keep-alive settings
+    timeout: 60
+    
+    # Secure JSON data (for authentication if needed)
+    # secureJsonData:
+    #   httpHeaderValue1: "Bearer <token>"
+
+  # ==========================================================================
+  # LOKI — Log Aggregation Datasource
+  # ==========================================================================
+  - name: Loki
+    type: loki
+    uid: loki
+    access: proxy
+    url: http://loki:3100
+    isDefault: false
+    editable: true
+    
+    jsonData:
+      # Maximum number of lines to return per query
+      # Prevents browser overload and excessive memory usage
+      maxLines: 5000
+      
+      # Query timeout
+      timeout: 60
+      
+      # Derived fields - extract structured data from log lines
+      # These create clickable links and enable field-based filtering
+      derivedFields:
+        # Transaction ID extraction
+        - name: transactionId
+          matcherRegex: "(?:transactionId|txnId|transaction_id)[=:]\\s*([\\w-]+)"
+          url: ""
+          datasourceUid: loki
+          
+        # Account ID extraction
+        - name: accountId
+          matcherRegex: "(?:accountId|account_id)[=:]\\s*([\\w-]+)"
+          url: ""
+          datasourceUid: loki
+          
+        # Customer ID extraction
+        - name: customerId
+          matcherRegex: "(?:customerId|customer_id)[=:]\\s*([\\w-]+)"
+          url: ""
+          datasourceUid: loki
+          
+        # Trace ID extraction (for distributed tracing integration)
+        - name: traceId
+          matcherRegex: "(?:traceId|trace_id)[=:]\\s*([\\w-]+)"
+          url: ""
+          datasourceUid: loki
+          
+        # Error/Exception class extraction
+        - name: exceptionClass
+          matcherRegex: "([\\w\\.]+Exception)"
+          url: ""
+          datasourceUid: loki
+      
+      # Enable HTTP compression for log queries
+      httpHeaderName1: "Accept-Encoding"
+      
+    # Connection timeout
+    timeout: 60
+    
+    # Secure JSON data
+    # secureJsonData:
+    #   httpHeaderValue1: "gzip, deflate"
+
+  # ==========================================================================
+  # TESTDATA — Built-in datasource for testing dashboards
+  # ==========================================================================
+  - name: TestData
+    type: testdata
+    uid: testdata
+    access: proxy
+    isDefault: false
+    editable: false
+    
+    jsonData:
+      # Used for testing and development
+      
+  # ==========================================================================
+  # MIXED — Special datasource for mixing multiple datasources in one panel
+  # ==========================================================================
+  # The "-- Mixed --" datasource is built into Grafana and doesn't need
+  # to be explicitly configured. It allows combining queries from multiple
+  # datasources in a single panel.
