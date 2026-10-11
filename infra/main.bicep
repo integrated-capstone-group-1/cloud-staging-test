@@ -116,6 +116,19 @@ resource networkSecurityGroup 'Microsoft.Network/networkSecurityGroups@2024-05-0
         }
       }
       {
+        name: 'azhttp${resourceToken}'
+        properties: {
+          priority: 105
+          protocol: 'Tcp'
+          access: 'Allow'
+          direction: 'Inbound'
+          sourceAddressPrefix: 'Internet'
+          sourcePortRange: '*'
+          destinationAddressPrefix: '*'
+          destinationPortRange: '80'
+        }
+      }
+      {
         name: 'azora${resourceToken}'
         properties: {
           priority: 110
@@ -522,6 +535,7 @@ output postgresServerName string = postgres.name
 output postgresHostName string = postgres.properties.fullyQualifiedDomainName
 output postgresAdminUser string = postgresAdminUser
 output oracleVmName string = oracleVm.name
+output vmNetworkSecurityGroupName string = networkSecurityGroup.name
 output oracleVmPrivateIp string = vmNic.properties.ipConfigurations[0].properties.privateIPAddress
 output oracleVmPublicIp string = vmPublicIp.properties.ipAddress
 output postgresAdminSecretName string = postgresAdminSecret.name

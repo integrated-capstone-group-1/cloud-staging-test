@@ -8,6 +8,12 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      seed_postgres:
+        description: Initialize managed PostgreSQL schema and demo seed data (first deployment only)
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
@@ -95,84 +101,114 @@ jobs:
             ${{ secrets.DOCKERHUB_USERNAME }}/banking-${{ matrix.service }}:latest
 
   deploy:
-    name: Deploy to AKS
+    name: Deploy demo to Azure VM
     needs: publish-images
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment: production
-    permissions:
-      contents: read
-      id-token: write
     env:
-      AZURE_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
-      AZURE_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
-      AZURE_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-      AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
-      AKS_CLUSTER_NAME: ${{ vars.AKS_CLUSTER_NAME }}
+      DEMO_VM_HOST: ${{ vars.DEMO_VM_HOST }}
+      DEMO_VM_USER: ${{ vars.DEMO_VM_USER }}
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+      POSTGRES_HOST: ${{ vars.POSTGRES_HOST }}
+      POSTGRES_ADMIN_USER: ${{ secrets.POSTGRES_ADMIN_USER }}
+      POSTGRES_ADMIN_PASSWORD: ${{ secrets.POSTGRES_ADMIN_PASSWORD }}
+      POSTGRES_LEDGER_USERNAME: ${{ vars.POSTGRES_LEDGER_USERNAME }}
+      POSTGRES_LEDGER_PASSWORD: ${{ secrets.POSTGRES_LEDGER_PASSWORD }}
+      POSTGRES_CHANNEL_USERNAME: ${{ vars.POSTGRES_CHANNEL_USERNAME }}
+      POSTGRES_CHANNEL_PASSWORD: ${{ secrets.POSTGRES_CHANNEL_PASSWORD }}
+      REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
+      ORACLE_USERNAME: ${{ vars.ORACLE_USERNAME }}
+      ORACLE_PASSWORD: ${{ secrets.ORACLE_PASSWORD }}
+      JWT_SECRET: ${{ secrets.JWT_SECRET }}
+      DEMO_HTTP_PORT: ${{ vars.DEMO_HTTP_PORT }}
+      JAVA_TOOL_OPTIONS: ${{ vars.JAVA_TOOL_OPTIONS }}
       IMAGE_TAG: ${{ github.sha }}
+      SEED_POSTGRES: ${{ inputs.seed_postgres }}
     steps:
       - name: Check out source
         uses: actions/checkout@v4
 
-      - name: Sign in to Azure with GitHub OIDC
-        uses: azure/login@v2
-        with:
-          client-id: ${{ env.AZURE_CLIENT_ID }}
-          tenant-id: ${{ env.AZURE_TENANT_ID }}
-          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
-
-      - name: Get AKS credentials
-        run: az aks get-credentials --resource-group "$AZURE_RESOURCE_GROUP" --name "$AKS_CLUSTER_NAME" --overwrite-existing
-
-      - name: Set up kubectl
-        uses: azure/setup-kubectl@v4
-
-      - name: Set up kubelogin
-        uses: azure/use-kubelogin@v1
-        with:
-          kubelogin-version: 'v0.2.12'
-
-      - name: Configure kubelogin to use Azure CLI
-        run: kubelogin convert-kubeconfig -l azurecli
-
-      - name: Update Docker Hub pull secret
+      - name: Validate demo deployment settings
         run: |
           set -euo pipefail
-          kubectl create secret docker-registry dockerhub-pull \
-            --namespace banking \
-            --docker-server=https://index.docker.io/v1/ \
-            --docker-username="$DOCKERHUB_USERNAME" \
-            --docker-password="$DOCKERHUB_TOKEN" \
-            --dry-run=client -o yaml | kubectl apply -f -
+          for name in DEMO_VM_HOST DEMO_VM_USER DOCKERHUB_USERNAME DOCKERHUB_TOKEN \
+            POSTGRES_HOST POSTGRES_ADMIN_USER POSTGRES_ADMIN_PASSWORD \
+            POSTGRES_LEDGER_PASSWORD POSTGRES_CHANNEL_PASSWORD REDIS_PASSWORD \
+            ORACLE_PASSWORD JWT_SECRET DEMO_VM_SSH_PRIVATE_KEY; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "::error::Required GitHub production setting $name is empty."
+              exit 1
+            fi
+          done
+        env:
+          DEMO_VM_SSH_PRIVATE_KEY: ${{ secrets.DEMO_VM_SSH_PRIVATE_KEY }}
 
-      - name: Apply Kubernetes services and workloads
-        run: kubectl apply -k k8s/base
-
-      - name: Deploy the validated images
+      - name: Configure SSH
         run: |
           set -euo pipefail
-          services=(
-            api-gateway
-            registration-service
-            login-service
-            accounts-service
-            transaction-service
-            notification-service
-            orchestrator-service
-            forex-service
-            risk-engine
-            frontend-web
-            reconciliation-service
-          )
-          for service in "${services[@]}"; do
-            kubectl set image "deployment/$service" \
-              "$service=$DOCKERHUB_USERNAME/banking-$service:$IMAGE_TAG" \
-              --namespace banking
-          done
-          for service in "${services[@]}"; do
-            kubectl rollout status "deployment/$service" \
-              --namespace banking \
-              --timeout=15m
-          done
+          mkdir -p "$HOME/.ssh"
+          chmod 700 "$HOME/.ssh"
+          printf '%s\n' "$DEMO_VM_SSH_PRIVATE_KEY" > "$HOME/.ssh/id_ed25519"
+          chmod 600 "$HOME/.ssh/id_ed25519"
+          ssh-keyscan -H "$DEMO_VM_HOST" >> "$HOME/.ssh/known_hosts"
+        env:
+          DEMO_VM_SSH_PRIVATE_KEY: ${{ secrets.DEMO_VM_SSH_PRIVATE_KEY }}
+
+      - name: Prepare runtime environment file
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require("node:fs");
+          const keys = [
+            "DOCKERHUB_USERNAME", "IMAGE_TAG", "POSTGRES_HOST",
+            "POSTGRES_ADMIN_USER", "POSTGRES_ADMIN_PASSWORD",
+            "POSTGRES_LEDGER_USERNAME", "POSTGRES_LEDGER_PASSWORD",
+            "POSTGRES_CHANNEL_USERNAME", "POSTGRES_CHANNEL_PASSWORD",
+            "REDIS_PASSWORD",
+            "ORACLE_USERNAME", "ORACLE_PASSWORD", "JWT_SECRET",
+            "DEMO_HTTP_PORT", "JAVA_TOOL_OPTIONS", "SEED_POSTGRES"
+          ];
+          const lines = keys.map((key) => {
+            const value = process.env[key] ?? "";
+            if (/[\r\n]/.test(value)) {
+              throw new Error(`${key} must not contain line breaks`);
+            }
+            return `${key}='${value.replaceAll("'", "\\'")}'`;
+          });
+          fs.writeFileSync(".demo.env", `${lines.join("\n")}\n`, { mode: 0o600 });
+          NODE
+
+      - name: Upload deployment files
+        run: |
+          set -euo pipefail
+          target="$DEMO_VM_USER@$DEMO_VM_HOST"
+          remote_dir="/tmp/banking-demo-${GITHUB_RUN_ID}"
+          # remote_dir is intentionally expanded locally into the quoted SSH command.
+          # shellcheck disable=SC2029
+          ssh "$target" "mkdir -p '$remote_dir'"
+          scp docker-compose.vm.yml "$target:$remote_dir/"
+          scp -r scripts sql "$target:$remote_dir/"
+          scp .demo.env "$target:$remote_dir/.env"
+          # Deployment user and temporary path are intentionally expanded locally.
+          # shellcheck disable=SC2029
+          ssh "$target" \
+            "sudo install -d -o '$DEMO_VM_USER' -g '$DEMO_VM_USER' -m 0750 /opt/banking-demo && \
+             sudo cp -a '$remote_dir/.' /opt/banking-demo/ && \
+             sudo chown -R '$DEMO_VM_USER:$DEMO_VM_USER' /opt/banking-demo && \
+             chmod 600 /opt/banking-demo/.env && \
+             rm -rf '$remote_dir'"
+
+      - name: Pull and deploy validated images
+        run: |
+          set -euo pipefail
+          target="$DEMO_VM_USER@$DEMO_VM_HOST"
+          {
+            printf '%s\n' "$DOCKERHUB_USERNAME"
+            printf '%s\n' "$DOCKERHUB_TOKEN"
+          } | ssh "$target" 'sudo -n bash /opt/banking-demo/scripts/remote-deploy-demo-vm.sh'
+
+      - name: Remove temporary deployment environment file
+        if: always()
+        run: rm -f .demo.env
