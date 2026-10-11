@@ -442,6 +442,8 @@ public class HttpBankingApiClient implements BankingApiClient {
         String status = res.status() != null ? res.status() : "";
         if ("FAILED".equalsIgnoreCase(status) || "REVERSED".equalsIgnoreCase(status)) {
             tv.setAuditState(AuditState.ROLLED_BACK);
+        } else if ("CANCELLED".equalsIgnoreCase(status)) {
+            tv.setAuditState(AuditState.CANCELLED);
         } else if ("PENDING".equalsIgnoreCase(status) || "INITIATED".equalsIgnoreCase(status)) {
             tv.setAuditState(AuditState.PENDING);
         } else {

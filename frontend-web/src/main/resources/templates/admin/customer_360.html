@@ -355,7 +355,7 @@
                             th:classappend="${txn.direction != null && txn.direction.name() == 'CREDIT' ? 'text-success' : 'text-danger'}"
                             th:text="${txn.formattedAmount}">₱1,250.00</td>
                         <td>
-                            <span th:class="${'badge ' + (txn.auditState != null && txn.auditState.name() == 'COMMITTED' ? 'bg-success' : (txn.auditState != null && txn.auditState.name() == 'PENDING' ? 'bg-warning text-dark' : 'bg-danger'))}"
+                            <span th:class="${'badge ' + (txn.auditState != null && txn.auditState.name() == 'COMMITTED' ? 'bg-success' : (txn.auditState != null && txn.auditState.name() == 'PENDING' ? 'bg-warning text-dark' : (txn.auditState != null && txn.auditState.name() == 'CANCELLED' ? 'bg-secondary' : 'bg-danger')))}"
                                   th:text="${txn.auditState != null ? txn.auditState.displayName : 'COMMITTED'}">COMMITTED</span>
                         </td>
                     </tr>
