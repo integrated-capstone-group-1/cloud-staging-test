@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Real-Time Transaction Monitoring &amp; Grafana Observability')}"></head>
+<body>
+<div th:replace="~{fragments/layout :: demoBar}"></div>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div th:replace="~{fragments/layout :: alerts}"></div>
+
+<main class="container py-4">
+    <!-- Header with Telemetry Status & Quick Actions -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+        <div>
+            <h4 class="fw-bold mb-1">
+                <i class="bi bi-activity text-success me-2"></i>Real-Time Observability &amp; Transaction Monitoring
+            </h4>
+            <p class="text-muted small mb-0">
+                11-stage mutation pipeline, Grafana 11.1 live metrics, Prometheus time-series, and Loki audit traces (DIG-102, TR-MD02)
+            </p>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <span class="badge bg-success p-2" title="Live Throughput">
+                <i class="bi bi-broadcast me-1"></i>Active Feed · TPS: <span id="monitoringTps" th:text="${activeTps}">18.4 tx/s</span>
+            </span>
+            <span class="badge bg-primary p-2" title="Cluster p95 Latency">
+                <i class="bi bi-stopwatch me-1"></i>p95 Latency: <span id="monitoringP95" th:text="${p95LatencyMs}">340 ms</span>
+            </span>
+            <span class="badge border p-2" id="grafanaGlobalStatusBadge" style="background: var(--bg-card); color: var(--text-muted);">
+                <i class="bi bi-circle-fill text-secondary me-1" id="grafanaDot"></i><span id="grafanaStatusText">Probing Grafana Proxy...</span>
+            </span>
+            <a href="http://localhost:3000" target="_blank" class="btn btn-sm btn-outline-secondary" title="Open Grafana in external tab on port 3000">
+                <i class="bi bi-box-arrow-up-right me-1"></i> Grafana (Port 3000)
+            </a>
+        </div>
+    </div>
+
+    <!-- Observability Navigation Tabs -->
+    <ul class="nav nav-pills mb-3 border-bottom pb-2 gap-1" id="observabilityTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="tab-pipeline-btn" data-bs-toggle="tab" data-bs-target="#tab-pipeline" type="button" role="tab">
+                <i class="bi bi-diagram-3 me-1"></i> 11-Stage Pipeline &amp; Transactions
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="tab-grafana-tx-btn" data-bs-toggle="tab" data-bs-target="#tab-grafana-tx" type="button" role="tab">
+                <i class="bi bi-speedometer2 me-1"></i> Live Grafana · Transaction Monitoring
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="tab-grafana-sys-btn" data-bs-toggle="tab" data-bs-target="#tab-grafana-sys" type="button" role="tab">
+                <i class="bi bi-cpu me-1"></i> Live Grafana · System Health &amp; Microservices
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="tab-grafana-logs-btn" data-bs-toggle="tab" data-bs-target="#tab-grafana-logs" type="button" role="tab">
+                <i class="bi bi-journal-text me-1"></i> Live Grafana · Application Logs (Loki)
+            </button>
+        </li>
+    </ul>
+
+    <!-- Tab Content Panels -->
+    <div class="tab-content" id="observabilityTabsContent">
+
+        <!-- =========================================================
+             TAB 1: 11-STAGE NATIVE PIPELINE & EVENT STREAM (DIG-102)
+             ========================================================= -->
+        <div class="tab-pane fade show active" id="tab-pipeline" role="tabpanel">
+
+            <!-- Live Stale-Feed Banner -->
+            <div class="alert alert-info py-2 px-3 small d-flex align-items-center justify-content-between mb-3" id="staleFeedBanner">
+                <div class="d-flex align-items-center gap-2">
+                    <div class="spinner-grow spinner-grow-sm text-info" role="status"></div>
+                    <div>Live transaction event stream active (DIG-101 SSE). Event-to-screen p95 &le; 2.0 s across all API gateway channels.</div>
+                </div>
+                <button class="btn btn-sm btn-outline-info py-0 px-2" onclick="toggleMasking()">
+                    <i class="bi bi-eye-slash" id="maskIcon"></i> <span id="maskLabel">Unmask Identifiers</span>
+                </button>
+            </div>
+
+            <!-- Filter & Search Controls -->
+            <div class="card p-3 mb-3">
+                <div class="row g-2 align-items-center">
+                    <div class="col-md-6">
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text"><i class="bi bi-search"></i></span>
+                            <input type="text" id="txnFilterInput" class="form-control" placeholder="Search by Transaction ID, Correlation ID, or Account..." onkeyup="filterTxnFeed()">
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <select id="statusFilter" class="form-select form-select-sm" onchange="filterTxnFeed()">
+                            <option value="">All Statuses</option>
+                            <option value="SUCCESS">SUCCESS</option>
+                            <option value="HELD">HELD</option>
+                            <option value="FAILED">FAILED</option>
+                            <option value="REVERSED">REVERSED</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3 text-end text-muted small">
+                        Showing <strong id="monitoringCount" th:text="${feed.size()}">2</strong> active transactions
+                    </div>
+                </div>
+            </div>
+
+            <!-- Transactions Feed with 11-Stage Pipeline -->
+            <div id="txnCardsContainer">
+                <div th:each="txn : ${feed}" class="card p-3 mb-3 txn-card" th:attr="data-status=${txn.overallStatus},data-txn=${txn.txnId},data-corr=${txn.correlationId}">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center border-bottom pb-2 mb-3 gap-2">
+                        <div>
+                            <span class="font-monospace fw-bold me-2" th:text="${txn.txnId}">TXN-MON-8801</span>
+                            <span class="badge" th:classappend="${txn.statusBadgeClass}" th:text="${txn.overallStatus}">SUCCESS</span>
+                            <span class="small text-muted ms-2 font-monospace">Correlation: <span th:text="${txn.correlationId}">CORR-MON-8801</span></span>
+                        </div>
+                        <div class="d-flex align-items-center gap-3">
+                            <span class="fw-bold font-monospace text-primary fs-6" th:text="${txn.formattedAmount}">₱12,500.00</span>
+                            <span class="badge bg-light text-dark border small" th:text="'Duration: ' + ${txn.totalDurationMs} + ' ms'">840 ms</span>
+                        </div>
+                    </div>
+
+                    <div class="row g-2 small mb-3">
+                        <div class="col-md-4">
+                            <span class="text-muted">Customer:</span>
+                            <span class="fw-semibold cust-name masked" th:text="${txn.maskedCustomerName}">J*** D***</span>
+                            <span class="fw-semibold cust-name raw d-none" th:text="${txn.rawCustomerName}">Juan Dela Cruz</span>
+                        </div>
+                        <div class="col-md-4">
+                            <span class="text-muted">Source Account:</span>
+                            <span class="font-monospace fw-semibold src-acct masked" th:text="${txn.maskedSourceAccount}">ACCT-****-1001</span>
+                            <span class="font-monospace fw-semibold src-acct raw d-none" th:text="${txn.rawSourceAccount}">ACCT-1001-PHP</span>
+                        </div>
+                        <div class="col-md-4">
+                            <span class="text-muted">Destination:</span>
+                            <span class="font-monospace fw-semibold dst-acct masked" th:text="${txn.maskedDestAccount}">ACCT-****-2001</span>
+                            <span class="font-monospace fw-semibold dst-acct raw d-none" th:text="${txn.rawDestAccount}">ACCT-2001-PHP</span>
+                        </div>
+                    </div>
+
+                    <!-- 11-Stage Pipeline Visual Tracker -->
+                    <h6 class="small fw-bold text-muted text-uppercase mb-2"><i class="bi bi-diagram-3 me-1"></i>Lifecycle Stage Tracker (11 Stages)</h6>
+                    <div class="d-flex flex-wrap gap-1 align-items-center">
+                        <div th:each="stage : ${txn.stages}" class="d-flex align-items-center gap-1">
+                            <div class="badge p-2 text-center" th:classappend="${stage.badgeClass}" style="min-width: 95px;">
+                                <div class="fw-bold" style="font-size: 0.65rem;" th:text="${stage.stageName}">STAGE</div>
+                                <div class="small" style="font-size: 0.6rem;" th:text="${stage.durationMs} + ' ms'">40 ms</div>
+                            </div>
+                            <i class="bi bi-chevron-right text-muted small" th:if="${stage.sequence < txn.stages.size()}"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- =========================================================
+             TAB 2: LIVE GRAFANA · TRANSACTION MONITORING
+             ========================================================= -->
+        <div class="tab-pane fade" id="tab-grafana-tx" role="tabpanel">
+
+            <!-- Standby Mode Panel when Docker is Offline -->
+            <div class="grafana-offline-panel card p-4 text-center my-2 border-0 shadow-sm" style="background: var(--brand-card-soft);">
+                <div class="my-3">
+                    <span class="d-inline-flex align-items-center justify-content-center rounded-circle p-3" style="background: rgba(217, 154, 36, 0.15); width: 68px; height: 68px;">
+                        <i class="bi bi-hdd-network text-warning fs-2"></i>
+                    </span>
+                </div>
+                <h5 class="fw-bold mb-2">Grafana Observability Stack in Standby</h5>
+                <p class="text-muted small mx-auto mb-3" style="max-width: 580px;">
+                    The Grafana 11.1 time-series service is cloaked inside the internal Docker bridge network (<code>banking-net</code>).
+                    Since Docker Desktop is currently stopped, real-time Prometheus charts are in standby.
+                </p>
+                <div class="p-3 my-2 rounded text-start mx-auto" style="background: var(--bg-card); border: 1px solid var(--border-color); max-width: 540px;">
+                    <div class="small fw-semibold text-muted mb-1"><i class="bi bi-terminal me-1"></i>To launch the live time-series cluster in your terminal:</div>
+                    <code class="d-block p-2 rounded bg-dark text-light small font-monospace">docker-compose up -d grafana prometheus loki</code>
+                    <div class="small text-muted mt-2">
+                        <i class="bi bi-info-circle me-1"></i>In local mock development, live transaction monitoring and the 11-stage pipeline are fully functional without Docker.
+                    </div>
+                </div>
+                <div class="d-flex justify-content-center gap-2 mt-3">
+                    <button type="button" class="btn btn-primary btn-sm px-3" onclick="switchToPipeline()">
+                        <i class="bi bi-diagram-3 me-1"></i> View Active 11-Stage Pipeline
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm px-3" onclick="probeGrafanaConnectivity(true)">
+                        <i class="bi bi-arrow-clockwise me-1"></i> Check Connection Again
+                    </button>
+                </div>
+            </div>
+
+            <!-- Live Streaming Panel (Shown automatically when Grafana is Online) -->
+            <div class="grafana-live-panel d-none">
+                <div class="card p-2 mb-2">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 small">
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="badge bg-primary"><i class="bi bi-graph-up me-1"></i>Prometheus Time-Series</span>
+                            <span class="text-muted">Dashboard: <code>banking-transaction-monitoring</code></span>
+                        </div>
+                        <div class="d-flex align-items-center gap-2">
+                            <label class="text-muted">Refresh:</label>
+                            <select class="form-select form-select-sm py-0" style="width: auto;" onchange="updateGrafanaRefresh('iframe-grafana-tx', this.value)">
+                                <option value="5s" selected>5 seconds</option>
+                                <option value="10s">10 seconds</option>
+                                <option value="30s">30 seconds</option>
+                            </select>
+                            <a href="http://localhost:3000/d/banking-transaction-monitoring" target="_blank" class="btn btn-sm btn-outline-secondary py-0">
+                                <i class="bi bi-box-arrow-up-right me-1"></i> Fullscreen
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="position-relative" style="min-height: 850px;">
+                    <iframe id="iframe-grafana-tx"
+                            data-base-path="/d/banking-transaction-monitoring"
+                            src=""
+                            style="width: 100%; height: 860px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-card);"
+                            allow="fullscreen"></iframe>
+                </div>
+            </div>
+        </div>
+
+        <!-- =========================================================
+             TAB 3: LIVE GRAFANA · SYSTEM HEALTH & MICROSERVICES
+             ========================================================= -->
+        <div class="tab-pane fade" id="tab-grafana-sys" role="tabpanel">
+
+            <!-- Standby Mode Panel when Docker is Offline -->
+            <div class="grafana-offline-panel card p-4 text-center my-2 border-0 shadow-sm" style="background: var(--brand-card-soft);">
+                <div class="my-3">
+                    <span class="d-inline-flex align-items-center justify-content-center rounded-circle p-3" style="background: rgba(217, 154, 36, 0.15); width: 68px; height: 68px;">
+                        <i class="bi bi-cpu text-warning fs-2"></i>
+                    </span>
+                </div>
+                <h5 class="fw-bold mb-2">Microservices Observability in Standby</h5>
+                <p class="text-muted small mx-auto mb-3" style="max-width: 580px;">
+                    The microservice health, throughput, and latency dashboard runs through Prometheus metrics scraping.
+                    Start the telemetry containers to stream live metrics across all 10 microservices.
+                </p>
+                <div class="p-3 my-2 rounded text-start mx-auto" style="background: var(--bg-card); border: 1px solid var(--border-color); max-width: 540px;">
+                    <div class="small fw-semibold text-muted mb-1"><i class="bi bi-terminal me-1"></i>To launch the containers:</div>
+                    <code class="d-block p-2 rounded bg-dark text-light small font-monospace">docker-compose up -d grafana prometheus</code>
+                </div>
+                <div class="d-flex justify-content-center gap-2 mt-3">
+                    <button type="button" class="btn btn-primary btn-sm px-3" onclick="switchToPipeline()">
+                        <i class="bi bi-diagram-3 me-1"></i> View Active 11-Stage Pipeline
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm px-3" onclick="probeGrafanaConnectivity(true)">
+                        <i class="bi bi-arrow-clockwise me-1"></i> Check Connection Again
+                    </button>
+                </div>
+            </div>
+
+            <!-- Live Streaming Panel (Shown automatically when Grafana is Online) -->
+            <div class="grafana-live-panel d-none">
+                <div class="card p-2 mb-2">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 small">
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Microservices Health</span>
+                            <span class="text-muted">Dashboard: <code>banking-overview</code></span>
+                        </div>
+                        <div class="d-flex align-items-center gap-2">
+                            <label class="text-muted">Refresh:</label>
+                            <select class="form-select form-select-sm py-0" style="width: auto;" onchange="updateGrafanaRefresh('iframe-grafana-sys', this.value)">
+                                <option value="5s">5 seconds</option>
+                                <option value="10s" selected>10 seconds</option>
+                                <option value="30s">30 seconds</option>
+                            </select>
+                            <a href="http://localhost:3000/d/banking-overview" target="_blank" class="btn btn-sm btn-outline-secondary py-0">
+                                <i class="bi bi-box-arrow-up-right me-1"></i> Fullscreen
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="position-relative" style="min-height: 850px;">
+                    <iframe id="iframe-grafana-sys"
+                            data-base-path="/d/banking-overview"
+                            src=""
+                            style="width: 100%; height: 860px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-card);"
+                            allow="fullscreen"></iframe>
+                </div>
+            </div>
+        </div>
+
+        <!-- =========================================================
+             TAB 4: LIVE GRAFANA · APPLICATION LOGS & TRACES (LOKI)
+             ========================================================= -->
+        <div class="tab-pane fade" id="tab-grafana-logs" role="tabpanel">
+
+            <!-- Standby Mode Panel when Docker is Offline -->
+            <div class="grafana-offline-panel card p-4 text-center my-2 border-0 shadow-sm" style="background: var(--brand-card-soft);">
+                <div class="my-3">
+                    <span class="d-inline-flex align-items-center justify-content-center rounded-circle p-3" style="background: rgba(217, 154, 36, 0.15); width: 68px; height: 68px;">
+                        <i class="bi bi-journal-code text-warning fs-2"></i>
+                    </span>
+                </div>
+                <h5 class="fw-bold mb-2">Loki Log Aggregator in Standby</h5>
+                <p class="text-muted small mx-auto mb-3" style="max-width: 580px;">
+                    Centralized container log streaming and correlation ID indexing operate through Loki and Promtail.
+                </p>
+                <div class="p-3 my-2 rounded text-start mx-auto" style="background: var(--bg-card); border: 1px solid var(--border-color); max-width: 540px;">
+                    <div class="small fw-semibold text-muted mb-1"><i class="bi bi-terminal me-1"></i>To launch Loki & Promtail:</div>
+                    <code class="d-block p-2 rounded bg-dark text-light small font-monospace">docker-compose up -d grafana loki promtail</code>
+                </div>
+                <div class="d-flex justify-content-center gap-2 mt-3">
+                    <button type="button" class="btn btn-primary btn-sm px-3" onclick="switchToPipeline()">
+                        <i class="bi bi-diagram-3 me-1"></i> View Active 11-Stage Pipeline
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm px-3" onclick="probeGrafanaConnectivity(true)">
+                        <i class="bi bi-arrow-clockwise me-1"></i> Check Connection Again
+                    </button>
+                </div>
+            </div>
+
+            <!-- Live Streaming Panel (Shown automatically when Grafana is Online) -->
+            <div class="grafana-live-panel d-none">
+                <div class="card p-2 mb-2">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 small">
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="badge bg-dark"><i class="bi bi-journal-code me-1"></i>Loki Log Pipeline</span>
+                            <span class="text-muted">Dashboard: <code>banking-application-logs</code></span>
+                        </div>
+                        <div class="d-flex align-items-center gap-2">
+                            <a href="http://localhost:3000/d/banking-application-logs" target="_blank" class="btn btn-sm btn-outline-secondary py-0">
+                                <i class="bi bi-box-arrow-up-right me-1"></i> Fullscreen
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="position-relative" style="min-height: 850px;">
+                    <iframe id="iframe-grafana-logs"
+                            data-base-path="/d/banking-application-logs"
+                            src=""
+                            style="width: 100%; height: 860px; border: 1px solid var(--border-color); border-radius: 8px; background: var(--bg-card);"
+                            allow="fullscreen"></iframe>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</main>
+
+<script>
+// 1. Data Masking Toggle
+var isMasked = true;
+function toggleMasking() {
+    isMasked = !isMasked;
+    document.querySelectorAll(".masked").forEach(el => el.classList.toggle("d-none", !isMasked));
+    document.querySelectorAll(".raw").forEach(el => el.classList.toggle("d-none", isMasked));
+    var icon = document.getElementById("maskIcon");
+    var label = document.getElementById("maskLabel");
+    if (isMasked) {
+        icon.className = "bi bi-eye-slash";
+        label.textContent = "Unmask Identifiers";
+    } else {
+        icon.className = "bi bi-eye";
+        label.textContent = "Mask Identifiers";
+    }
+}
+
+// 2. Transaction Feed Filter
+function filterTxnFeed() {
+    var query = document.getElementById("txnFilterInput").value.toLowerCase();
+    var status = document.getElementById("statusFilter").value.toUpperCase();
+    document.querySelectorAll(".txn-card").forEach(function(card) {
+        var cardStatus = (card.getAttribute("data-status") || "").toUpperCase();
+        var cardTxn = (card.getAttribute("data-txn") || "").toLowerCase();
+        var cardCorr = (card.getAttribute("data-corr") || "").toLowerCase();
+        var matchesStatus = !status || cardStatus === status;
+        var matchesQuery = !query || cardTxn.includes(query) || cardCorr.includes(query);
+        card.style.display = (matchesStatus && matchesQuery) ? "" : "none";
+    });
+}
+
+// 3. Grafana Live Integration & Theme-Aware Iframe Loader (Proxied via :8090/grafana/**)
+var isGrafanaOnline = false;
+
+function getGrafanaTheme() {
+    return document.documentElement.classList.contains("dark-mode") ? "dark" : "light";
+}
+
+function buildGrafanaUrl(basePath, refreshInterval) {
+    var refresh = refreshInterval || "5s";
+    var theme = getGrafanaTheme();
+    // Use the protocol and host of current page to determine Grafana URL
+    // If accessed via 8090, use localhost:3000
+    // This works because the browser makes the request, not the backend
+    var grafanaHost = window.location.hostname === 'localhost' ? 'localhost:3000' : window.location.host.split(':')[0] + ':3000';
+    return "http://" + grafanaHost + basePath + "?kiosk&refresh=" + refresh + "&theme=" + theme;
+}
+
+function loadGrafanaIframe(iframeId, refreshInterval) {
+    if (!isGrafanaOnline) return; // Never mount/load iframe when Grafana is in standby
+    var iframe = document.getElementById(iframeId);
+    if (!iframe) return;
+    var basePath = iframe.getAttribute("data-base-path");
+    var targetUrl = buildGrafanaUrl(basePath, refreshInterval);
+    if (iframe.src !== targetUrl) {
+        iframe.src = targetUrl;
+    }
+}
+
+function updateGrafanaRefresh(iframeId, refresh) {
+    loadGrafanaIframe(iframeId, refresh);
+}
+
+function switchToPipeline() {
+    var btn = document.getElementById("tab-pipeline-btn");
+    if (btn && typeof bootstrap !== "undefined") {
+        new bootstrap.Tab(btn).show();
+    }
+}
+
+// 4. Grafana Health Probe via Direct Port 3000
+function probeGrafanaConnectivity(isManual) {
+    var dot = document.getElementById("grafanaDot");
+    var text = document.getElementById("grafanaStatusText");
+
+    if (isManual && text) {
+        text.textContent = "Checking connection...";
+    }
+
+    // Determine Grafana URL based on current hostname
+    var grafanaHost = window.location.hostname === 'localhost' ? 'localhost:3000' : window.location.host.split(':')[0] + ':3000';
+    var healthUrl = "http://" + grafanaHost + "/api/health";
+
+    fetch(healthUrl, { mode: 'no-cors' })
+        .then(function(res) {
+            // With no-cors mode, we can't check status, so we assume success if fetch didn't error
+            isGrafanaOnline = true;
+            setGrafanaOnline();
+            loadActiveTabIframe();
+        })
+        .catch(function() {
+            isGrafanaOnline = false;
+            setGrafanaOffline();
+        });
+
+    function setGrafanaOnline() {
+        if (dot) dot.className = "bi bi-circle-fill text-success me-1";
+        if (text) text.textContent = "Grafana Online (Port 3000)";
+        document.querySelectorAll(".grafana-offline-panel").forEach(p => p.classList.add("d-none"));
+        document.querySelectorAll(".grafana-live-panel").forEach(p => p.classList.remove("d-none"));
+    }
+
+    function setGrafanaOffline() {
+        if (dot) dot.className = "bi bi-circle-fill text-warning me-1";
+        if (text) text.textContent = "Grafana Stack Offline";
+        document.querySelectorAll(".grafana-offline-panel").forEach(p => p.classList.remove("d-none"));
+        document.querySelectorAll(".grafana-live-panel").forEach(p => p.classList.add("d-none"));
+    }
+}
+
+function loadActiveTabIframe() {
+    var activePane = document.querySelector(".tab-pane.active");
+    if (activePane) {
+        var iframe = activePane.querySelector("iframe");
+        if (iframe) {
+            loadGrafanaIframe(iframe.id);
+        }
+    }
+}
+
+// 5. Real-Time SSE Event Stream (DIG-101) & Fallback Polling
+var eventSource = null;
+
+function renderStagesHtml(stages) {
+    if (!stages || !stages.length) return '';
+    return stages.map(function(s, idx) {
+        var badgeCls = "bg-secondary text-white opacity-50";
+        var st = (s.status || "").toUpperCase();
+        if (st === "GREEN") badgeCls = "bg-success text-white";
+        else if (st === "BLUE") badgeCls = "bg-primary text-white";
+        else if (st === "RED") badgeCls = "bg-danger text-white";
+        else if (st === "OUTLINE") badgeCls = "border border-warning text-warning";
+
+        var chevron = (idx < stages.length - 1) ? '<i class="bi bi-chevron-right text-muted small"></i>' : '';
+        return '<div class="d-flex align-items-center gap-1">' +
+            '<div class="badge p-2 text-center ' + badgeCls + '" style="min-width: 95px;">' +
+                '<div class="fw-bold" style="font-size: 0.65rem;">' + (s.stageName || '') + '</div>' +
+                '<div class="small" style="font-size: 0.6rem;">' + (s.durationMs || 0) + ' ms</div>' +
+            '</div>' + chevron + '</div>';
+    }).join('');
+}
+
+function updatePipelineFeed(feed) {
+    if (!feed) return;
+    var countEl = document.getElementById("monitoringCount");
+    if (countEl) countEl.textContent = feed.length;
+
+    var container = document.getElementById("txnCardsContainer");
+    if (!container) return;
+
+    var html = "";
+    feed.forEach(function(txn) {
+        var statusBadge = "bg-primary text-white";
+        var s = (txn.overallStatus || "PENDING").toUpperCase();
+        if (s === "SUCCESS" || s === "COMPLETED") statusBadge = "bg-success text-white";
+        else if (s === "HELD") statusBadge = "bg-warning text-dark";
+        else if (s === "FAILED") statusBadge = "bg-danger text-white";
+        else if (s === "REVERSED") statusBadge = "bg-info text-dark";
+
+        html += '<div class="card p-3 mb-3 txn-card" data-status="' + (txn.overallStatus || '') + '" data-txn="' + (txn.txnId || '') + '" data-corr="' + (txn.correlationId || '') + '">' +
+            '<div class="d-flex flex-wrap justify-content-between align-items-center border-bottom pb-2 mb-3 gap-2">' +
+                '<div>' +
+                    '<span class="font-monospace fw-bold me-2">' + (txn.txnId || '') + '</span>' +
+                    '<span class="badge ' + statusBadge + '">' + (txn.overallStatus || '') + '</span>' +
+                    '<span class="small text-muted ms-2 font-monospace">Correlation: <span>' + (txn.correlationId || '') + '</span></span>' +
+                '</div>' +
+                '<div class="d-flex align-items-center gap-3">' +
+                    '<span class="fw-bold font-monospace text-primary fs-6">' + (txn.formattedAmount || '') + '</span>' +
+                    '<span class="badge bg-light text-dark border small">Duration: ' + (txn.totalDurationMs || 0) + ' ms</span>' +
+                '</div>' +
+            '</div>' +
+            '<div class="row g-2 small mb-3">' +
+                '<div class="col-md-4">' +
+                    '<span class="text-muted">Customer:</span> ' +
+                    '<span class="fw-semibold cust-name masked ' + (isMasked ? '' : 'd-none') + '">' + (txn.maskedCustomerName || '') + '</span>' +
+                    '<span class="fw-semibold cust-name raw ' + (isMasked ? 'd-none' : '') + '">' + (txn.rawCustomerName || '') + '</span>' +
+                '</div>' +
+                '<div class="col-md-4">' +
+                    '<span class="text-muted">Source Account:</span> ' +
+                    '<span class="font-monospace fw-semibold src-acct masked ' + (isMasked ? '' : 'd-none') + '">' + (txn.maskedSourceAccount || '') + '</span>' +
+                    '<span class="font-monospace fw-semibold src-acct raw ' + (isMasked ? 'd-none' : '') + '">' + (txn.rawSourceAccount || '') + '</span>' +
+                '</div>' +
+                '<div class="col-md-4">' +
+                    '<span class="text-muted">Destination:</span> ' +
+                    '<span class="font-monospace fw-semibold dst-acct masked ' + (isMasked ? '' : 'd-none') + '">' + (txn.maskedDestAccount || '') + '</span>' +
+                    '<span class="font-monospace fw-semibold dst-acct raw ' + (isMasked ? 'd-none' : '') + '">' + (txn.rawDestAccount || '') + '</span>' +
+                '</div>' +
+            '</div>' +
+            '<h6 class="small fw-bold text-muted text-uppercase mb-2"><i class="bi bi-diagram-3 me-1"></i>Lifecycle Stage Tracker (11 Stages)</h6>' +
+            '<div class="d-flex flex-wrap gap-1 align-items-center">' +
+                renderStagesHtml(txn.stages) +
+            '</div>' +
+        '</div>';
+    });
+    container.innerHTML = html;
+    filterTxnFeed();
+}
+
+function initMonitoringStream() {
+    if (window.EventSource) {
+        try {
+            eventSource = new EventSource("/admin/api/monitoring/stream");
+            eventSource.addEventListener("init", function(e) {
+                var feed = JSON.parse(e.data);
+                updatePipelineFeed(feed);
+            });
+            eventSource.addEventListener("feed", function(e) {
+                var feed = JSON.parse(e.data);
+                updatePipelineFeed(feed);
+            });
+            eventSource.onerror = function() {
+                if (eventSource) eventSource.close();
+                setInterval(pollMonitoringFeed, 3000);
+            };
+            return;
+        } catch (e) {
+            console.warn("SSE stream failed, falling back to polling", e);
+        }
+    }
+    setInterval(pollMonitoringFeed, 3000);
+}
+
+function pollMonitoringFeed() {
+    fetch("/admin/api/monitoring/feed")
+        .then(res => res.json())
+        .then(feed => updatePipelineFeed(feed))
+        .catch(err => console.warn("Monitoring poll error:", err));
+}
+
+// 6. Tab Activation Listener
+document.addEventListener("DOMContentLoaded", function () {
+    probeGrafanaConnectivity(false);
+    initMonitoringStream();
+
+    var tabs = [
+        { btnId: "tab-grafana-tx-btn", iframeId: "iframe-grafana-tx" },
+        { btnId: "tab-grafana-sys-btn", iframeId: "iframe-grafana-sys" },
+        { btnId: "tab-grafana-logs-btn", iframeId: "iframe-grafana-logs" }
+    ];
+
+    tabs.forEach(function(item) {
+        var btn = document.getElementById(item.btnId);
+        if (btn) {
+            btn.addEventListener("shown.bs.tab", function() {
+                if (isGrafanaOnline) {
+                    loadGrafanaIframe(item.iframeId);
+                }
+            });
+        }
+    });
+
+    // Check URL hash for direct tab navigation e.g. #grafana-tx
+    if (window.location.hash) {
+        var hash = window.location.hash.replace("#", "");
+        if (hash === "grafana-tx" || hash === "grafana") {
+            var tabBtn = document.getElementById("tab-grafana-tx-btn");
+            if (tabBtn && typeof bootstrap !== "undefined") {
+                new bootstrap.Tab(tabBtn).show();
+            }
+        }
+    }
+});
+</script>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+</body>
+</html>

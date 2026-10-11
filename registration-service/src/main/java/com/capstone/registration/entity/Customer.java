@@ -48,6 +48,19 @@ public class Customer {
     @Column(name = "birth_date")
     private LocalDate birthDate;
 
+    @Column(name = "id_type", length = 50)
+    private String idType;
+
+    @Column(name = "id_number", length = 100)
+    private String idNumber;
+
+    @Column(name = "residential_address", length = 255)
+    private String residentialAddress;
+
+    @Builder.Default
+    @Column(name = "kyc_status", nullable = false, length = 20)
+    private String kycStatus = "PENDING";
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 

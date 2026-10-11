@@ -1,0 +1,31 @@
+{
+  "findings": [
+    {
+      "title": "Internal boundary violated: /api/v1/ledger/mutate returned 401 (expected 403)",
+      "sev": "S1",
+      "oracle": "F7",
+      "path": "/api/v1/ledger/mutate",
+      "status": 401,
+      "res": ""
+    },
+    {
+      "title": "Internal boundary violated: /api/v1/accounts/1/credit returned 401 (expected 403)",
+      "sev": "S1",
+      "oracle": "F7",
+      "path": "/api/v1/accounts/1/credit",
+      "status": 401,
+      "res": ""
+    },
+    {
+      "title": "Internal boundary violated: /api/v1/accounts/1/debit returned 401 (expected 403)",
+      "sev": "S1",
+      "oracle": "F7",
+      "path": "/api/v1/accounts/1/debit",
+      "status": 401,
+      "res": ""
+    }
+  ],
+  "contract_queries": [],
+  "observations": [],
+  "created_customers": []
+}

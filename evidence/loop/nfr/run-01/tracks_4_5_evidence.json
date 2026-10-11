@@ -1,0 +1,35 @@
+{
+  "timestamp": "2026-10-10T16:02:27Z",
+  "NFR-INTEG-01": {
+    "status": "PASS",
+    "attempts": 50,
+    "blocked_rate": "100%",
+    "elapsed_ms": 1176.5320301055908
+  },
+  "NFR-INTEG-02": {
+    "status": "PASS",
+    "requests": 100,
+    "rejection_status": 422,
+    "error_code": "ACCOUNT_FROZEN",
+    "oracle_status": "FROZEN",
+    "elapsed_ms": 391.2618160247803
+  },
+  "NFR-INTEG-03": {
+    "status": "PASS",
+    "tests_run": 6,
+    "elapsed_seconds": 8.023862838745117
+  },
+  "NFR-SEC-02": {
+    "status": "PASS",
+    "tests_run": 12,
+    "sla_ms_target": 50,
+    "observed_avg_ms": 0.24,
+    "elapsed_seconds": 7.681405544281006
+  },
+  "NFR-SEC-03": {
+    "status": "PASS",
+    "attempts": 5,
+    "all_rejected_401": true
+  },
+  "final_invariants_exit": 0
+}

@@ -1,0 +1,227 @@
+# ============================================================================
+# Prometheus Recording Rules for Banking Backend Monorepo
+# ============================================================================
+# Recording rules pre-compute frequently needed or computationally expensive
+# expressions and save their results as new time series.
+#
+# Benefits:
+# - Faster dashboard query performance
+# - Reduced query load on Prometheus
+# - Consistent calculations across dashboards
+# ============================================================================
+
+groups:
+  # ==========================================================================
+  # HTTP REQUEST METRICS
+  # ==========================================================================
+  - name: http_request_aggregations
+    interval: 30s
+    rules:
+      # Total request rate per service
+      - record: job:http_requests:rate1m
+        expr: sum(rate(http_server_requests_seconds_count[1m])) by (job)
+
+      # Request rate by method and status
+      - record: job:http_requests:rate1m:by_method_status
+        expr: sum(rate(http_server_requests_seconds_count[1m])) by (job, method, status)
+
+      # Error rate (4xx + 5xx) per service
+      - record: job:http_errors:rate1m
+        expr: sum(rate(http_server_requests_seconds_count{status=~"4..|5.."}[1m])) by (job)
+
+      # 5xx error rate per service
+      - record: job:http_errors_5xx:rate1m
+        expr: sum(rate(http_server_requests_seconds_count{status=~"5.."}[1m])) by (job)
+
+      # Error percentage per service
+      - record: job:http_errors:percentage
+        expr: |
+          (sum(rate(http_server_requests_seconds_count{status=~"4..|5.."}[5m])) by (job) 
+          / 
+          sum(rate(http_server_requests_seconds_count[5m])) by (job)) * 100
+
+      # P50 latency per service
+      - record: job:http_request_duration:p50
+        expr: histogram_quantile(0.50, sum(rate(http_server_requests_seconds_bucket[5m])) by (le, job))
+
+      # P95 latency per service
+      - record: job:http_request_duration:p95
+        expr: histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket[5m])) by (le, job))
+
+      # P99 latency per service
+      - record: job:http_request_duration:p99
+        expr: histogram_quantile(0.99, sum(rate(http_server_requests_seconds_bucket[5m])) by (le, job))
+
+  # ==========================================================================
+  # BUSINESS TRANSACTION METRICS
+  # ==========================================================================
+  - name: banking_transaction_aggregations
+    interval: 30s
+    rules:
+      # Transaction success rate by type
+      - record: banking:transactions:rate1m:by_type_status
+        expr: sum(rate(banking_transactions_total[1m])) by (type, status)
+
+      # Transaction failure rate
+      - record: banking:transactions:failure_rate1m
+        expr: sum(rate(banking_transactions_total{status="FAILED"}[1m])) by (type)
+
+      # Transaction success percentage
+      - record: banking:transactions:success_percentage
+        expr: |
+          (sum(rate(banking_transactions_total{status=~"COMMITTED|COMPLETED"}[5m])) by (type)
+          /
+          sum(rate(banking_transactions_total[5m])) by (type)) * 100
+
+      # Total transaction volume (5 minute window)
+      - record: banking:transactions:volume5m
+        expr: sum(increase(banking_transactions_total[5m])) by (type)
+
+      # Transaction amount processed (if metric exists)
+      - record: banking:transaction_amount:rate1m
+        expr: sum(rate(banking_transaction_amount_total[1m])) by (type, currency)
+
+  # ==========================================================================
+  # FOREX METRICS
+  # ==========================================================================
+  - name: forex_aggregations
+    interval: 30s
+    rules:
+      # Forex conversion rate by currency pair
+      - record: forex:conversions:rate1m
+        expr: sum(rate(forex_conversions_total[1m])) by (currency_pair, status)
+
+      # Forex failure rate
+      - record: forex:conversions:failure_rate1m
+        expr: sum(rate(forex_conversions_total{status="FAILED"}[1m])) by (currency_pair)
+
+      # Forex success percentage
+      - record: forex:conversions:success_percentage
+        expr: |
+          (sum(rate(forex_conversions_total{status="SUCCESS"}[5m])) by (currency_pair)
+          /
+          sum(rate(forex_conversions_total[5m])) by (currency_pair)) * 100
+
+  # ==========================================================================
+  # JVM AND SYSTEM METRICS
+  # ==========================================================================
+  - name: jvm_system_aggregations
+    interval: 30s
+    rules:
+      # JVM Heap utilization percentage
+      - record: job:jvm_heap:utilization_percentage
+        expr: |
+          (jvm_memory_used_bytes{area="heap"} 
+          / 
+          jvm_memory_max_bytes{area="heap"}) * 100
+
+      # JVM Non-Heap utilization percentage
+      - record: job:jvm_nonheap:utilization_percentage
+        expr: |
+          (jvm_memory_used_bytes{area="nonheap"} 
+          / 
+          jvm_memory_max_bytes{area="nonheap"}) * 100
+
+      # CPU usage percentage
+      - record: job:cpu:utilization_percentage
+        expr: process_cpu_usage * 100
+
+      # GC time rate (seconds per second spent in GC)
+      - record: job:jvm_gc:rate1m
+        expr: rate(jvm_gc_pause_seconds_sum[1m])
+
+      # Thread count by state
+      - record: job:jvm_threads:by_state
+        expr: sum(jvm_threads_states_threads) by (job, state)
+
+  # ==========================================================================
+  # DATABASE CONNECTION POOL METRICS
+  # ==========================================================================
+  - name: database_connection_pool_aggregations
+    interval: 30s
+    rules:
+      # Active connections percentage
+      - record: job:hikaricp_connections:active_percentage
+        expr: |
+          (hikaricp_connections_active 
+          / 
+          hikaricp_connections_max) * 100
+
+      # Connection acquisition time P95
+      - record: job:hikaricp_connection_acquire:p95
+        expr: histogram_quantile(0.95, sum(rate(hikaricp_connections_acquire_seconds_bucket[5m])) by (le, job, pool))
+
+      # Connection usage time P95
+      - record: job:hikaricp_connection_usage:p95
+        expr: histogram_quantile(0.95, sum(rate(hikaricp_connections_usage_seconds_bucket[5m])) by (le, job, pool))
+
+  # ==========================================================================
+  # RECONCILIATION METRICS
+  # ==========================================================================
+  - name: reconciliation_aggregations
+    interval: 30s
+    rules:
+      # Reconciliation exception rate
+      - record: recon:exceptions:rate1m
+        expr: sum(rate(reconciliation_exceptions_total[1m])) by (exception_type, severity)
+
+      # Reconciliation match percentage
+      - record: recon:match_percentage
+        expr: |
+          (sum(rate(reconciliation_results_total{status="MATCHED"}[5m]))
+          /
+          sum(rate(reconciliation_results_total[5m]))) * 100
+
+  # ==========================================================================
+  # SLI/SLO METRICS (Service Level Indicators/Objectives)
+  # ==========================================================================
+  - name: sli_slo_metrics
+    interval: 30s
+    rules:
+      # Availability SLI: percentage of successful requests (non-5xx)
+      - record: sli:availability:success_rate
+        expr: |
+          sum(rate(http_server_requests_seconds_count{status!~"5.."}[5m])) by (job)
+          /
+          sum(rate(http_server_requests_seconds_count[5m])) by (job)
+
+      # Latency SLI: percentage of requests under 1 second
+      - record: sli:latency:under_1s_percentage
+        expr: |
+          (sum(rate(http_server_requests_seconds_bucket{le="1.0"}[5m])) by (job)
+          /
+          sum(rate(http_server_requests_seconds_count[5m])) by (job)) * 100
+
+      # Transaction SLI: successful transaction rate
+      - record: sli:transactions:success_rate
+        expr: |
+          sum(rate(banking_transactions_total{status=~"COMMITTED|COMPLETED"}[5m])) by (type)
+          /
+          sum(rate(banking_transactions_total[5m])) by (type)
+
+  # ==========================================================================
+  # ALERTING AGGREGATIONS (for efficient alert rules)
+  # ==========================================================================
+  - name: alerting_aggregations
+    interval: 15s
+    rules:
+      # Service availability (up/down)
+      - record: alert:service:up
+        expr: up
+
+      # Critical error rate threshold
+      - record: alert:http_errors:critical
+        expr: |
+          (sum(rate(http_server_requests_seconds_count{status=~"5.."}[2m])) by (job)
+          /
+          sum(rate(http_server_requests_seconds_count[2m])) by (job)) * 100 > 5
+
+      # Database connection pool saturation
+      - record: alert:hikaricp:saturation
+        expr: |
+          (hikaricp_connections_active / hikaricp_connections_max) * 100 > 90
+
+      # High JVM heap pressure
+      - record: alert:jvm_heap:pressure
+        expr: |
+          (jvm_memory_used_bytes{area="heap"} / jvm_memory_max_bytes{area="heap"}) * 100 > 85

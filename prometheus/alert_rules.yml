@@ -1,0 +1,566 @@
+# ============================================================================
+# Prometheus Alert Rules for Banking Backend Monorepo
+# ============================================================================
+# Comprehensive alert rules covering infrastructure, application health,
+# business metrics, and SLI/SLO violations.
+# ============================================================================
+
+groups:
+  # ==========================================================================
+  # CRITICAL SERVICE AVAILABILITY ALERTS
+  # ==========================================================================
+  - name: service_availability_critical
+    interval: 15s
+    rules:
+      # Critical services down
+      - alert: CriticalServiceDown
+        expr: up{criticality="critical"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          category: availability
+          team: platform
+        annotations:
+          summary: "🚨 CRITICAL: Service {{ $labels.job }} is DOWN"
+          description: |
+            Critical service {{ $labels.job }} (instance {{ $labels.instance }}) has been down for more than 1 minute.
+            
+            Impact: This affects core banking operations and customer transactions.
+            Action: Investigate immediately and check service logs.
+            
+            Service: {{ $labels.job }}
+            Instance: {{ $labels.instance }}
+            Tier: {{ $labels.tier }}
+          runbook_url: "https://runbooks.example.com/service-down"
+
+      # High criticality services down
+      - alert: HighPriorityServiceDown
+        expr: up{criticality="high"} == 0
+        for: 2m
+        labels:
+          severity: high
+          category: availability
+          team: platform
+        annotations:
+          summary: "⚠️ HIGH: Service {{ $labels.job }} is DOWN"
+          description: |
+            High priority service {{ $labels.job }} has been down for more than 2 minutes.
+            
+            Service: {{ $labels.job }}
+            Instance: {{ $labels.instance }}
+            Tier: {{ $labels.tier }}
+          runbook_url: "https://runbooks.example.com/service-down"
+
+      # API Gateway down (single point of failure)
+      - alert: APIGatewayDown
+        expr: up{job="api-gateway"} == 0
+        for: 30s
+        labels:
+          severity: critical
+          category: availability
+          team: platform
+          page: "true"
+        annotations:
+          summary: "🚨🚨 CRITICAL: API Gateway is DOWN - ALL SERVICES UNREACHABLE"
+          description: |
+            The API Gateway is down. This means ALL external client requests are failing.
+            
+            Impact: Complete service outage for all customers.
+            Action: IMMEDIATE response required. Check gateway logs and restart if necessary.
+          runbook_url: "https://runbooks.example.com/api-gateway-down"
+
+  # ==========================================================================
+  # HTTP ERROR RATE ALERTS
+  # ==========================================================================
+  - name: http_error_alerts
+    interval: 30s
+    rules:
+      # Critical 5xx error rate
+      - alert: HighHttp5xxErrorRate
+        expr: job:http_errors:percentage > 5
+        for: 2m
+        labels:
+          severity: critical
+          category: errors
+          team: backend
+        annotations:
+          summary: "🚨 High 5xx error rate on {{ $labels.job }}"
+          description: |
+            Service {{ $labels.job }} is experiencing high 5xx error rate.
+            
+            Current error rate: {{ printf "%.2f" $value }}%
+            Threshold: 5%
+            Duration: 2+ minutes
+            
+            Action: Check application logs and error traces immediately.
+          runbook_url: "https://runbooks.example.com/high-error-rate"
+
+      # Sustained elevated 4xx rate (possible attack or client issues)
+      - alert: ElevatedHttp4xxErrorRate
+        expr: |
+          (sum(rate(http_server_requests_seconds_count{status=~"4.."}[5m])) by (job)
+          /
+          sum(rate(http_server_requests_seconds_count[5m])) by (job)) * 100 > 15
+        for: 5m
+        labels:
+          severity: warning
+          category: errors
+          team: backend
+        annotations:
+          summary: "⚠️ Elevated 4xx error rate on {{ $labels.job }}"
+          description: |
+            Service {{ $labels.job }} has elevated 4xx error rate: {{ printf "%.2f" $value }}%
+            
+            Possible causes:
+            - Invalid client requests
+            - Authentication/authorization issues
+            - Possible security attack (brute force, scanning)
+            
+            Action: Review request patterns and access logs.
+          runbook_url: "https://runbooks.example.com/elevated-4xx"
+
+      # Authentication failures spike
+      - alert: HighAuthenticationFailureRate
+        expr: |
+          sum(rate(http_server_requests_seconds_count{job=~"login-service|registration-service",status="401"}[2m])) by (job) > 5
+        for: 2m
+        labels:
+          severity: high
+          category: security
+          team: security
+        annotations:
+          summary: "🔐 High authentication failure rate on {{ $labels.job }}"
+          description: |
+            Unusually high authentication failure rate detected on {{ $labels.job }}.
+            
+            Current rate: {{ printf "%.2f" $value }} failures/second
+            
+            Possible security concern:
+            - Brute force attack
+            - Credential stuffing
+            - Application bug
+            
+            Action: Review authentication logs and consider rate limiting.
+          runbook_url: "https://runbooks.example.com/auth-failures"
+
+  # ==========================================================================
+  # LATENCY ALERTS
+  # ==========================================================================
+  - name: latency_alerts
+    interval: 30s
+    rules:
+      # Critical latency degradation
+      - alert: CriticalLatencyDegradation
+        expr: job:http_request_duration:p95 > 2.0
+        for: 3m
+        labels:
+          severity: critical
+          category: performance
+          team: backend
+        annotations:
+          summary: "🐌 Critical latency on {{ $labels.job }}"
+          description: |
+            Service {{ $labels.job }} P95 latency is critically high.
+            
+            Current P95: {{ printf "%.2f" $value }}s
+            Threshold: 2.0s
+            Duration: 3+ minutes
+            
+            Impact: Poor user experience, potential timeouts.
+            Action: Investigate slow queries, downstream dependencies, and resource constraints.
+          runbook_url: "https://runbooks.example.com/high-latency"
+
+      # Warning latency increase
+      - alert: ElevatedLatency
+        expr: job:http_request_duration:p95 > 1.0
+        for: 5m
+        labels:
+          severity: warning
+          category: performance
+          team: backend
+        annotations:
+          summary: "⚠️ Elevated latency on {{ $labels.job }}"
+          description: |
+            Service {{ $labels.job }} P95 latency is elevated: {{ printf "%.2f" $value }}s
+            
+            Threshold: 1.0s
+            Duration: 5+ minutes
+            
+            Action: Monitor closely. Investigate if it continues to rise.
+          runbook_url: "https://runbooks.example.com/elevated-latency"
+
+      # P99 latency extreme outliers
+      - alert: ExtremeLatencyOutliers
+        expr: job:http_request_duration:p99 > 5.0
+        for: 2m
+        labels:
+          severity: high
+          category: performance
+          team: backend
+        annotations:
+          summary: "🚨 Extreme latency outliers on {{ $labels.job }}"
+          description: |
+            Service {{ $labels.job }} has extreme P99 latency: {{ printf "%.2f" $value }}s
+            
+            Some requests are experiencing severe delays.
+            Action: Check for slow queries, lock contention, or resource exhaustion.
+          runbook_url: "https://runbooks.example.com/extreme-latency"
+
+  # ==========================================================================
+  # JVM AND RESOURCE ALERTS
+  # ==========================================================================
+  - name: jvm_resource_alerts
+    interval: 30s
+    rules:
+      # Critical heap usage
+      - alert: CriticalJvmHeapUsage
+        expr: job:jvm_heap:utilization_percentage > 90
+        for: 2m
+        labels:
+          severity: critical
+          category: resources
+          team: platform
+        annotations:
+          summary: "🚨 Critical JVM Heap usage on {{ $labels.job }}"
+          description: |
+            Service {{ $labels.job }} JVM Heap usage is critically high: {{ printf "%.1f" $value }}%
+            
+            Risk: Imminent OutOfMemoryError and service crash.
+            Action: 
+            1. Check for memory leaks
+            2. Review heap dump if available
+            3. Consider increasing heap size or restarting service
+            
+            Instance: {{ $labels.instance }}
+          runbook_url: "https://runbooks.example.com/high-heap-usage"
+
+      # High heap usage warning
+      - alert: HighJvmHeapUsage
+        expr: job:jvm_heap:utilization_percentage > 85
+        for: 5m
+        labels:
+          severity: warning
+          category: resources
+          team: platform
+        annotations:
+          summary: "⚠️ High JVM Heap usage on {{ $labels.job }}"
+          description: |
+            Service {{ $labels.job }} JVM Heap usage: {{ printf "%.1f" $value }}%
+            
+            Action: Monitor closely. Investigate if it continues to increase.
+            Instance: {{ $labels.instance }}
+          runbook_url: "https://runbooks.example.com/high-heap-usage"
+
+      # Excessive GC activity
+      - alert: ExcessiveGarbageCollection
+        expr: rate(jvm_gc_pause_seconds_sum[5m]) > 0.10
+        for: 3m
+        labels:
+          severity: warning
+          category: resources
+          team: platform
+        annotations:
+          summary: "♻️ Excessive GC activity on {{ $labels.job }}"
+          description: |
+            Service {{ $labels.job }} is spending {{ printf "%.1f" $value }}0% of time in GC.
+            
+            Threshold: 10% GC time
+            
+            Impact: Reduced throughput and increased latency.
+            Action: Investigate heap sizing and memory allocation patterns.
+          runbook_url: "https://runbooks.example.com/excessive-gc"
+
+      # High CPU usage
+      - alert: HighCpuUsage
+        expr: job:cpu:utilization_percentage > 80
+        for: 5m
+        labels:
+          severity: warning
+          category: resources
+          team: platform
+        annotations:
+          summary: "⚡ High CPU usage on {{ $labels.job }}"
+          description: |
+            Service {{ $labels.job }} CPU usage: {{ printf "%.1f" $value }}%
+            
+            Duration: 5+ minutes
+            Action: Investigate CPU-intensive operations or consider scaling.
+            Instance: {{ $labels.instance }}
+          runbook_url: "https://runbooks.example.com/high-cpu"
+
+      # Thread pool exhaustion
+      - alert: HighThreadCount
+        expr: jvm_threads_live_threads > 500
+        for: 3m
+        labels:
+          severity: high
+          category: resources
+          team: platform
+        annotations:
+          summary: "🧵 High thread count on {{ $labels.job }}"
+          description: |
+            Service {{ $labels.job }} has {{ $value }} live threads.
+            
+            Possible causes:
+            - Thread leaks
+            - Excessive blocking operations
+            - Thread pool misconfiguration
+            
+            Action: Review thread dumps and thread pool configurations.
+          runbook_url: "https://runbooks.example.com/high-thread-count"
+
+  # ==========================================================================
+  # DATABASE CONNECTION POOL ALERTS
+  # ==========================================================================
+  - name: database_connection_alerts
+    interval: 30s
+    rules:
+      # Connection pool saturation
+      - alert: DatabaseConnectionPoolSaturation
+        expr: alert:hikaricp:saturation
+        for: 1m
+        labels:
+          severity: critical
+          category: database
+          team: backend
+        annotations:
+          summary: "🚨 Database connection pool saturation on {{ $labels.job }}"
+          description: |
+            Service {{ $labels.job }} connection pool is critically full.
+            
+            Pool: {{ $labels.pool }}
+            Active: {{ $value }}% of maximum
+            
+            Impact: New requests will be blocked waiting for connections.
+            Action: 
+            1. Check for connection leaks
+            2. Review long-running queries
+            3. Consider increasing pool size
+          runbook_url: "https://runbooks.example.com/connection-pool-saturation"
+
+      # High connection wait time
+      - alert: HighDatabaseConnectionWaitTime
+        expr: hikaricp_connections_pending > 5
+        for: 1m
+        labels:
+          severity: high
+          category: database
+          team: backend
+        annotations:
+          summary: "⏳ High database connection wait on {{ $labels.job }}"
+          description: |
+            Service {{ $labels.job }} has {{ $value }} requests waiting for database connections.
+            
+            Pool: {{ $labels.pool }}
+            
+            Impact: Requests are being delayed due to connection unavailability.
+            Action: Investigate connection pool health and query performance.
+          runbook_url: "https://runbooks.example.com/connection-wait"
+
+      # Slow connection acquisition
+      - alert: SlowDatabaseConnectionAcquisition
+        expr: job:hikaricp_connection_acquire:p95 > 1.0
+        for: 3m
+        labels:
+          severity: warning
+          category: database
+          team: backend
+        annotations:
+          summary: "🐌 Slow database connection acquisition on {{ $labels.job }}"
+          description: |
+            Service {{ $labels.job }} P95 connection acquisition time: {{ printf "%.2f" $value }}s
+            
+            Pool: {{ $labels.pool }}
+            Threshold: 1.0s
+            
+            Action: Check connection pool configuration and database health.
+          runbook_url: "https://runbooks.example.com/slow-connection-acquire"
+
+  # ==========================================================================
+  # BUSINESS TRANSACTION ALERTS
+  # ==========================================================================
+  - name: business_transaction_alerts
+    interval: 30s
+    rules:
+      # High transaction failure rate
+      - alert: HighTransactionFailureRate
+        expr: |
+          (sum(rate(banking_transactions_total{status="FAILED"}[5m])) by (type)
+          /
+          sum(rate(banking_transactions_total[5m])) by (type)) * 100 > 5
+        for: 3m
+        labels:
+          severity: critical
+          category: business
+          team: banking
+        annotations:
+          summary: "💳 High transaction failure rate for {{ $labels.type }}"
+          description: |
+            {{ $labels.type }} transactions are failing at {{ printf "%.2f" $value }}%.
+            
+            Threshold: 5%
+            Duration: 3+ minutes
+            
+            Impact: Customer transactions are being rejected.
+            Action: Investigate transaction service logs and downstream dependencies.
+          runbook_url: "https://runbooks.example.com/transaction-failures"
+
+      # Transaction processing stopped
+      - alert: TransactionProcessingStopped
+        expr: |
+          sum(rate(banking_transactions_total[5m])) by (type) == 0
+          and
+          sum(rate(banking_transactions_total[30m] offset 30m)) by (type) > 0
+        for: 5m
+        labels:
+          severity: critical
+          category: business
+          team: banking
+          page: "true"
+        annotations:
+          summary: "🚨 Transaction processing STOPPED for {{ $labels.type }}"
+          description: |
+            No {{ $labels.type }} transactions have been processed in the last 5 minutes,
+            but transactions were occurring in the previous 30 minutes.
+            
+            Impact: Critical business function is not operating.
+            Action: IMMEDIATE investigation required. Check transaction service health.
+          runbook_url: "https://runbooks.example.com/transaction-stopped"
+
+      # Forex conversion failures
+      - alert: HighForexConversionFailureRate
+        expr: forex:conversions:success_percentage < 95
+        for: 3m
+        labels:
+          severity: high
+          category: business
+          team: forex
+        annotations:
+          summary: "💱 High forex conversion failure rate for {{ $labels.currency_pair }}"
+          description: |
+            Forex conversions for {{ $labels.currency_pair }} success rate: {{ printf "%.2f" $value }}%
+            
+            Threshold: 95%
+            Duration: 3+ minutes
+            
+            Impact: Cross-currency transactions may be failing.
+            Action: Check forex service and exchange rate data sources.
+          runbook_url: "https://runbooks.example.com/forex-failures"
+
+  # ==========================================================================
+  # RECONCILIATION ALERTS
+  # ==========================================================================
+  - name: reconciliation_alerts
+    interval: 60s
+    rules:
+      # High reconciliation exception rate
+      - alert: HighReconciliationExceptionRate
+        expr: recon:match_percentage < 95
+        for: 5m
+        labels:
+          severity: high
+          category: operations
+          team: operations
+        annotations:
+          summary: "⚠️ High reconciliation exception rate"
+          description: |
+            Reconciliation match rate has dropped to {{ printf "%.2f" $value }}%.
+            
+            Threshold: 95%
+            
+            Impact: Data integrity concerns between transaction and ledger systems.
+            Action: Review reconciliation service logs and investigate mismatches.
+          runbook_url: "https://runbooks.example.com/recon-exceptions"
+
+      # Critical severity reconciliation breaks
+      - alert: CriticalReconciliationBreaks
+        expr: sum(rate(reconciliation_exceptions_total{severity="HIGH"}[5m])) > 0.1
+        for: 2m
+        labels:
+          severity: high
+          category: operations
+          team: operations
+        annotations:
+          summary: "🚨 Critical reconciliation breaks detected"
+          description: |
+            High-severity reconciliation exceptions are occurring at {{ printf "%.2f" $value }} per second.
+            
+            Exception types need investigation.
+            Action: Review reconciliation dashboard and investigate breaks immediately.
+          runbook_url: "https://runbooks.example.com/critical-recon-breaks"
+
+  # ==========================================================================
+  # SLI/SLO VIOLATION ALERTS
+  # ==========================================================================
+  - name: sli_slo_alerts
+    interval: 60s
+    rules:
+      # Availability SLO violation (99.9% target)
+      - alert: AvailabilitySLOViolation
+        expr: sli:availability:success_rate < 0.999
+        for: 5m
+        labels:
+          severity: critical
+          category: slo
+          team: sre
+        annotations:
+          summary: "📉 Availability SLO violation for {{ $labels.job }}"
+          description: |
+            Service {{ $labels.job }} availability: {{ printf "%.4f" $value }}%
+            
+            SLO Target: 99.9%
+            Current: {{ printf "%.4f" $value }}%
+            
+            Impact: Service availability is below contractual SLO.
+            Action: Investigate and restore service health immediately.
+          runbook_url: "https://runbooks.example.com/slo-violation"
+
+      # Latency SLO violation (95% of requests under 1s)
+      - alert: LatencySLOViolation
+        expr: sli:latency:under_1s_percentage < 95
+        for: 5m
+        labels:
+          severity: high
+          category: slo
+          team: sre
+        annotations:
+          summary: "⏱️ Latency SLO violation for {{ $labels.job }}"
+          description: |
+            Service {{ $labels.job }} latency SLO violation.
+            
+            Target: 95% of requests under 1 second
+            Current: {{ printf "%.2f" $value }}%
+            
+            Impact: User experience degradation.
+            Action: Investigate performance issues and optimize response times.
+          runbook_url: "https://runbooks.example.com/latency-slo-violation"
+
+  # ==========================================================================
+  # SECURITY ALERTS
+  # ==========================================================================
+  - name: security_alerts
+    interval: 30s
+    rules:
+      # Unusual traffic spike
+      - alert: UnusualTrafficSpike
+        expr: |
+          (sum(rate(http_server_requests_seconds_count[2m])) by (job)
+          /
+          sum(rate(http_server_requests_seconds_count[30m] offset 1h)) by (job)) > 3
+        for: 3m
+        labels:
+          severity: warning
+          category: security
+          team: security
+        annotations:
+          summary: "📈 Unusual traffic spike on {{ $labels.job }}"
+          description: |
+            Service {{ $labels.job }} is experiencing a traffic spike {{ printf "%.1f" $value }}x normal levels.
+            
+            Possible causes:
+            - Legitimate traffic increase
+            - DDoS attack
+            - Misconfigured client retry logic
+            
+            Action: Monitor closely and investigate traffic patterns.
+          runbook_url: "https://runbooks.example.com/traffic-spike"

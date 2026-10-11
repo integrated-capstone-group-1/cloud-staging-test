@@ -33,14 +33,36 @@ public class TransactionEventProducer {
         publish(event.accountId(), event);
     }
 
+    public void publishRaw(String key, Object event) {
+        publish(key, event);
+    }
+
+    public void publishLifecycle(com.capstone.common.event.TransactionLifecycleEvent event) {
+        publishToTopic(KafkaTopics.TXN_LIFECYCLE, event.txnId(), event);
+    }
+
+    public void publishToTopic(String topic, String key, Object event) {
+        kafkaTemplate.send(topic, key, event)
+                .whenComplete((result, ex) -> {
+                    if (ex != null) {
+                        log.error("Failed to publish payload={} to topic={}", event, topic, ex, "\n");
+                    } else {
+                        log.info("Published payload={} to topic={} partition={}\n",
+                                event, topic, result.getRecordMetadata().partition());
+                    }
+                });
+    }
+
     private void publish(String key, Object event) {
         kafkaTemplate.send(KafkaTopics.TRANSACTION_EVENTS, key, event)
                 .whenComplete((result, ex) -> {
                     if (ex != null) {
-                        log.error("Failed to publish event {} to {}", event, KafkaTopics.TRANSACTION_EVENTS, ex);
+                        log.error("Failed to publish payload={} to topic={}",
+                                event, KafkaTopics.TRANSACTION_EVENTS, ex, "\n");
                     } else {
-                        log.debug("Published event {} to partition {}",
-                                event, result.getRecordMetadata().partition());
+                        log.info("Published payload={} to topic={} partition={}\n",
+                                event, KafkaTopics.TRANSACTION_EVENTS,
+                                result.getRecordMetadata().partition());
                     }
                 });
     }

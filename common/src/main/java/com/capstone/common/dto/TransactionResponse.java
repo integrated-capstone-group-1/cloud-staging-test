@@ -17,7 +17,41 @@ public record TransactionResponse(
         BigDecimal amount,
         BigDecimal balanceAfter,
         String txnStatus,
-        Instant timestamp
+        Instant timestamp,
+        String targetCurrency,
+        BigDecimal exchangeRate,
+        BigDecimal targetAmount,
+        BigDecimal feeAmount,
+        Boolean isCrossCurrency,
+        String currencyCode
 ) {
+    public TransactionResponse(
+            UUID txnId,
+            String accountId,
+            String txnType,
+            BigDecimal amount,
+            BigDecimal balanceAfter,
+            String txnStatus,
+            Instant timestamp,
+            String targetCurrency,
+            BigDecimal exchangeRate,
+            BigDecimal targetAmount,
+            BigDecimal feeAmount,
+            Boolean isCrossCurrency) {
+        this(txnId, accountId, txnType, amount, balanceAfter, txnStatus, timestamp,
+                targetCurrency, exchangeRate, targetAmount, feeAmount, isCrossCurrency, null);
+    }
+
+    public TransactionResponse(
+            UUID txnId,
+            String accountId,
+            String txnType,
+            BigDecimal amount,
+            BigDecimal balanceAfter,
+            String txnStatus,
+            Instant timestamp) {
+        this(txnId, accountId, txnType, amount, balanceAfter, txnStatus, timestamp,
+            null, null, null, null, false, null);
+    }
 }
 

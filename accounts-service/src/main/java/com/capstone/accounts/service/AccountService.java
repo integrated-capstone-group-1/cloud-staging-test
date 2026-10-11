@@ -1,25 +1,44 @@
 package com.capstone.accounts.service;
 
-import com.capstone.accounts.entity.AccountMaster;
-import com.capstone.accounts.repository.AccountRepository;
-import com.capstone.accounts.repository.CustomerRepository;
-import com.capstone.common.constants.KafkaTopics;
-import com.capstone.common.dto.AccountDTO;
-import com.capstone.common.dto.CreateAccountRequest;
-import com.capstone.common.exception.ResourceNotFoundException;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.UUID;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigDecimal;
-import java.time.LocalDateTime;
-import java.util.List;
-import java.util.UUID;
+import com.capstone.accounts.entity.AccountMaster;
+import com.capstone.accounts.entity.OutboxMaster;
+import com.capstone.accounts.repository.AccountRepository;
+import com.capstone.accounts.repository.CustomerRepository;
+import com.capstone.accounts.repository.OutboxMasterRepository;
+import com.capstone.common.constants.KafkaTopics;
+import com.capstone.common.dto.AccountDTO;
+import com.capstone.common.dto.AccountLockResponse;
+import com.capstone.common.dto.AccountMutationResponse;
+import com.capstone.common.dto.CreateAccountRequest;
+import com.capstone.common.dto.LockAccountRequest;
+import com.capstone.common.dto.UnlockAccountRequest;
+import com.capstone.common.event.BalanceUpdatedEvent;
+import com.capstone.common.event.CrossCurrencySettlementCompletedEvent;
+import com.capstone.common.event.ForexConversionCompletedEvent;
+import com.capstone.common.exception.AccountFrozenException;
+import com.capstone.common.exception.InsufficientBalanceException;
+import com.capstone.common.exception.ResourceNotFoundException;
+import com.capstone.common.security.SecurityUtils;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+
+import lombok.extern.slf4j.Slf4j;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class AccountService {
 
@@ -27,6 +46,24 @@ public class AccountService {
     private final CustomerRepository customerRepository;
     private final BalanceCacheService balanceCacheService;
     private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final OutboxMasterRepository outboxMasterRepository;
+    private final ObjectMapper objectMapper;
+
+    @Autowired
+    public AccountService(
+            @Qualifier("accountRepository") AccountRepository accountRepository,
+            CustomerRepository customerRepository,
+            BalanceCacheService balanceCacheService,
+            KafkaTemplate<String, Object> kafkaTemplate,
+            OutboxMasterRepository outboxMasterRepository,
+            ObjectMapper objectMapper) {
+        this.accountRepository = accountRepository;
+        this.customerRepository = customerRepository;
+        this.balanceCacheService = balanceCacheService;
+        this.kafkaTemplate = kafkaTemplate;
+        this.outboxMasterRepository = Objects.requireNonNull(outboxMasterRepository, "outboxMasterRepository must not be null");
+        this.objectMapper = objectMapper != null ? objectMapper : new ObjectMapper().findAndRegisterModules();
+    }
 
     /**
      * Creates an account for an existing customer.
@@ -36,6 +73,8 @@ public class AccountService {
      */
     @Transactional
     public AccountDTO createAccount(CreateAccountRequest request) {
+
+        SecurityUtils.checkCustomerAccess(request.customerId(), "create account");
 
         /*
          * Validate the parent customer before inserting into
@@ -50,15 +89,28 @@ public class AccountService {
         }
 
         String accountId = UUID.randomUUID().toString();
+        String accountNumber = "1000" + String.format("%08d", Math.abs(accountId.hashCode() % 100000000));
         LocalDateTime now = LocalDateTime.now();
+
+        // New accounts receive an initial 500.0000 PHP welcome bonus from the bank if primary PHP savings.
+        // Other currencies/types are initialized to 0.00.
+        boolean isPrimarySavings = "SAVINGS".equalsIgnoreCase(request.accountType()) && "PHP".equalsIgnoreCase(request.currencyCode());
+        BigDecimal initialBalance = isPrimarySavings
+                ? new BigDecimal("500.0000")
+                : BigDecimal.ZERO;
 
         AccountMaster account = AccountMaster.builder()
                 .accountId(accountId)
+                .accountNumber(accountNumber)
                 .customerId(request.customerId())
                 .accountType(request.accountType())
                 .currencyCode(request.currencyCode())
                 .accountStatus("ACTIVE")
-                .balanceAmount(BigDecimal.ZERO)
+                .balanceAmount(initialBalance)
+                .isPrimary(isPrimarySavings ? "Y" : "N")
+                .normalBalance("CR")
+                .customerLocked("N")
+                .adminFrozen("N")
                 .createdAt(now)
                 .createdBy("SYSTEM")
                 .build();
@@ -72,33 +124,131 @@ public class AccountService {
 
         AccountDTO dto = toDto(saved);
 
-        kafkaTemplate.send(
-                KafkaTopics.ACCOUNT_CREATED,
-                saved.getAccountId(),
-                dto
-        ).whenComplete((result, ex) -> {
-            if (ex != null) {
-                log.warn(
-                        "Failed to publish account.created for accountId={}",
-                        saved.getAccountId(),
-                        ex
-                );
-            }
-        });
+        // Save to transactional outbox in Oracle (atomic with account creation)
+        saveOutbox("ACCOUNT", saved.getAccountId(), KafkaTopics.ACCOUNT_CREATED, dto);
+
+        // Immediate direct publish attempt for fast notification
+        if (kafkaTemplate != null) {
+            kafkaTemplate.send(
+                    KafkaTopics.ACCOUNT_CREATED,
+                    saved.getAccountId(),
+                    dto
+            ).whenComplete((result, ex) -> {
+                if (ex != null) {
+                    log.warn("Direct publish account.created failed for accountId={}; outbox relay will guarantee delivery",
+                            saved.getAccountId());
+                }
+            });
+        }
 
         return dto;
     }
 
     @Transactional(readOnly = true)
     public AccountDTO getAccount(String accountId) {
-        return toDto(findOrThrow(accountId));
+        AccountMaster account = findOrThrow(accountId);
+        SecurityUtils.checkCustomerAccess(account.getCustomerId(), "view account " + accountId);
+        return toDto(account);
     }
 
     @Transactional(readOnly = true)
     public List<AccountDTO> getAccountsForCustomer(String customerId) {
+        SecurityUtils.checkCustomerAccess(customerId, "view accounts");
         return accountRepository.findByCustomerId(customerId).stream()
                 .map(this::toDto)
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public AccountDTO getPocket(String customerId, String currency) {
+        SecurityUtils.checkCustomerAccess(customerId, "view pocket " + currency);
+        AccountMaster pocket = accountRepository.findByCustomerIdAndCurrencyCode(customerId, currency)
+                .orElseThrow(() -> new ResourceNotFoundException("Pocket for currency " + currency + " not found for customer " + customerId));
+        return toDto(pocket);
+    }
+
+    @Transactional
+    public AccountLockResponse lockAccount(String accountId, LockAccountRequest request) {
+        AccountMaster account = findOrThrow(accountId);
+        SecurityUtils.checkCustomerAccess(account.getCustomerId(), "lock account " + accountId);
+
+        account.setAccountStatus("FROZEN");
+        account.setCustomerLocked("Y");
+        account.setUpdatedAt(LocalDateTime.now());
+        account.setUpdatedBy("CUSTOMER");
+        AccountMaster saved = accountRepository.save(account);
+
+        balanceCacheService.evict(accountId);
+        log.info("Account {} locked by customer. Reason: {}", accountId, request != null ? request.reason() : "N/A");
+        return new AccountLockResponse(saved.getAccountId(), saved.getAccountStatus());
+    }
+
+    @Transactional
+    public AccountLockResponse unlockAccount(String accountId, UnlockAccountRequest request) {
+        AccountMaster account = findOrThrow(accountId);
+        SecurityUtils.checkCustomerAccess(account.getCustomerId(), "unlock account " + accountId);
+
+        // Strict Admin Freeze Precedence: if frozen by ADMIN, customer cannot self-unlock
+        if ("Y".equalsIgnoreCase(account.getAdminFrozen()) || ("FROZEN".equalsIgnoreCase(account.getAccountStatus()) && "ADMIN".equalsIgnoreCase(account.getUpdatedBy()))) {
+            throw new AccountFrozenException("ACCOUNT_FROZEN: Account is administratively frozen and cannot be unlocked by customer");
+        }
+
+        if (request == null || request.otpCode() == null || request.otpCode().isBlank()) {
+            throw new IllegalArgumentException("Valid OTP code is required to unlock account");
+        }
+
+        account.setAccountStatus("ACTIVE");
+        account.setCustomerLocked("N");
+        account.setUpdatedAt(LocalDateTime.now());
+        account.setUpdatedBy("CUSTOMER");
+        AccountMaster saved = accountRepository.save(account);
+
+        balanceCacheService.evict(accountId);
+        log.info("Account {} unlocked by customer with OTP", accountId);
+        return new AccountLockResponse(saved.getAccountId(), saved.getAccountStatus());
+    }
+
+    @Transactional(readOnly = true)
+    public List<AccountDTO> getAllAccounts() {
+        return accountRepository.findAll().stream()
+                .map(this::toDto)
+                .toList();
+    }
+
+    /**
+     * Admin governance: freeze, unfreeze, or close an account.
+     *
+     * Allowed statuses: ACTIVE | FROZEN | CLOSED
+     * Any in-flight mutation on a non-ACTIVE account will be rejected
+     * by TransactionService (assertActive guard) before touching balances.
+     */
+    @Transactional
+    public AccountDTO updateAccountStatus(String accountId, String newStatus) {
+        if (!java.util.Set.of("ACTIVE", "FROZEN", "CLOSED").contains(newStatus)) {
+            throw new IllegalArgumentException(
+                    "Invalid account status '" + newStatus
+                            + "'. Allowed: ACTIVE, FROZEN, CLOSED");
+        }
+
+        AccountMaster account = findOrThrow(accountId);
+        LocalDateTime now = LocalDateTime.now();
+
+        account.setAccountStatus(newStatus);
+        if ("FROZEN".equalsIgnoreCase(newStatus)) {
+            account.setAdminFrozen("Y");
+        } else if ("ACTIVE".equalsIgnoreCase(newStatus)) {
+            account.setAdminFrozen("N");
+        }
+        account.setUpdatedAt(now);
+        account.setUpdatedBy("ADMIN");
+
+        AccountMaster saved = accountRepository.save(account);
+
+        // Evict cached balance so stale data is not served after a status change.
+        balanceCacheService.evict(accountId);
+
+        log.info("Admin updated account {} status to {}", accountId, newStatus);
+        return toDto(saved);
     }
 
     /**
@@ -106,24 +256,237 @@ public class AccountService {
      * Redis hit returns immediately.
      * Cache miss falls through to Oracle and refreshes Redis.
      */
+    @CircuitBreaker(name = "balanceService", fallbackMethod = "getBalanceFallback")
     @Transactional(readOnly = true)
     public BigDecimal getBalance(String accountId) {
+        AccountMaster acct = findOrThrow(accountId);
+        SecurityUtils.checkCustomerAccess(acct.getCustomerId(), "view balance of account " + accountId);
         return balanceCacheService.get(accountId)
                 .orElseGet(() -> {
-                    AccountMaster acct = findOrThrow(accountId);
-
                     balanceCacheService.put(
                             accountId,
                             acct.getBalanceAmount()
                     );
-
                     return acct.getBalanceAmount();
                 });
+    }
+
+    public BigDecimal getBalanceFallback(String accountId, Throwable t) {
+        log.warn("Circuit breaker fallback triggered for getBalance on account: {}", accountId, t);
+        return balanceCacheService.get(accountId)
+                .orElseThrow(() -> new IllegalStateException("Balance cache unavailable during CBS latency spike for account " + accountId, t));
+    }
+
+    /**
+     * Atomically debits the account under a PESSIMISTIC_WRITE row lock (SELECT ... FOR UPDATE).
+     * Serializes concurrent debits and ensures balance never drops below zero.
+     * Updates Redis balance cache immediately.
+     */
+    @Transactional
+    public AccountMutationResponse debit(String accountId, BigDecimal amount, String txnId, String txnType) {
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Debit amount must be greater than zero");
+        }
+
+        AccountMaster account = accountRepository.findByIdForUpdate(accountId)
+                .orElseThrow(() -> new ResourceNotFoundException("Account " + accountId + " not found"));
+
+        SecurityUtils.checkCustomerAccess(account.getCustomerId(), "debit account " + accountId);
+
+        assertActive(account);
+
+        BigDecimal before = account.getBalanceAmount();
+        BigDecimal after = before.subtract(amount);
+
+        if (after.compareTo(BigDecimal.ZERO) < 0) {
+            throw new InsufficientBalanceException("Account " + accountId + " has insufficient balance");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        account.setBalanceAmount(after);
+        account.setUpdatedAt(now);
+        account.setUpdatedBy("SYSTEM");
+
+        accountRepository.save(account);
+
+        balanceCacheService.put(accountId, after);
+
+        // Atomic outbox write
+        saveOutbox("ACCOUNT", accountId, KafkaTopics.BALANCE_UPDATED,
+                new BalanceUpdatedEvent(
+                        accountId,
+                        before,
+                        after,
+                        amount.negate(),
+                        account.getCurrencyCode(),
+                        txnId,
+                        txnType,
+                        Instant.now()
+                ));
+
+        return new AccountMutationResponse(
+                accountId,
+                before,
+                after,
+                amount.negate(),
+                account.getCurrencyCode()
+        );
+    }
+
+    /**
+     * Atomically credits the account under a PESSIMISTIC_WRITE row lock (SELECT ... FOR UPDATE).
+     * Updates Redis balance cache immediately.
+     */
+    @Transactional
+    public AccountMutationResponse credit(String accountId, BigDecimal amount, String txnId, String txnType) {
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new IllegalArgumentException("Credit amount must be greater than zero");
+        }
+
+        AccountMaster account = accountRepository.findByIdForUpdate(accountId)
+                .orElseThrow(() -> new ResourceNotFoundException("Account " + accountId + " not found"));
+
+        assertActive(account);
+
+        BigDecimal before = account.getBalanceAmount();
+        BigDecimal after = before.add(amount);
+
+        LocalDateTime now = LocalDateTime.now();
+        account.setBalanceAmount(after);
+        account.setUpdatedAt(now);
+        account.setUpdatedBy("SYSTEM");
+
+        accountRepository.save(account);
+
+        balanceCacheService.put(accountId, after);
+
+        // Atomic outbox write
+        saveOutbox("ACCOUNT", accountId, KafkaTopics.BALANCE_UPDATED,
+                new BalanceUpdatedEvent(
+                        accountId,
+                        before,
+                        after,
+                        amount,
+                        account.getCurrencyCode(),
+                        txnId,
+                        txnType,
+                        Instant.now()
+                ));
+
+        return new AccountMutationResponse(
+                accountId,
+                before,
+                after,
+                amount,
+                account.getCurrencyCode()
+        );
+    }
+
+    /**
+     * Settles a cross-currency transfer leg under pessimistic locks (FC-47).
+     * Debits the source account and credits destination account with converted amount,
+     * then queues a CrossCurrencySettlementCompletedEvent into OUTBOX_MASTER.
+     */
+    @Transactional
+    public CrossCurrencySettlementCompletedEvent settleCrossCurrency(ForexConversionCompletedEvent event) {
+        log.info("Settling cross-currency transfer txnId={} src={} dest={} srcAmt={} destAmt={}",
+                event.txnId(), event.sourceAccountId(), event.destAccountId(), event.sourceAmount(), event.destAmount());
+
+        AccountMaster source = accountRepository.findByIdForUpdate(event.sourceAccountId())
+                .orElseThrow(() -> new ResourceNotFoundException("Source account " + event.sourceAccountId() + " not found"));
+
+        Optional<OutboxMaster> existingSettlement = outboxMasterRepository
+                .findFirstBySourceServiceAndAggregateIdAndEventTypeOrderByCreatedAtAsc(
+                        "accounts-service", event.txnId().toString(), KafkaTopics.CROSSCURRENCY_SETTLEMENT_COMPLETED);
+        if (existingSettlement.isPresent()) {
+            log.info("Ignoring duplicate Forex settlement delivery txnId={}", event.txnId());
+            try {
+                return objectMapper.readValue(
+                        existingSettlement.get().getPayload(), CrossCurrencySettlementCompletedEvent.class);
+            } catch (Exception ex) {
+                throw new IllegalStateException(
+                        "Unable to read existing settlement result for txnId=" + event.txnId(), ex);
+            }
+        }
+
+        assertActive(source);
+
+        if (source.getBalanceAmount().compareTo(event.sourceAmount()) < 0) {
+            log.error("Insufficient balance for cross-currency txnId={} on account={}", event.txnId(), source.getAccountId());
+            throw new InsufficientBalanceException("Account " + source.getAccountId() + " has insufficient balance");
+        }
+
+        AccountMaster dest = accountRepository.findByIdForUpdate(event.destAccountId())
+                .orElseThrow(() -> new ResourceNotFoundException("Destination account " + event.destAccountId() + " not found"));
+        assertActive(dest);
+
+        BigDecimal srcBefore = source.getBalanceAmount();
+        BigDecimal srcAfter = srcBefore.subtract(event.sourceAmount());
+        source.setBalanceAmount(srcAfter);
+        source.setUpdatedAt(LocalDateTime.now());
+        source.setUpdatedBy("SYSTEM");
+        accountRepository.save(source);
+        balanceCacheService.put(source.getAccountId(), srcAfter);
+
+        BigDecimal destBefore = dest.getBalanceAmount();
+        BigDecimal destAfter = destBefore.add(event.destAmount());
+        dest.setBalanceAmount(destAfter);
+        dest.setUpdatedAt(LocalDateTime.now());
+        dest.setUpdatedBy("SYSTEM");
+        accountRepository.save(dest);
+        balanceCacheService.put(dest.getAccountId(), destAfter);
+
+        CrossCurrencySettlementCompletedEvent settlementEvent = new CrossCurrencySettlementCompletedEvent(
+                event.txnId(),
+                source.getAccountId(),
+                dest.getAccountId(),
+                event.sourceCurrency(),
+                event.destCurrency(),
+                event.sourceAmount(),
+                event.fxRate(),
+                event.destAmount(),
+                srcAfter,
+                destAfter,
+                Instant.now()
+        );
+
+        saveOutbox("CROSS_CURRENCY", event.txnId().toString(), KafkaTopics.CROSSCURRENCY_SETTLEMENT_COMPLETED, settlementEvent);
+
+        log.info("Successfully settled cross-currency transfer txnId={} srcAfter={} destAfter={}",
+                event.txnId(), srcAfter, destAfter);
+
+        return settlementEvent;
     }
 
     // ----------------------------------------------------------------
     // Helpers
     // ----------------------------------------------------------------
+
+    private void saveOutbox(String aggregateType, String aggregateId, String eventType, Object payload) {
+        try {
+            String json = payload instanceof String s ? s : objectMapper.writeValueAsString(payload);
+            OutboxMaster outbox = OutboxMaster.builder()
+                    .outboxId(UUID.randomUUID().toString())
+                    .sourceService("accounts-service")
+                    .aggregateType(aggregateType)
+                    .aggregateId(aggregateId)
+                    .eventType(eventType)
+                    .payload(json)
+                    .status("PENDING")
+                    .createdAt(LocalDateTime.now())
+                    .build();
+            outboxMasterRepository.save(outbox);
+        } catch (Exception e) {
+            log.error("Failed to save to OutboxMaster: aggregateId={}, eventType={}", aggregateId, eventType, e);
+            throw new RuntimeException("Failed to persist outbox event for aggregate " + aggregateId, e);
+        }
+    }
+
+    private void assertActive(AccountMaster account) {
+        if (!"ACTIVE".equalsIgnoreCase(account.getAccountStatus())) {
+            throw new IllegalStateException("Account " + account.getAccountId() + " is " + account.getAccountStatus());
+        }
+    }
 
     private AccountMaster findOrThrow(String accountId) {
         return accountRepository.findById(accountId)
@@ -137,12 +500,18 @@ public class AccountService {
     private AccountDTO toDto(AccountMaster account) {
         return new AccountDTO(
                 account.getAccountId(),
+                account.getAccountNumber(),
                 account.getCustomerId(),
                 account.getAccountType(),
                 account.getAccountStatus(),
                 account.getBalanceAmount(),
                 account.getCurrencyCode(),
-                account.getCreatedAt()
+                account.getCreatedAt(),
+                account.getHeldAmount(),
+                account.getIsPrimary(),
+                account.getNormalBalance() != null ? account.getNormalBalance() : "CR",
+                account.getCustomerLocked() != null ? account.getCustomerLocked() : "N",
+                account.getAdminFrozen() != null ? account.getAdminFrozen() : "N"
         );
     }
 }

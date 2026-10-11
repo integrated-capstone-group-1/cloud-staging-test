@@ -1,0 +1,242 @@
+{
+    "Results":  [
+                    {
+                        "SuiteId":  "S1",
+                        "TestId":  "API-PK-01.1",
+                        "Description":  "Register new customer via Gateway",
+                        "ExpectedStatus":  200,
+                        "ActualStatus":  200,
+                        "Passed":  true,
+                        "DurationMs":  5213,
+                        "Details":  ""
+                    },
+                    {
+                        "SuiteId":  "S1",
+                        "TestId":  "API-PK-01.2",
+                        "Description":  "Reject duplicate customer registration",
+                        "ExpectedStatus":  409,
+                        "ActualStatus":  409,
+                        "Passed":  true,
+                        "DurationMs":  169,
+                        "Details":  ""
+                    },
+                    {
+                        "SuiteId":  "S1",
+                        "TestId":  "API-PK-01.3",
+                        "Description":  "Authenticate Customer (Juan) \u0026 retrieve JWT",
+                        "ExpectedStatus":  200,
+                        "ActualStatus":  200,
+                        "Passed":  true,
+                        "DurationMs":  771,
+                        "Details":  ""
+                    },
+                    {
+                        "SuiteId":  "S1",
+                        "TestId":  "API-PK-01.4",
+                        "Description":  "Authenticate Admin \u0026 retrieve JWT with ROLE_ADMIN",
+                        "ExpectedStatus":  200,
+                        "ActualStatus":  200,
+                        "Passed":  true,
+                        "DurationMs":  501,
+                        "Details":  ""
+                    },
+                    {
+                        "SuiteId":  "S1",
+                        "TestId":  "API-PK-01.5",
+                        "Description":  "Logout customer \u0026 write blacklist to Redis",
+                        "ExpectedStatus":  200,
+                        "ActualStatus":  200,
+                        "Passed":  true,
+                        "DurationMs":  646,
+                        "Details":  ""
+                    },
+                    {
+                        "SuiteId":  "S1",
+                        "TestId":  "API-PK-01.6",
+                        "Description":  "Block revoked/blacklisted token at Gateway edge (TOKEN_REVOKED)",
+                        "ExpectedStatus":  401,
+                        "ActualStatus":  401,
+                        "Passed":  true,
+                        "DurationMs":  38,
+                        "Details":  ""
+                    },
+                    {
+                        "SuiteId":  "S2",
+                        "TestId":  "API-PK-02.1",
+                        "Description":  "Query multi-currency pockets via Orchestrator BFF",
+                        "ExpectedStatus":  200,
+                        "ActualStatus":  200,
+                        "Passed":  true,
+                        "DurationMs":  894,
+                        "Details":  ""
+                    },
+                    {
+                        "SuiteId":  "S2",
+                        "TestId":  "API-PK-02.2",
+                        "Description":  "Query customer accounts by customer UUID",
+                        "ExpectedStatus":  200,
+                        "ActualStatus":  200,
+                        "Passed":  true,
+                        "DurationMs":  65,
+                        "Details":  ""
+                    },
+                    {
+                        "SuiteId":  "S2",
+                        "TestId":  "API-PK-02.3",
+                        "Description":  "Enforce account ownership boundary (cross-user probe)",
+                        "ExpectedStatus":  403,
+                        "ActualStatus":  403,
+                        "Passed":  true,
+                        "DurationMs":  59,
+                        "Details":  ""
+                    },
+                    {
+                        "SuiteId":  "S3",
+                        "TestId":  "API-PK-03.1",
+                        "Description":  "Submit payment transfer through Gateway -\u003e Orchestrator -\u003e Hub",
+                        "ExpectedStatus":  200,
+                        "ActualStatus":  200,
+                        "Passed":  true,
+                        "DurationMs":  446,
+                        "Details":  ""
+                    },
+                    {
+                        "SuiteId":  "S3",
+                        "TestId":  "API-PK-03.2",
+                        "Description":  "Idempotency replay: Return cached transaction without re-execution",
+                        "ExpectedStatus":  200,
+                        "ActualStatus":  200,
+                        "Passed":  true,
+                        "DurationMs":  163,
+                        "Details":  ""
+                    },
+                    {
+                        "SuiteId":  "S3",
+                        "TestId":  "API-PK-03.3",
+                        "Description":  "Idempotency conflict probe (same key, altered payload)",
+                        "ExpectedStatus":  409,
+                        "ActualStatus":  409,
+                        "Passed":  true,
+                        "DurationMs":  92,
+                        "Details":  ""
+                    },
+                    {
+                        "SuiteId":  "S3",
+                        "TestId":  "API-PK-03.4",
+                        "Description":  "Reject payment debiting unauthorized source account",
+                        "ExpectedStatus":  403,
+                        "ActualStatus":  403,
+                        "Passed":  true,
+                        "DurationMs":  35,
+                        "Details":  ""
+                    },
+                    {
+                        "SuiteId":  "S4",
+                        "TestId":  "API-PK-04.1",
+                        "Description":  "Retrieve transaction status \u0026 stage by UUID",
+                        "ExpectedStatus":  200,
+                        "ActualStatus":  200,
+                        "Passed":  true,
+                        "DurationMs":  59,
+                        "Details":  ""
+                    },
+                    {
+                        "SuiteId":  "S4",
+                        "TestId":  "API-PK-04.2",
+                        "Description":  "Retrieve customer chronological transaction history",
+                        "ExpectedStatus":  200,
+                        "ActualStatus":  200,
+                        "Passed":  true,
+                        "DurationMs":  247,
+                        "Details":  ""
+                    },
+                    {
+                        "SuiteId":  "S5",
+                        "TestId":  "API-PK-05.1",
+                        "Description":  "Retrieve live forex currency exchange rates",
+                        "ExpectedStatus":  200,
+                        "ActualStatus":  200,
+                        "Passed":  true,
+                        "DurationMs":  111,
+                        "Details":  ""
+                    },
+                    {
+                        "SuiteId":  "S6",
+                        "TestId":  "API-PK-06.1",
+                        "Description":  "Query core accounts registry with ROLE_ADMIN credentials",
+                        "ExpectedStatus":  200,
+                        "ActualStatus":  200,
+                        "Passed":  true,
+                        "DurationMs":  66,
+                        "Details":  ""
+                    },
+                    {
+                        "SuiteId":  "S6",
+                        "TestId":  "API-PK-06.2",
+                        "Description":  "Block non-admin customer from /api/admin/** endpoints",
+                        "ExpectedStatus":  403,
+                        "ActualStatus":  403,
+                        "Passed":  true,
+                        "DurationMs":  152,
+                        "Details":  ""
+                    },
+                    {
+                        "SuiteId":  "S6",
+                        "TestId":  "API-PK-06.3",
+                        "Description":  "Trigger dual-datasource reconciliation engine audit",
+                        "ExpectedStatus":  200,
+                        "ActualStatus":  401,
+                        "Passed":  false,
+                        "DurationMs":  2813,
+                        "Details":  ""
+                    },
+                    {
+                        "SuiteId":  "S6",
+                        "TestId":  "API-PK-06.4",
+                        "Description":  "Block customer token from admin customer directory",
+                        "ExpectedStatus":  403,
+                        "ActualStatus":  403,
+                        "Passed":  true,
+                        "DurationMs":  1283,
+                        "Details":  ""
+                    },
+                    {
+                        "SuiteId":  "S7",
+                        "TestId":  "API-PK-07.1",
+                        "Description":  "Reject unauthenticated request on protected route",
+                        "ExpectedStatus":  401,
+                        "ActualStatus":  401,
+                        "Passed":  true,
+                        "DurationMs":  22,
+                        "Details":  ""
+                    },
+                    {
+                        "SuiteId":  "S7",
+                        "TestId":  "API-PK-07.2",
+                        "Description":  "Validation error probe: Reject negative payment amount",
+                        "ExpectedStatus":  400,
+                        "ActualStatus":  400,
+                        "Passed":  true,
+                        "DurationMs":  96,
+                        "Details":  ""
+                    },
+                    {
+                        "SuiteId":  "S7",
+                        "TestId":  "API-PK-07.3",
+                        "Description":  "Resource not found probe: Query non-existent payment ID",
+                        "ExpectedStatus":  404,
+                        "ActualStatus":  404,
+                        "Passed":  true,
+                        "DurationMs":  68,
+                        "Details":  ""
+                    }
+                ],
+    "FailedTests":  null,
+    "ExecutionTimestamp":  "2026-10-09 16:01:35 +08:00",
+    "GatewayBaseUrl":  "http://localhost:8080",
+    "PassedTests":  22,
+    "MonorepoBranch":  "test/pk-api-test",
+    "TotalTests":  23,
+    "TotalDurationSec":  14.77,
+    "PassRate":  95.65
+}

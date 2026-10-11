@@ -10,5 +10,8 @@ public interface AppUserRepository extends JpaRepository<AppUser, String> {
 
     // username == email (set at registration) — primary auth lookup
     Optional<AppUser> findByUsername(String username);
+
+    // customerId matches JWT subject and tokenBlacklistService registration
+    Optional<AppUser> findByCustomerId(String customerId);
 }
 

@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{fragments/layout :: head('Customer 360 Unified Profile')}"></head>
+<body>
+<div th:replace="~{fragments/layout :: demoBar}"></div>
+<nav th:replace="~{fragments/layout :: navbar}"></nav>
+<div th:replace="~{fragments/layout :: alerts}"></div>
+
+<main class="container py-4">
+    <!-- Breadcrumb & Top Bar -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-2">
+        <div>
+            <div class="small text-muted mb-1">
+                <a href="/admin/customers" class="text-decoration-none"><i class="bi bi-arrow-left me-1"></i>Back to Customer Directory</a>
+            </div>
+            <h3 class="fw-bold mb-0">
+                <i class="bi bi-person-bounding-box text-primary me-2"></i>Customer 360 · <span th:text="${c360.fullName}">Customer Name</span>
+                <span th:if="${c360.locked}" class="badge bg-danger ms-2" style="font-size: 0.75rem;"><i class="bi bi-lock-fill me-1"></i>LOCKED</span>
+                <span th:unless="${c360.locked}" class="badge bg-success ms-2" style="font-size: 0.75rem;"><i class="bi bi-check-circle me-1"></i>ACTIVE</span>
+            </h3>
+            <div class="d-flex align-items-center gap-2 mt-1">
+                <span class="badge bg-secondary-subtle text-dark border font-monospace px-2 py-1">Customer CIF: <strong th:text="${c360.cifNumber}">CIF-8000-0001</strong></span>
+                <span class="text-muted small font-monospace">UUID: <span class="text-secondary" th:text="${c360.shortCustomerId}">7bd20304...</span></span>
+                <button type="button" class="btn btn-sm btn-link p-0 text-muted copy-btn"
+                        th:data-copy="${c360.customerId}" title="Copy Full Customer UUID">
+                    <i class="bi bi-clipboard"></i>
+                </button>
+            </div>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            <!-- Customer Lock / Unlock Toggle -->
+            <button th:if="${!c360.locked}" type="button" class="btn btn-outline-danger btn-sm"
+                    data-bs-toggle="modal" data-bs-target="#customerLockModal">
+                <i class="bi bi-lock me-1"></i> Lock Customer Login
+            </button>
+            <button th:if="${c360.locked}" type="button" class="btn btn-success btn-sm"
+                    data-bs-toggle="modal" data-bs-target="#customerUnlockModal">
+                <i class="bi bi-unlock me-1"></i> Unlock Customer Login
+            </button>
+            <a href="/admin/monitoring" class="btn btn-outline-primary btn-sm">
+                <i class="bi bi-activity me-1"></i> Live Monitoring
+            </a>
+        </div>
+    </div>
+
+    <!-- KPI Summary Row -->
+    <div class="row g-3 mb-4">
+        <!-- Total Consolidated Liquidity -->
+        <div class="col-md-3">
+            <div class="card p-3 border-start border-primary border-4 h-100">
+                <div class="text-muted small text-uppercase fw-semibold">Consolidated Available</div>
+                <div class="h4 fw-bold mt-2 text-primary" th:text="${c360.formattedTotalAvailableInPhp}">₱0.00</div>
+                <div class="small text-muted mt-auto" th:text="${c360.pockets.size() + ' currency pockets'}">0 pockets</div>
+            </div>
+        </div>
+
+        <!-- Explainable Risk Score -->
+        <div class="col-md-3">
+            <div class="card p-3 border-start border-4 h-100"
+                 th:classappend="${c360.riskLevel == 'HIGH' ? 'border-danger' : (c360.riskLevel == 'MEDIUM' ? 'border-warning' : 'border-success')}">
+                <div class="text-muted small text-uppercase fw-semibold">Explainable Risk Score</div>
+                <div class="d-flex align-items-baseline gap-2 mt-2">
+                    <span class="h4 fw-bold mb-0" th:text="${c360.riskScore + ' / 100'}">15 / 100</span>
+                    <span class="badge"
+                          th:classappend="${c360.riskLevel == 'HIGH' ? 'bg-danger' : (c360.riskLevel == 'MEDIUM' ? 'bg-warning text-dark' : 'bg-success')}"
+                          th:text="${c360.riskLevel}">LOW</span>
+                </div>
+                <div class="small text-muted mt-auto">Automated Risk Engine Score</div>
+            </div>
+        </div>
+
+        <!-- Identity Status -->
+        <div class="col-md-3">
+            <div class="card p-3 border-start border-info border-4 h-100">
+                <div class="text-muted small text-uppercase fw-semibold">Identity Status</div>
+                <div class="mt-2">
+                    <span class="badge"
+                          th:classappend="${c360.kycStatus.name() == 'VERIFIED' ? 'bg-success' : (c360.kycStatus.name() == 'REJECTED' ? 'bg-danger' : 'bg-warning text-dark')}"
+                          th:text="${c360.kycStatus.displayName}">VERIFIED</span>
+                </div>
+                <div class="small text-muted mt-auto" th:text="${c360.idType + ': ' + c360.idNumber}">PASSPORT</div>
+            </div>
+        </div>
+
+        <!-- Member Duration -->
+        <div class="col-md-3">
+            <div class="card p-3 border-start border-secondary border-4 h-100">
+                <div class="text-muted small text-uppercase fw-semibold">Member History</div>
+                <div class="fw-semibold mt-2" th:text="${#temporals.format(c360.memberSince, 'MMM dd, yyyy')}">Jan 01, 2026</div>
+                <div class="small text-muted mt-auto">Active Customer</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabbed Profile Sections -->
+    <div class="row g-4 mb-4">
+        <!-- Left Column: Identity & Multi-Currency Pockets -->
+        <div class="col-lg-7">
+            <!-- Profile Details Card -->
+            <div class="card p-3 mb-4">
+                <h5 class="fw-bold mb-3"><i class="bi bi-person-vcard text-primary me-2"></i>Customer Profile &amp; Contact Details</h5>
+                <div class="row g-2 small">
+                    <div class="col-sm-6">
+                        <span class="text-muted">Full Legal Name:</span>
+                        <div class="fw-semibold" th:text="${c360.fullName}">Juan Dela Cruz</div>
+                    </div>
+                    <div class="col-sm-6">
+                        <span class="text-muted">Email Address:</span>
+                        <div class="fw-semibold" th:text="${c360.email}">email@example.com</div>
+                    </div>
+                    <div class="col-sm-6">
+                        <span class="text-muted">Contact Phone:</span>
+                        <div class="fw-semibold" th:text="${c360.contactNo}">+63 917 000 0000</div>
+                    </div>
+                    <div class="col-sm-6">
+                        <span class="text-muted">Date of Birth:</span>
+                        <div class="fw-semibold" th:text="${#temporals.format(c360.birthDate, 'MMM dd, yyyy')}">Oct 29, 1988</div>
+                    </div>
+                    <div class="col-sm-6">
+                        <span class="text-muted">Identity Document:</span>
+                        <div class="fw-semibold font-monospace" th:text="${c360.idType + ' - ' + c360.idNumber}">PASSPORT - P1234567A</div>
+                    </div>
+                    <div class="col-sm-6">
+                        <span class="text-muted">Registered Address:</span>
+                        <div class="fw-semibold text-truncate" th:text="${c360.address}">Metro Manila, Philippines</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Currency Pockets Card with 3-Tier Balances (Ledger / Held / Available) & Freeze Controls -->
+            <div class="card p-3 mb-4">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="fw-bold mb-0"><i class="bi bi-wallet2 text-primary me-2"></i>Currency Pockets &amp; Balances</h5>
+                    <span class="small text-muted">Ledger · Held · Available</span>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover align-middle">
+                        <thead>
+                            <tr class="small text-muted">
+                                <th>Pocket ID</th>
+                                <th>Currency</th>
+                                <th>Status</th>
+                                <th class="text-end">Ledger Balance</th>
+                                <th class="text-end">Held Amount</th>
+                                <th class="text-end">Available</th>
+                                <th>Admin Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr th:each="pocket : ${c360.pockets}">
+                                <td>
+                                    <div class="d-flex flex-column">
+                                        <div class="d-flex align-items-center gap-1">
+                                            <a th:href="@{/accounts/{id}(id=${pocket.accountId})}" class="font-monospace fw-bold text-decoration-none" th:text="${pocket.formattedAccountNumber}">1000-0000-0001</a>
+                                            <span class="badge bg-primary-subtle text-primary border py-0 px-1" style="font-size: 0.72rem;" th:text="${pocket.pocketName}">PHP Pocket</span>
+                                        </div>
+                                        <div class="d-flex align-items-center gap-1 mt-1 text-muted" style="font-size: 0.75rem;">
+                                            <span class="text-secondary font-monospace" th:text="${pocket.shortAccountId}" th:title="${pocket.accountId}">3722f77f...</span>
+                                            <button type="button" class="btn btn-sm btn-link p-0 text-muted copy-btn" th:data-copy="${pocket.accountId}" title="Copy UUID">
+                                                <i class="bi bi-clipboard" style="font-size: 0.72rem;"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    <span class="currency-badge" th:text="${pocket.currencyCode}">PHP</span>
+                                </td>
+                                <td>
+                                    <span th:class="${'badge ' + (pocket.accountStatus.name() == 'ACTIVE' ? 'bg-success' : 'bg-danger')}"
+                                          th:text="${pocket.accountStatus.displayName}">ACTIVE</span>
+                                </td>
+                                <td class="text-end font-monospace small" th:text="${pocket.formattedLedger}">₱150,000.00</td>
+                                <td class="text-end font-monospace small text-danger" th:text="${pocket.formattedHeld}">₱0.00</td>
+                                <td class="text-end font-monospace small fw-bold text-success" th:text="${pocket.formattedAvailable}">₱150,000.00</td>
+                                <td>
+                                    <!-- Admin Freeze / Unfreeze Button triggering confirmation modal -->
+                                    <button th:if="${pocket.accountStatus.name() == 'ACTIVE'}" type="button"
+                                            class="btn btn-sm btn-outline-danger py-0 px-2"
+                                            th:data-account-id="${pocket.accountId}"
+                                            th:data-account-number="${pocket.formattedAccountNumber}"
+                                            th:data-pocket="${pocket.pocketName}"
+                                            th:data-currency="${pocket.currencyCode}"
+                                            th:data-balance="${pocket.formattedLedger}"
+                                            onclick="openPocketFreezeModal(this.getAttribute('data-account-id'), this.getAttribute('data-account-number'), this.getAttribute('data-pocket'), this.getAttribute('data-currency'), this.getAttribute('data-balance'))"
+                                            title="Freeze account pocket">
+                                        <i class="bi bi-pause-circle"></i> Freeze
+                                    </button>
+                                    <button th:if="${pocket.accountStatus.name() == 'FROZEN'}" type="button"
+                                            class="btn btn-sm btn-outline-success py-0 px-2"
+                                            th:data-account-id="${pocket.accountId}"
+                                            th:data-account-number="${pocket.formattedAccountNumber}"
+                                            th:data-pocket="${pocket.pocketName}"
+                                            th:data-currency="${pocket.currencyCode}"
+                                            th:data-balance="${pocket.formattedLedger}"
+                                            onclick="openPocketUnfreezeModal(this.getAttribute('data-account-id'), this.getAttribute('data-account-number'), this.getAttribute('data-pocket'), this.getAttribute('data-currency'), this.getAttribute('data-balance'))"
+                                            title="Unfreeze account pocket">
+                                        <i class="bi bi-play-circle"></i> Unfreeze
+                                    </button>
+                                </td>
+                            </tr>
+                            <tr th:if="${c360.pockets == null || c360.pockets.isEmpty()}">
+                                <td colspan="7" class="text-center text-muted small py-3">
+                                    <i class="bi bi-wallet2 text-secondary me-1"></i>No provisioned currency pockets found for this profile.
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Virtual Cards & Standing Instructions -->
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <div class="card p-3 h-100">
+                        <h6 class="fw-bold mb-2"><i class="bi bi-credit-card text-primary me-2"></i>Virtual Cards</h6>
+                        <div th:each="card : ${c360.cards}" class="border rounded p-2 mb-2 small bg-light">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <span class="font-monospace fw-bold" th:text="${card.maskedPan}">4111-XXXX-XXXX-9912</span>
+                                <span class="badge bg-success" th:text="${card.status}">ACTIVE</span>
+                            </div>
+                            <div class="d-flex justify-content-between text-muted">
+                                <span th:text="${card.cardType}">VIRTUAL_VISA</span>
+                                <span th:text="${'Daily Limit: ' + card.formattedDailyLimit}">₱50,000</span>
+                            </div>
+                        </div>
+                        <div th:if="${c360.cards == null || c360.cards.isEmpty()}" class="text-muted small text-center py-3">
+                            <i class="bi bi-credit-card text-secondary me-1"></i>No virtual cards issued.
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card p-3 h-100">
+                        <h6 class="fw-bold mb-2"><i class="bi bi-calendar-check text-primary me-2"></i>Standing Instructions</h6>
+                        <div th:each="si : ${c360.standingInstructions}" class="border rounded p-2 mb-2 small bg-light">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <span class="fw-bold" th:text="${si.beneficiaryName}">Meralco Utilities</span>
+                                <span class="badge bg-info text-dark" th:text="${si.frequency}">MONTHLY</span>
+                            </div>
+                            <div class="d-flex justify-content-between text-muted">
+                                <span th:text="${si.formattedAmount}">₱4,500.00</span>
+                                <span th:text="${'Next: ' + #temporals.format(si.nextRunDate, 'MMM dd')}">Nov 15</span>
+                            </div>
+                        </div>
+                        <div th:if="${c360.standingInstructions == null || c360.standingInstructions.isEmpty()}" class="text-muted small text-center py-3">
+                            <i class="bi bi-calendar-check text-secondary me-1"></i>No active standing instructions.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column: Explainable Risk, Spending Patterns, Screening History -->
+        <div class="col-lg-5">
+            <!-- Explainable Risk Engine Factors Card -->
+            <div class="card p-3 mb-4">
+                <h5 class="fw-bold mb-3"><i class="bi bi-shield-check text-warning me-2"></i>Risk Engine Evaluation</h5>
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between small mb-1">
+                        <span>Risk Score Severity</span>
+                        <strong th:text="${c360.riskScore + ' / 100'}">15 / 100</strong>
+                    </div>
+                    <div class="progress" style="height: 10px;">
+                        <div class="progress-bar"
+                             th:classappend="${c360.riskLevel == 'HIGH' ? 'bg-danger' : (c360.riskLevel == 'MEDIUM' ? 'bg-warning' : 'bg-success')}"
+                             role="progressbar"
+                             th:style="${'width: ' + c360.riskScore + '%;'}"
+                             th:aria-valuenow="${c360.riskScore}" aria-valuemin="0" aria-valuemax="100"></div>
+                    </div>
+                </div>
+
+                <h6 class="small fw-bold text-muted text-uppercase mb-2">Explainable Risk Factors</h6>
+                <ul class="list-group list-group-flush small mb-3">
+                    <li th:each="factor : ${c360.riskFactors}" class="list-group-item px-0 py-1 d-flex align-items-start gap-2">
+                        <i class="bi bi-check2-circle text-primary mt-1"></i>
+                        <span th:text="${factor}">Factor text</span>
+                    </li>
+                </ul>
+
+                <h6 class="small fw-bold text-muted text-uppercase mb-2">Screening &amp; PEP History</h6>
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered small mb-0">
+                        <thead>
+                            <tr class="bg-light">
+                                <th>Date</th>
+                                <th>Rule</th>
+                                <th>Result</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr th:each="sh : ${c360.screeningHistory}">
+                                <td th:text="${#temporals.format(sh.date, 'MM/dd')}">10/01</td>
+                                <td th:text="${sh.ruleChecked}">Sanctions check</td>
+                                <td>
+                                    <span class="badge"
+                                          th:classappend="${sh.result == 'CLEAN' || sh.result == 'PASSED' ? 'bg-success' : 'bg-danger'}"
+                                          th:text="${sh.result}">CLEAN</span>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Spending Pattern Card -->
+            <div class="card p-3 mb-4">
+                <h5 class="fw-bold mb-3"><i class="bi bi-pie-chart text-primary me-2"></i>Spending Pattern Breakdown</h5>
+                <div th:each="entry : ${c360.spendingPattern}" class="mb-2">
+                    <div class="d-flex justify-content-between small mb-1">
+                        <span th:text="${entry.key}">Category</span>
+                        <strong th:text="${entry.value + '%'}">40%</strong>
+                    </div>
+                    <div class="progress" style="height: 6px;">
+                        <div class="progress-bar bg-primary" role="progressbar"
+                             th:style="${'width: ' + entry.value + '%;'}"></div>
+                    </div>
+                </div>
+                <div th:if="${c360.spendingPattern == null || c360.spendingPattern.empty}" class="text-center text-muted small py-3">
+                    <i class="bi bi-info-circle me-1"></i>No transaction history available to derive spending breakdown.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent 20 Transactions Table -->
+    <div class="card p-3 mb-4">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="fw-bold mb-0"><i class="bi bi-clock-history text-primary me-2"></i>Recent Activity (Last 20 Transactions)</h5>
+            <span class="small text-muted">Aggregated across all customer pockets</span>
+        </div>
+        <div class="table-responsive">
+            <table class="table table-sm table-hover align-middle">
+                <thead>
+                    <tr class="small text-muted">
+                        <th>Txn ID</th>
+                        <th>Date &amp; Time (PHT)</th>
+                        <th>Account</th>
+                        <th>Type</th>
+                        <th class="text-end">Amount</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr th:each="txn : ${c360.recentTransactions}">
+                        <td class="font-monospace small fw-bold">
+                            <a th:href="@{/transactions/receipt/{id}(id=${txn.txnId})}" class="text-decoration-none" th:text="${txn.txnId}">TXN-1001</a>
+                        </td>
+                        <td class="small" th:text="${#temporals.format(txn.timestamp, 'yyyy-MM-dd HH:mm:ss')}">2026-10-06 14:00:00</td>
+                        <td class="font-monospace small">
+                            <a th:href="@{/accounts/{id}(id=${txn.accountId})}" class="text-decoration-none fw-semibold" th:text="${txn.formattedAccountNumber != null ? txn.formattedAccountNumber : txn.accountId}">1000-0000-0001</a>
+                        </td>
+                        <td>
+                            <span class="badge bg-secondary" th:text="${txn.txnType.displayName}">TRANSFER</span>
+                        </td>
+                        <td class="text-end font-monospace small fw-bold"
+                            th:classappend="${txn.direction != null && txn.direction.name() == 'CREDIT' ? 'text-success' : 'text-danger'}"
+                            th:text="${txn.formattedAmount}">₱1,250.00</td>
+                        <td>
+                            <span th:class="${'badge ' + (txn.auditState != null && txn.auditState.name() == 'COMMITTED' ? 'bg-success' : (txn.auditState != null && txn.auditState.name() == 'PENDING' ? 'bg-warning text-dark' : (txn.auditState != null && txn.auditState.name() == 'CANCELLED' ? 'bg-secondary' : 'bg-danger')))}"
+                                  th:text="${txn.auditState != null ? txn.auditState.displayName : 'COMMITTED'}">COMMITTED</span>
+                        </td>
+                    </tr>
+                    <tr th:if="${c360.recentTransactions == null || c360.recentTransactions.isEmpty()}">
+                        <td colspan="6" class="text-center text-muted py-3">No recent transactions recorded.</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Access Audit Banner -->
+    <div class="card p-2 bg-light border text-muted small d-flex flex-row justify-content-between align-items-center">
+        <div>
+            <i class="bi bi-shield-check me-1"></i> Audit Compliance: Read access audited by
+            <strong th:text="${c360.lastAuditedBy}">admin@ledgerbank.com</strong> at
+            <span th:text="${#temporals.format(c360.lastAuditedAt, 'yyyy-MM-dd HH:mm:ss')}">2026-10-06 10:00:00</span>.
+        </div>
+        <span class="badge bg-secondary">Immutable Audit Trail</span>
+    </div>
+</main>
+
+<!-- Pocket Freeze Confirmation Modal -->
+<div class="modal fade" id="pocketFreezeModal" tabindex="-1" aria-labelledby="pocketFreezeModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-warning shadow">
+            <form id="pocketFreezeForm" method="post" action="">
+                <input type="hidden" name="redirectCustId" th:value="${c360.customerId}"/>
+                <div class="modal-header bg-warning-subtle text-warning-emphasis">
+                    <h5 class="modal-title fw-bold" id="pocketFreezeModalLabel">
+                        <i class="bi bi-exclamation-triangle-fill text-warning me-2"></i>Confirm Pocket Freeze
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-warning d-flex align-items-start gap-2 mb-3">
+                        <i class="bi bi-shield-slash-fill fs-4 mt-1"></i>
+                        <div>
+                            <strong>Critical Action:</strong> Freezing this currency pocket will immediately suspend all outgoing transactions and card debits on this account.
+                        </div>
+                    </div>
+                    <div class="bg-light p-3 rounded mb-3 border">
+                        <div class="d-flex justify-content-between mb-1 small">
+                            <span class="text-muted">Target Account:</span>
+                            <span class="font-monospace fw-bold" id="pocketFreezeModalAcctDisplay"></span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-1 small align-items-center">
+                            <span class="text-muted">System UUID:</span>
+                            <div class="d-inline-flex align-items-center gap-1">
+                                <code class="font-monospace text-secondary small" id="pocketFreezeModalAcctId"></code>
+                                <button type="button" class="btn btn-sm btn-link p-0 text-muted copy-btn" id="pocketFreezeModalCopyBtn" data-copy="" title="Copy UUID">
+                                    <i class="bi bi-clipboard"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="d-flex justify-content-between mb-1 small">
+                            <span class="text-muted">Pocket Currency:</span>
+                            <span class="fw-semibold" id="pocketFreezeModalCurrency"></span>
+                        </div>
+                        <div class="d-flex justify-content-between small">
+                            <span class="text-muted">Ledger Balance:</span>
+                            <span class="font-monospace fw-bold" id="pocketFreezeModalBalance"></span>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="pocketFreezeStandardReason" class="form-label small fw-semibold">Reason Category</label>
+                        <select class="form-select form-select-sm" id="pocketFreezeStandardReason" onchange="document.getElementById('pocketFreezeReasonInput').value = this.value">
+                            <option value="Suspected Fraud / AML Risk Hold" selected>Suspected Fraud / AML Risk Hold</option>
+                            <option value="AMLA Regulatory / Court Hold Order">AMLA Regulatory / Court Hold Order</option>
+                            <option value="Customer Security / Stolen Device Report">Customer Security / Stolen Device Report</option>
+                            <option value="Administrative Risk &amp; Reconciliation Review">Administrative Risk &amp; Reconciliation Review</option>
+                        </select>
+                    </div>
+                    <div class="mb-2">
+                        <label for="pocketFreezeReasonInput" class="form-label small fw-semibold">Audit Justification</label>
+                        <textarea class="form-control form-control-sm" id="pocketFreezeReasonInput" name="reason" rows="2" required>Suspected Fraud / AML Risk Hold</textarea>
+                    </div>
+                </div>
+                <div class="modal-footer py-2 bg-light">
+                    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-sm btn-danger px-3">
+                        <i class="bi bi-snow me-1"></i> Confirm &amp; Freeze Pocket
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Pocket Unfreeze Confirmation Modal -->
+<div class="modal fade" id="pocketUnfreezeModal" tabindex="-1" aria-labelledby="pocketUnfreezeModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-success shadow">
+            <form id="pocketUnfreezeForm" method="post" action="">
+                <input type="hidden" name="redirectCustId" th:value="${c360.customerId}"/>
+                <div class="modal-header bg-success-subtle text-success-emphasis">
+                    <h5 class="modal-title fw-bold" id="pocketUnfreezeModalLabel">
+                        <i class="bi bi-check-circle-fill text-success me-2"></i>Confirm Pocket Unfreeze
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info d-flex align-items-start gap-2 mb-3">
+                        <i class="bi bi-info-circle-fill fs-4 mt-1"></i>
+                        <div>
+                            Unfreezing will restore full transaction capabilities for this currency pocket.
+                        </div>
+                    </div>
+                    <div class="bg-light p-3 rounded mb-2 border">
+                        <div class="d-flex justify-content-between mb-1 small">
+                            <span class="text-muted">Target Account:</span>
+                            <span class="font-monospace fw-bold" id="pocketUnfreezeModalAcctDisplay"></span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-1 small align-items-center">
+                            <span class="text-muted">System UUID:</span>
+                            <div class="d-inline-flex align-items-center gap-1">
+                                <code class="font-monospace text-secondary small" id="pocketUnfreezeModalAcctId"></code>
+                                <button type="button" class="btn btn-sm btn-link p-0 text-muted copy-btn" id="pocketUnfreezeModalCopyBtn" data-copy="" title="Copy UUID">
+                                    <i class="bi bi-clipboard"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="d-flex justify-content-between small">
+                            <span class="text-muted">Current Ledger Balance:</span>
+                            <span class="font-monospace fw-bold" id="pocketUnfreezeModalBalance"></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer py-2 bg-light">
+                    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-sm btn-success px-3">
+                        <i class="bi bi-sun me-1"></i> Confirm &amp; Unfreeze
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Customer Lock Confirmation Modal -->
+<div class="modal fade" id="customerLockModal" tabindex="-1" aria-labelledby="customerLockModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-danger shadow">
+            <form th:action="@{/admin/customers/{id}/lock(id=${c360.customerId})}" method="post">
+                <div class="modal-header bg-danger-subtle text-danger-emphasis">
+                    <h5 class="modal-title fw-bold" id="customerLockModalLabel">
+                        <i class="bi bi-lock-fill text-danger me-2"></i>Confirm Customer Account Lock
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-danger d-flex align-items-start gap-2 mb-3">
+                        <i class="bi bi-exclamation-octagon-fill fs-4 mt-1"></i>
+                        <div>
+                            Locking this customer will terminate all active web/mobile authentication sessions and block subsequent logins across all channels.
+                        </div>
+                    </div>
+                    <div class="bg-light p-3 rounded border small">
+                        <div class="mb-1"><strong>Customer Name:</strong> <span th:text="${c360.fullName}"></span></div>
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span><strong>Customer CIF:</strong> <span class="font-monospace fw-bold" th:text="${c360.cifNumber}"></span></span>
+                            <div class="d-inline-flex align-items-center gap-1">
+                                <span class="text-secondary font-monospace" th:text="${c360.shortCustomerId}"></span>
+                                <button type="button" class="btn btn-sm btn-link p-0 text-muted copy-btn" th:data-copy="${c360.customerId}" title="Copy UUID">
+                                    <i class="bi bi-clipboard" style="font-size: 0.72rem;"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div><strong>Email:</strong> <span th:text="${c360.email}"></span></div>
+                    </div>
+                </div>
+                <div class="modal-footer py-2 bg-light">
+                    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-sm btn-danger px-3">
+                        <i class="bi bi-lock me-1"></i> Confirm &amp; Lock Login
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Customer Unlock Confirmation Modal -->
+<div class="modal fade" id="customerUnlockModal" tabindex="-1" aria-labelledby="customerUnlockModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-success shadow">
+            <form th:action="@{/admin/customers/{id}/unlock(id=${c360.customerId})}" method="post">
+                <div class="modal-header bg-success-subtle text-success-emphasis">
+                    <h5 class="modal-title fw-bold" id="customerUnlockModalLabel">
+                        <i class="bi bi-unlock-fill text-success me-2"></i>Confirm Customer Unlock
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info d-flex align-items-start gap-2 mb-3">
+                        <i class="bi bi-info-circle-fill fs-4 mt-1"></i>
+                        <div>
+                            Unlocking this customer will permit authentication and self-service online banking access again.
+                        </div>
+                    </div>
+                    <div class="bg-light p-3 rounded border small">
+                        <div class="mb-1"><strong>Customer Name:</strong> <span th:text="${c360.fullName}"></span></div>
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <span><strong>Customer CIF:</strong> <span class="font-monospace fw-bold" th:text="${c360.cifNumber}"></span></span>
+                            <div class="d-inline-flex align-items-center gap-1">
+                                <span class="text-secondary font-monospace" th:text="${c360.shortCustomerId}"></span>
+                                <button type="button" class="btn btn-sm btn-link p-0 text-muted copy-btn" th:data-copy="${c360.customerId}" title="Copy UUID">
+                                    <i class="bi bi-clipboard" style="font-size: 0.72rem;"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer py-2 bg-light">
+                    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-sm btn-success px-3">
+                        <i class="bi bi-unlock me-1"></i> Confirm &amp; Unlock
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function openPocketFreezeModal(acctId, acctNum, pocket, currency, balance) {
+    document.getElementById("pocketFreezeForm").action = "/admin/accounts/" + encodeURIComponent(acctId) + "/freeze";
+    document.getElementById("pocketFreezeModalAcctDisplay").textContent = (acctNum || acctId) + (pocket ? " (" + pocket + ")" : "");
+    document.getElementById("pocketFreezeModalAcctId").textContent = acctId;
+    document.getElementById("pocketFreezeModalCopyBtn").setAttribute("data-copy", acctId);
+    document.getElementById("pocketFreezeModalCurrency").textContent = currency || "PHP";
+    document.getElementById("pocketFreezeModalBalance").textContent = balance || "₱0.00";
+    new bootstrap.Modal(document.getElementById("pocketFreezeModal")).show();
+}
+
+function openPocketUnfreezeModal(acctId, acctNum, pocket, currency, balance) {
+    document.getElementById("pocketUnfreezeForm").action = "/admin/accounts/" + encodeURIComponent(acctId) + "/unfreeze";
+    document.getElementById("pocketUnfreezeModalAcctDisplay").textContent = (acctNum || acctId) + (pocket ? " (" + pocket + ")" : "");
+    document.getElementById("pocketUnfreezeModalAcctId").textContent = acctId;
+    document.getElementById("pocketUnfreezeModalCopyBtn").setAttribute("data-copy", acctId);
+    document.getElementById("pocketUnfreezeModalBalance").textContent = balance || "₱0.00";
+    new bootstrap.Modal(document.getElementById("pocketUnfreezeModal")).show();
+}
+</script>
+
+<footer th:replace="~{fragments/layout :: footer}"></footer>
+</body>
+</html>

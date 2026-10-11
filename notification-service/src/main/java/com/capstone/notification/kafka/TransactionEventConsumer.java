@@ -1,7 +1,7 @@
-
 package com.capstone.notification.kafka;
 
 import com.capstone.common.constants.KafkaTopics;
+import com.capstone.common.event.PaymentCompletedEvent;
 import com.capstone.common.event.TransactionCompletedEvent;
 import com.capstone.common.event.TransactionCreatedEvent;
 import com.capstone.common.event.TransactionFailedEvent;
@@ -18,7 +18,7 @@ import java.util.Map;
 /**
  * Single listener on `transaction-events` that fans an incoming payload out
  * to the right handler based on its shape, since TransactionCreatedEvent,
- * TransactionCompletedEvent and TransactionFailedEvent are all published to
+ * TransactionCompletedEvent, TransactionFailedEvent and PaymentCompletedEvent are all published to
  * the same topic.
  */
 @Component
@@ -41,7 +41,13 @@ public class TransactionEventConsumer {
             return;
         }
         try {
-            if (asMap.containsKey("reason")) {
+            String eventType = asMap.containsKey("event_type") ? String.valueOf(asMap.get("event_type"))
+                    : (asMap.containsKey("eventType") ? String.valueOf(asMap.get("eventType")) : null);
+
+            if ("payment.completed".equalsIgnoreCase(eventType) && asMap.containsKey("payload")) {
+                PaymentCompletedEvent pce = objectMapper.convertValue(asMap.get("payload"), PaymentCompletedEvent.class);
+                notificationService.notifySettlementCompleted(pce);
+            } else if (asMap.containsKey("reason")) {
                 notificationService.notifyFailed(objectMapper.convertValue(asMap, TransactionFailedEvent.class));
             } else if (asMap.containsKey("balanceAfter")) {
                 notificationService.notifyCompleted(objectMapper.convertValue(asMap, TransactionCompletedEvent.class));
@@ -53,4 +59,3 @@ public class TransactionEventConsumer {
         }
     }
 }
-

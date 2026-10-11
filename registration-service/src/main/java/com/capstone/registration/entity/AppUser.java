@@ -41,9 +41,25 @@ public class AppUser {
     @Column(name = "password_hash", nullable = false, length = 255)
     private String passwordHash;
 
+    @Column(name = "pin_hash", length = 255)
+    private String pinHash;
+
+    @Column(name = "role", nullable = false, length = 20)
+    private String role;
+
     // DEFAULT 'ACTIVE' in DDL
     @Column(name = "active_status", nullable = false, length = 20)
     private String activeStatus;
+
+    @Column(name = "device_hash", length = 255)
+    private String deviceHash;
+
+    @Builder.Default
+    @Column(name = "failed_attempts")
+    private Integer failedAttempts = 0;
+
+    @Column(name = "locked_until")
+    private LocalDateTime lockedUntil;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

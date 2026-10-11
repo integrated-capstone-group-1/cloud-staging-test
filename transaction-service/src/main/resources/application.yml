@@ -1,6 +1,37 @@
 server:
   port: 8084
+  tomcat:
+    threads:
+      max: 200
+      min-spare: 20
 
+accounts:
+  service:
+    url: ${ACCOUNTS_SERVICE_URL:http://localhost:8083}
+
+risk:
+  service:
+    url: ${RISK_SERVICE_URL:http://localhost:8088}
+  evaluation:
+    timeout-ms: ${RISK_TIMEOUT_MS:2000}
+
+---
+spring:
+  config:
+    activate:
+      on-profile: docker
+
+accounts:
+  service:
+    url: ${ACCOUNTS_SERVICE_URL:http://accounts-service:8083}
+
+risk:
+  service:
+    url: ${RISK_SERVICE_URL:http://risk-engine:8088}
+  evaluation:
+    timeout-ms: ${RISK_TIMEOUT_MS:2000}
+
+---
 spring:
   application:
     name: transaction-service
@@ -40,12 +71,43 @@ spring:
 jwt:
   secret: ${JWT_SECRET:CapstoneBankingSuperSecretSigningKeyMustBe256BitsLong!}
 
+risk:
+  service:
+    url: ${RISK_SERVICE_URL:http://localhost:8088}
+  evaluation:
+    timeout-ms: ${RISK_EVALUATION_TIMEOUT_MS:500}
+
+# ── Actuator / Micrometer / Prometheus ─────────────────────────────────────────
 management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,prometheus,metrics
+  endpoint:
+    health:
+      show-details: always
+    prometheus:
+      enabled: true
 
+  # Add a common 'service' tag to every metric emitted by this service.
+  # This lets Grafana filter/group by service name alongside the Prometheus 'job' label.
+  metrics:
+    tags:
+      service: transaction-service
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+
+# ── Logging ────────────────────────────────────────────────────────────────────
+# Logback profile switching is handled in logback-spring.xml via <springProfile>.
+# These properties set the root level and suppress noisy framework packages
+# at the Spring property level (works in both profiles).
 logging:
   level:
+    root: INFO
     com.capstone: INFO
+    org.hibernate.SQL: WARN
+    com.zaxxer.hikari: WARN
+    org.apache.kafka: WARN
+    org.springframework.kafka: WARN
+    org.springframework.security: WARN

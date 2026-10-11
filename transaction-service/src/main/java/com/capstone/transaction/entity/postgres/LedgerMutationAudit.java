@@ -60,10 +60,18 @@ public class LedgerMutationAudit {
     @Column(name = "account_id", nullable = false, length = 36)
     private String accountId;
 
+    // 1-indexed leg sequence per txn_id; UNIQUE (txn_id, leg_no) per 03_postgres_deltas.sql
+    @Column(name = "leg_no", nullable = false)
+    @Builder.Default
+    private Integer legNo = 1;
+
     // NUMERIC(18,4) — matches NUMBER(18,4) on the Oracle side so the two
     // legs can never disagree on precision
     @Column(name = "mutation_amount", nullable = false, precision = 18, scale = 4)
     private BigDecimal mutationAmount;
+
+    @Column(name = "currency_code", nullable = false, columnDefinition = "CHAR(3)")
+    private String currencyCode;
 
     // DEBIT | CREDIT — determines which side of the double-entry this row is
     @Column(name = "mutation_type", nullable = false, length = 10)
@@ -77,7 +85,12 @@ public class LedgerMutationAudit {
     @Column(name = "audit_state", nullable = false, length = 20)
     private String auditState;
 
+    @Column(name = "business_date")
+    @Builder.Default
+    private java.time.LocalDate businessDate = java.time.LocalDate.now();
+
     @Column(name = "created_at", nullable = false, updatable = false)
-    private Instant createdAt;
+    @Builder.Default
+    private Instant createdAt = Instant.now();
 }
 

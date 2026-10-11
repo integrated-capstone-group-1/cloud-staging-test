@@ -11,12 +11,44 @@ import java.time.LocalDateTime;
  */
 public record AccountDTO(
         String accountId,
+        String accountNumber,
         String customerId,
         String accountType,
         String accountStatus,
         BigDecimal balanceAmount,
         String currencyCode,
-        LocalDateTime createdAt
+        LocalDateTime createdAt,
+        BigDecimal heldAmount,
+        String isPrimary,
+        String normalBalance,
+        String customerLocked,
+        String adminFrozen
 ) {
+    public AccountDTO(
+            String accountId,
+            String customerId,
+            String accountType,
+            String accountStatus,
+            BigDecimal balanceAmount,
+            String currencyCode,
+            LocalDateTime createdAt
+    ) {
+        this(accountId, null, customerId, accountType, accountStatus, balanceAmount, currencyCode, createdAt, BigDecimal.ZERO, "N", "CR", "N", "N");
+    }
+
+    public AccountDTO(
+            String accountId,
+            String customerId,
+            String accountType,
+            String accountStatus,
+            BigDecimal balanceAmount,
+            String currencyCode,
+            LocalDateTime createdAt,
+            BigDecimal heldAmount,
+            String isPrimary
+    ) {
+        this(accountId, null, customerId, accountType, accountStatus, balanceAmount, currencyCode, createdAt, heldAmount, isPrimary, "CR", "N", "N");
+    }
 }
+
 
