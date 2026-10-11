@@ -134,6 +134,9 @@ jobs:
         with:
           kubelogin-version: 'v0.2.12'
 
+      - name: Configure kubelogin to use Azure CLI
+        run: kubelogin convert-kubeconfig -l azurecli
+
       - name: Update Docker Hub pull secret
         run: |
           set -euo pipefail
