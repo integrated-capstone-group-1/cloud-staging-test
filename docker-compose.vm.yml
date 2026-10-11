@@ -1,0 +1,292 @@
+name: banking-demo
+
+networks:
+  banking-net:
+    driver: bridge
+
+volumes:
+  zookeeper-data:
+  zookeeper-log:
+  kafka-data:
+  redis-data:
+
+x-app-env: &app-env
+  SPRING_PROFILES_ACTIVE: docker,azure
+  JAVA_TOOL_OPTIONS: ${JAVA_TOOL_OPTIONS:--Xms32m -Xmx256m -XX:MaxMetaspaceSize=160m -XX:ReservedCodeCacheSize=48m}
+  JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET}
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"
+  REDIS_USERNAME: default
+  REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD}
+  SPRING_DATA_REDIS_SSL_ENABLED: "false"
+  SPRING_DATA_REDIS_TIMEOUT: 5s
+  KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+
+x-redis-dependency: &redis-dependency
+  redis:
+    condition: service_healthy
+
+x-app: &app
+  restart: unless-stopped
+  environment: *app-env
+  extra_hosts:
+    - host.docker.internal:host-gateway
+  networks:
+    - banking-net
+
+services:
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set REDIS_PASSWORD}
+    command:
+      - sh
+      - -c
+      - exec redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli --no-auth-warning -a \"$$REDIS_PASSWORD\" ping | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    networks:
+      - banking-net
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.1
+    restart: unless-stopped
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      - zookeeper-data:/var/lib/zookeeper/data
+      - zookeeper-log:/var/lib/zookeeper/log
+    healthcheck:
+      test: ["CMD", "cub", "zk-ready", "localhost:2181", "5"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 10s
+    networks:
+      - banking-net
+
+  kafka:
+    image: confluentinc/cp-kafka:7.6.1
+    restart: unless-stopped
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://kafka:9092
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,PLAINTEXT_HOST://0.0.0.0:9092
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_HEAP_OPTS: -Xms384m -Xmx384m
+    volumes:
+      - kafka-data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD", "cub", "kafka-ready", "-b", "kafka:29092", "1", "20"]
+      interval: 15s
+      timeout: 25s
+      retries: 10
+      start_period: 45s
+    expose:
+      - "29092"
+    networks:
+      - banking-net
+
+  api-gateway:
+    <<: *app
+    image: ${DOCKERHUB_USERNAME:?Set DOCKERHUB_USERNAME}/banking-api-gateway:${IMAGE_TAG:-latest}
+    expose:
+      - "8080"
+    depends_on:
+      <<: *redis-dependency
+      registration-service:
+        condition: service_started
+      login-service:
+        condition: service_started
+      accounts-service:
+        condition: service_started
+      transaction-service:
+        condition: service_started
+      forex-service:
+        condition: service_started
+      orchestrator-service:
+        condition: service_started
+      reconciliation-service:
+        condition: service_started
+
+  registration-service:
+    <<: *app
+    image: ${DOCKERHUB_USERNAME:?Set DOCKERHUB_USERNAME}/banking-registration-service:${IMAGE_TAG:-latest}
+    depends_on:
+      <<: *redis-dependency
+      kafka:
+        condition: service_healthy
+    environment:
+      <<: *app-env
+      CHANNEL_DB_URL: jdbc:postgresql://${POSTGRES_HOST:?Set POSTGRES_HOST}:5432/channel_db?sslmode=require
+      CHANNEL_DB_USERNAME: ${POSTGRES_CHANNEL_USERNAME:-channel_user}
+      CHANNEL_DB_PASSWORD: ${POSTGRES_CHANNEL_PASSWORD:?Set POSTGRES_CHANNEL_PASSWORD}
+      ORACLE_URL: jdbc:oracle:thin:@host.docker.internal:1521/XEPDB1
+      ORACLE_USERNAME: ${ORACLE_USERNAME:-ledger_app}
+      ORACLE_PASSWORD: ${ORACLE_PASSWORD:?Set ORACLE_PASSWORD}
+      ACCOUNTS_SERVICE_URL: http://accounts-service:8083
+
+  login-service:
+    <<: *app
+    image: ${DOCKERHUB_USERNAME:?Set DOCKERHUB_USERNAME}/banking-login-service:${IMAGE_TAG:-latest}
+    depends_on: *redis-dependency
+    environment:
+      <<: *app-env
+      CHANNEL_DB_URL: jdbc:postgresql://${POSTGRES_HOST:?Set POSTGRES_HOST}:5432/channel_db?sslmode=require
+      CHANNEL_DB_USERNAME: ${POSTGRES_CHANNEL_USERNAME:-channel_user}
+      CHANNEL_DB_PASSWORD: ${POSTGRES_CHANNEL_PASSWORD:?Set POSTGRES_CHANNEL_PASSWORD}
+      ORACLE_URL: jdbc:oracle:thin:@host.docker.internal:1521/XEPDB1
+      ORACLE_USERNAME: ${ORACLE_USERNAME:-ledger_app}
+      ORACLE_PASSWORD: ${ORACLE_PASSWORD:?Set ORACLE_PASSWORD}
+
+  accounts-service:
+    <<: *app
+    image: ${DOCKERHUB_USERNAME:?Set DOCKERHUB_USERNAME}/banking-accounts-service:${IMAGE_TAG:-latest}
+    depends_on:
+      <<: *redis-dependency
+      kafka:
+        condition: service_healthy
+    environment:
+      <<: *app-env
+      ORACLE_URL: jdbc:oracle:thin:@host.docker.internal:1521/XEPDB1
+      ORACLE_USERNAME: ${ORACLE_USERNAME:-ledger_app}
+      ORACLE_PASSWORD: ${ORACLE_PASSWORD:?Set ORACLE_PASSWORD}
+
+  transaction-service:
+    <<: *app
+    image: ${DOCKERHUB_USERNAME:?Set DOCKERHUB_USERNAME}/banking-transaction-service:${IMAGE_TAG:-latest}
+    depends_on:
+      <<: *redis-dependency
+      kafka:
+        condition: service_healthy
+    environment:
+      <<: *app-env
+      ORACLE_URL: jdbc:oracle:thin:@host.docker.internal:1521/XEPDB1
+      ORACLE_USERNAME: ${ORACLE_USERNAME:-ledger_app}
+      ORACLE_PASSWORD: ${ORACLE_PASSWORD:?Set ORACLE_PASSWORD}
+      POSTGRES_URL: jdbc:postgresql://${POSTGRES_HOST:?Set POSTGRES_HOST}:5432/ledger_audit?sslmode=require
+      POSTGRES_USERNAME: ${POSTGRES_LEDGER_USERNAME:-ledger_audit}
+      POSTGRES_PASSWORD: ${POSTGRES_LEDGER_PASSWORD:?Set POSTGRES_LEDGER_PASSWORD}
+      ACCOUNTS_SERVICE_URL: http://accounts-service:8083
+      RISK_SERVICE_URL: http://risk-engine:8088
+
+  notification-service:
+    <<: *app
+    image: ${DOCKERHUB_USERNAME:?Set DOCKERHUB_USERNAME}/banking-notification-service:${IMAGE_TAG:-latest}
+    depends_on:
+      <<: *redis-dependency
+      kafka:
+        condition: service_healthy
+    environment:
+      <<: *app-env
+      POSTGRES_URL: jdbc:postgresql://${POSTGRES_HOST:?Set POSTGRES_HOST}:5432/channel_db?sslmode=require
+      POSTGRES_USERNAME: ${POSTGRES_CHANNEL_USERNAME:-channel_user}
+      POSTGRES_PASSWORD: ${POSTGRES_CHANNEL_PASSWORD:?Set POSTGRES_CHANNEL_PASSWORD}
+
+  orchestrator-service:
+    <<: *app
+    image: ${DOCKERHUB_USERNAME:?Set DOCKERHUB_USERNAME}/banking-orchestrator-service:${IMAGE_TAG:-latest}
+    environment:
+      <<: *app-env
+      ACCOUNTS_SERVICE_URL: http://accounts-service:8083
+      TRANSACTION_SERVICE_URL: http://transaction-service:8084
+      NOTIFICATION_SERVICE_URL: http://notification-service:8085
+    depends_on:
+      <<: *redis-dependency
+      accounts-service:
+        condition: service_started
+      transaction-service:
+        condition: service_started
+      notification-service:
+        condition: service_started
+
+  forex-service:
+    <<: *app
+    image: ${DOCKERHUB_USERNAME:?Set DOCKERHUB_USERNAME}/banking-forex-service:${IMAGE_TAG:-latest}
+    depends_on:
+      <<: *redis-dependency
+      kafka:
+        condition: service_healthy
+    environment:
+      <<: *app-env
+      ORACLE_URL: jdbc:oracle:thin:@host.docker.internal:1521/XEPDB1
+      ORACLE_USERNAME: ${ORACLE_USERNAME:-ledger_app}
+      ORACLE_PASSWORD: ${ORACLE_PASSWORD:?Set ORACLE_PASSWORD}
+
+  risk-engine:
+    <<: *app
+    image: ${DOCKERHUB_USERNAME:?Set DOCKERHUB_USERNAME}/banking-risk-engine:${IMAGE_TAG:-latest}
+    depends_on:
+      <<: *redis-dependency
+      kafka:
+        condition: service_healthy
+
+  frontend-web:
+    <<: *app
+    image: ${DOCKERHUB_USERNAME:?Set DOCKERHUB_USERNAME}/banking-frontend-web:${IMAGE_TAG:-latest}
+    ports:
+      - "${DEMO_HTTP_PORT:-80}:8090"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      TZ: Asia/Manila
+      BANKING_BACKEND_MODE: gateway
+      BANKING_GATEWAY_URL: http://api-gateway:8080
+      BANKING_GRAFANA_URL: http://grafana:3000
+    depends_on:
+      <<: *redis-dependency
+      api-gateway:
+        condition: service_started
+
+  reconciliation-service:
+    <<: *app
+    image: ${DOCKERHUB_USERNAME:?Set DOCKERHUB_USERNAME}/banking-reconciliation-service:${IMAGE_TAG:-latest}
+    depends_on:
+      <<: *redis-dependency
+      kafka:
+        condition: service_healthy
+    environment:
+      <<: *app-env
+      ORACLE_URL: jdbc:oracle:thin:@host.docker.internal:1521/XEPDB1
+      ORACLE_USERNAME: ${ORACLE_USERNAME:-ledger_app}
+      ORACLE_PASSWORD: ${ORACLE_PASSWORD:?Set ORACLE_PASSWORD}
+      ORACLE_SCHEMA: LEDGER_APP
+      POSTGRES_URL: jdbc:postgresql://${POSTGRES_HOST:?Set POSTGRES_HOST}:5432/ledger_audit?sslmode=require
+      POSTGRES_USERNAME: ${POSTGRES_LEDGER_USERNAME:-ledger_audit}
+      POSTGRES_PASSWORD: ${POSTGRES_LEDGER_PASSWORD:?Set POSTGRES_LEDGER_PASSWORD}
+
+  postgres-seed:
+    image: postgres:17
+    profiles:
+      - seed
+    entrypoint: ["/bin/bash", "/seed/seed-managed-postgres.sh"]
+    environment:
+      PGHOST: ${POSTGRES_HOST:?Set POSTGRES_HOST}
+      PGPORT: "5432"
+      PGUSER: ${POSTGRES_ADMIN_USER:?Set POSTGRES_ADMIN_USER}
+      PGPASSWORD: ${POSTGRES_ADMIN_PASSWORD:?Set POSTGRES_ADMIN_PASSWORD}
+      PGSSLMODE: require
+      LEDGER_DB_USER: ${POSTGRES_LEDGER_USERNAME:-ledger_audit}
+      LEDGER_DB_PASSWORD: ${POSTGRES_LEDGER_PASSWORD:?Set POSTGRES_LEDGER_PASSWORD}
+      CHANNEL_DB_USER: ${POSTGRES_CHANNEL_USERNAME:-channel_user}
+      CHANNEL_DB_PASSWORD: ${POSTGRES_CHANNEL_PASSWORD:?Set POSTGRES_CHANNEL_PASSWORD}
+    volumes:
+      - ./scripts/seed-managed-postgres.sh:/seed/seed-managed-postgres.sh:ro
+      - ./sql/postgres:/seed/postgres:ro
+      - ./sql/channel:/seed/channel:ro
+    networks:
+      - banking-net

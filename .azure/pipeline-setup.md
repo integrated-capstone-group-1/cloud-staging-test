@@ -1,70 +1,67 @@
-# GitHub Actions setup
+# GitHub Actions demo deployment
 
-The workflow `.github/workflows/azure-deploy.yml` validates pull requests and automatically deploys successful commits pushed to `main` to one GitHub Environment named `production`. It does not provision Azure resources. First run `scripts/provision-demo.ps1` and then `scripts/bootstrap-k8s.ps1`; these provision/configure the cluster dependencies, create the `banking` namespace and seed PostgreSQL. The workflow applies the Kubernetes workloads on the first successful deployment.
+`.github/workflows/azure-deploy.yml` runs Maven verification for pull requests and deploys successful commits pushed to `main` to one GitHub Environment named `production`. It builds and pushes the 11 application images to Docker Hub, then SSHes to the existing Azure Oracle VM and starts the Docker Compose demo stack from `docker-compose.vm.yml`. The deployment uses the exact validated commit SHA as its image tag.
 
-## One-time Azure setup
+The VM stack reuses the existing VM and its persistent Oracle container, runs Redis, Kafka/Zookeeper, and the banking services on that VM, and connects to Azure-managed PostgreSQL. The Spring API gateway remains in the stack because the frontend uses it and it applies authentication and other gateway behavior. Observability containers are omitted for the demo.
 
-Central US (`centralus`) is selected because PostgreSQL Flexible Server provisioning is restricted for this subscription in East US 2. The subscription currently has 4 regional vCPUs available in Central US. The Bicep template uses all of them: one 2-vCPU `Standard_D2as_v7` AKS node plus one 2-vCPU Oracle VM. Azure reports PostgreSQL 17 and the `Standard_B1ms` tier as available in Central US. This is a resource-constrained demo configuration; it is not suitable as a production sizing baseline, and the Java services may start slowly or contend for CPU/memory. Redis runs as a single authenticated StatefulSet in AKS. Azure resource, storage, and network charges begin after the explicit `CREATE` confirmation.
+## Before the first deployment
 
-The earlier failed deployment left resources in `rg-banking-demo-eastus2`, including a running AKS cluster. This setup uses a new resource group, `rg-banking-demo-centralus`, and does not remove or stop the East US 2 resources. Check and manage that previous resource group separately to avoid ongoing charges.
-
-From the repository root, first validate the template and provision it:
-
-```powershell
-az bicep build --file infra\main.bicep --stdout | Out-Null
-.\scripts\provision-demo.ps1 `
-  -SshPublicKeyPath "$env:USERPROFILE\.ssh\id_ed25519.pub" `
-  -SshAllowedCidr "YOUR_PUBLIC_IPV4/32"
-```
-
-The provisioning script creates the resource group, displays Azure's `what-if`, and requires typing `CREATE` before deploying any billable infrastructure. It generates database, Oracle, JWT, and Grafana passwords and places them in Key Vault; it does not use the development credentials from `docker-compose.yml`. Use the public key corresponding to your SSH private key and restrict SSH to your own public IPv4 CIDR.
-
-After deployment completes, bootstrap the database schemas/seeds, transfer the Oracle init/seed SQL to the VM over SSH, and create the Kubernetes configuration:
-
-```powershell
-.\scripts\bootstrap-k8s.ps1 `
-  -SshPrivateKeyPath "$env:USERPROFILE\.ssh\id_ed25519"
-```
-
-The bootstrap script uses the current Azure CLI identity, `kubectl`, `kubelogin`, and the matching SSH private key. It seeds the two managed PostgreSQL databases from `sql\postgres` and `sql\channel`, starts Oracle XE with the files under `sql\oracle`, and creates the Kubernetes secret/config maps, including a randomly generated Redis password. It does not print database or Redis credentials. Keep the namespace secrets private; Redis credentials are stored in the Kubernetes namespace secret.
-
-## GitHub configuration
-
-1. Create a GitHub Environment named `production`. Do not add required reviewers if deployment should proceed automatically as requested.
-2. Add these environment variables to `production`:
-   - `AZURE_CLIENT_ID`: client ID of the user-assigned managed identity used by GitHub Actions.
-   - `AZURE_TENANT_ID`: Microsoft Entra tenant ID.
-   - `AZURE_SUBSCRIPTION_ID`: Azure subscription ID.
-   - `AZURE_RESOURCE_GROUP`: resource group containing AKS.
-   - `AKS_CLUSTER_NAME`: AKS cluster name.
-3. Add these repository Actions secrets for Docker Hub:
-   - `DOCKERHUB_USERNAME`
-   - `DOCKERHUB_TOKEN`: Docker Hub access token with permission to push the 11 service repositories and pull them from AKS.
-4. After bootstrap completes, obtain the generated AKS name and create the GitHub OIDC identity/federated credential:
+1. Provision the existing Azure demo resources and bootstrap Oracle/PostgreSQL as documented in the project setup. The Bicep template still contains AKS resources; this VM deployment workflow does not use AKS.
+2. Configure the VM's inbound Network Security Group rule for public HTTP on port 80. The Bicep template declares this rule for new or updated deployments, but an already-deployed VM needs the rule applied separately. For the current deployment:
 
    ```powershell
-   $aksName = az deployment group show `
-     --resource-group rg-banking-demo-centralus `
-     --name banking-demo `
-     --query properties.outputs.aksName.value `
-     --output tsv
-   .\scripts\setup-azure-auth-for-pipeline.ps1 `
-     -SubscriptionId b82a736e-f4ca-4443-a538-9aa8de016682 `
-     -Location centralus `
-     -IdentityResourceGroup rg-banking-pipeline-centralus `
-     -IdentityName gh-banking-deploy `
-     -AksResourceGroup rg-banking-demo-centralus `
-     -AksClusterName $aksName `
-     -GitHubRepository integrated-capstone-group-1/banking-backend-monorepo
+   $resourceGroup = "rg-banking-demo-centralus"
+   $vmName = az deployment group show --resource-group $resourceGroup --name banking-demo --query properties.outputs.oracleVmName.value --output tsv
+   $nicId = az vm show --resource-group $resourceGroup --name $vmName --query "networkProfile.networkInterfaces[0].id" --output tsv
+   $nsgId = az network nic show --ids $nicId --query networkSecurityGroup.id --output tsv
+   $nsgName = $nsgId.Split("/")[-1]
+   az network nsg rule create --resource-group $resourceGroup --nsg-name $nsgName --name banking-demo-http --priority 105 --direction Inbound --access Allow --protocol Tcp --source-address-prefixes Internet --source-port-ranges "*" --destination-address-prefixes "*" --destination-port-ranges 80
    ```
 
-   Copy the printed values into the `production` Environment variables. The script grants the identity AKS user-credential access and the `Azure Kubernetes Service RBAC Admin` role scoped to the `banking` namespace. The first-time bootstrap script separately installs Promtail's cluster-scoped pod-reader role using the administrator's local credentials.
-5. Push to `main` after the bootstrap script completes. The workflow first updates the Docker Hub pull secret, applies the namespace workloads from `k8s/base`, updates all 11 application images to their validated commit-SHA tags, and waits for successful rollouts.
+   Keep SSH limited to the IP range used when provisioning. Only the frontend on port 80 is published by Compose; the gateway, Oracle, Kafka, and service ports are not published to the Internet.
+3. Confirm that the managed PostgreSQL endpoint is reachable from the VM. Redis runs as a `redis:7.4-alpine` container in the VM's Compose stack, uses a named volume for data, and is reachable only by the other Compose services. It does not need a separate Azure resource or inbound firewall rule.
+4. Create a GitHub Environment named `production`.
+5. Set these `production` environment variables:
 
-All application and Grafana Services are private `ClusterIP` Services. To access the frontend for a demo, run `kubectl port-forward --namespace banking service/frontend-web 8090:8090` and open `http://localhost:8090`. Use a TLS-enabled ingress/load balancer before exposing a banking application publicly.
+   | Variable | Value |
+   | --- | --- |
+   | `DEMO_VM_HOST` | Public IP address or DNS name of the existing Oracle VM |
+   | `DEMO_VM_USER` | VM SSH user, normally `azureuser` |
+   | `POSTGRES_HOST` | Managed PostgreSQL server FQDN |
+   | `POSTGRES_LEDGER_USERNAME` | Optional; defaults to `ledger_audit` |
+   | `POSTGRES_CHANNEL_USERNAME` | Optional; defaults to `channel_user` |
+   | `ORACLE_USERNAME` | Optional; defaults to `ledger_app` |
+   | `DEMO_HTTP_PORT` | Optional; defaults to `80` |
+   | `JAVA_TOOL_OPTIONS` | Optional JVM memory override; default limits each service JVM for a small demo VM |
 
-## Azure OIDC identity
+6. Set these GitHub Actions secrets:
 
-Run `scripts/setup-azure-auth-for-pipeline.ps1` from an Azure CLI session that has permission to create a user-assigned managed identity and role assignments. The script creates the identity in a separate resource group, creates the GitHub Environment federated credential, and assigns AKS access. It prints the values needed for the GitHub Environment variables.
+   | Secret | Value |
+   | --- | --- |
+   | `DOCKERHUB_USERNAME` | **Repository secret**; Docker Hub account used to publish and pull images |
+   | `DOCKERHUB_TOKEN` | **Repository secret**; Docker Hub access token with push/pull permissions |
+   | `DEMO_VM_SSH_PRIVATE_KEY` | OpenSSH private key matching the public key installed on the VM |
+   | `POSTGRES_ADMIN_USER` | Managed PostgreSQL administrator login |
+   | `POSTGRES_ADMIN_PASSWORD` | Managed PostgreSQL administrator password |
+   | `POSTGRES_LEDGER_PASSWORD` | Password for the `ledger_audit` application role |
+   | `POSTGRES_CHANNEL_PASSWORD` | Password for the `channel_user` application role |
+   | `REDIS_PASSWORD` | Password used by the local Redis container and the banking services |
+   | `ORACLE_PASSWORD` | Password of the existing Oracle `ledger_app` user |
+   | `JWT_SECRET` | Application JWT signing secret (at least 256 bits) |
 
-The workflow uses OIDC rather than an Azure client secret. It uses the Docker Hub token only for image push/pull. Never commit cloud credentials or Kubernetes secrets.
+   The Docker Hub values must be repository secrets because the image-publishing job does not run inside the `production` environment. The VM and database secrets can be repository secrets or `production` environment secrets.
+
+The workflow transfers a `.env` file to `/opt/banking-demo` with mode `0600`. It is not committed to Git. Docker Hub authentication is performed with a temporary Docker config that is removed after deployment.
+
+## Seeding and deployment
+
+- Pull requests to `main` run Maven `verify` only.
+- Pushes to `main` run Maven `verify`, build/push all 11 images, deploy them to the VM, and wait for the frontend health endpoint.
+- On the first deployment only, use **Actions → Banking services - validate and deploy → Run workflow** and enable `seed_postgres`. The seed script creates the two managed PostgreSQL databases and roles, applies the existing schema and seed SQL, and skips schema/data that are already initialized. Do not request reseeding for normal app deployments.
+- After a successful deployment, open `http://<DEMO_VM_HOST>/`. This HTTP endpoint is for the demo only; do not use real banking credentials or data.
+
+## Capacity and charges
+
+The existing VM is a small 2-vCPU demo size. Heap limits help fit the services, but Oracle, Kafka, and all Java services together may still exceed its memory/CPU capacity or start slowly. A successful CI build only proves the images build; the deployment job's health check is the runtime gate. If the VM runs out of memory, the smallest practical next step is to free the AKS node's quota and resize the existing VM, not create another VM.
+
+Do not delete the AKS cluster until the VM deployment and demo flows have been verified. AKS and managed PostgreSQL may continue to incur charges while they remain provisioned. The deployment workflow itself does not provision or delete Azure resources.
