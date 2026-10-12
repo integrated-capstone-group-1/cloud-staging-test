@@ -240,7 +240,7 @@ services:
     <<: *app
     image: ${DOCKERHUB_USERNAME:?Set DOCKERHUB_USERNAME}/banking-frontend-web:${IMAGE_TAG:-latest}
     ports:
-      - "${DEMO_HTTP_PORT:-80}:8090"
+      - "127.0.0.1:8090:8090"
     environment:
       SPRING_PROFILES_ACTIVE: docker
       TZ: Asia/Manila
